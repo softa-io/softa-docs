@@ -1,0 +1,40 @@
+{
+  "items": [
+    {
+      "title": "Metadata Driven",
+      "desc": "Model metadata, field metadata, interface metadata, etc. Metadata versioning and multi-environment publishing"
+    },
+    {
+      "title": "Flow",
+      "desc": "Automation flows, business processes, scheduled task flows. Built-in AI integration and interaction capabilities."
+    },
+    {
+      "title": "OpenAPI",
+      "desc": "Standard OpenAPI, AI-understandable API, Swagger API documentation."
+    },
+    {
+      "title": "Security Control",
+      "desc": "ABAC fine-grained access control, row-level and field-level security, data encryption and masking, user security policies, etc."
+    },
+    {
+      "title": "Data Integration",
+      "desc": "Configurable data integration capabilities, API orchestration capabilities, common integration authentication."
+    },
+    {
+      "title": "Timeline Model",
+      "desc": "Configurable timeline model, supports querying data by effective date, business event tracking."
+    },
+    {
+      "title": "Multi-language",
+      "desc": "Interface localization, message localization, business data localization."
+    },
+    {
+      "title": "Multi-database",
+      "desc": "Supports mainstream relational databases, such as PostgreSQL, MySQL, etc., with database dialect abstraction."
+    },
+    {
+      "title": "Multi-tenancy",
+      "desc": "Supports multi-tenant sharing of schemas, intended for standardized SaaS scenarios only."
+    }
+  ]
+}

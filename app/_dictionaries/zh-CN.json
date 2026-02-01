@@ -1,0 +1,15 @@
+{
+  "backToTop": "回到顶部",
+  "dark": "深色",
+  "editPage": "在 GitHub 上编辑此页 →",
+  "feedback": "有问题？给我们反馈 →",
+  "footer": "Copyright © Softa.io",
+  "lastUpdated": "最后更新于",
+  "light": "浅色",
+  "searchEmptyResult": "未找到结果。",
+  "searchError": "搜索索引加载失败。",
+  "searchLoading": "加载中…",
+  "searchPlaceholder": "搜索文档…",
+  "system": "跟随系统",
+  "tocTitle": "本页内容"
+}

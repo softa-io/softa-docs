@@ -1,0 +1,79 @@
+{
+  "hero": {
+    "badge": "Metadata-driven · AI-ready · Enterprise-grade",
+    "h1": "Build next‑gen",
+    "h2": "enterprise apps",
+    "lead": "Softa is a metadata-driven application framework with built-in AI integrations—secure, strict, and designed for long-term evolution.",
+    "primaryCta": "Read the docs",
+    "secondaryCta": "View GitHub",
+    "assurances": [
+      { "label": "Security-first governance" },
+      { "label": "OpenAPI-first integration" },
+      { "label": "AI-ready workflow building blocks" }
+    ],
+    "quickTitle": "Quick links",
+    "quickLinks": [
+      { "title": "Quick Start", "href": "/docs/start/quickStart" },
+      { "title": "Features", "href": "/docs/features" },
+      { "title": "Architecture", "href": "/docs/arch" },
+      { "title": "OpenAPI", "href": "https://api.softa.io", "external": true }
+    ],
+    "previewEyebrow": "Product preview",
+    "previewTitle": "From metadata to UI & APIs",
+    "previewDesc": "Model once, ship consistent UI, API, and automation—with guardrails for security and evolution."
+  },
+  "features": {
+    "title": "Powerful capabilities, built for real systems",
+    "subtitle": "Everything you need to ship secure, scalable enterprise software—without reinventing the platform.",
+    "items": [
+      { "icon": "metadata", "title": "Metadata-driven", "desc": "Unified model/field/UI abstractions with versioning and multi‑env publishing." },
+      { "icon": "flow", "title": "Flow automation", "desc": "Approvals, schedules, and AI-assisted operations as first-class building blocks." },
+      { "icon": "security", "title": "Security control", "desc": "ABAC, row/field level security, encryption & masking, audit-friendly by default." },
+      { "icon": "integration", "title": "Data integration", "desc": "Configurable integrations, API orchestration, and common authentication patterns." },
+      { "icon": "timeline", "title": "Timeline model", "desc": "Query effective data by date and track business events consistently." },
+      { "icon": "i18n", "title": "Internationalization", "desc": "Localize UI/messages/data to support global teams and products." },
+      { "icon": "database", "title": "Multi-database", "desc": "Works with mainstream relational databases via dialect abstraction." },
+      { "icon": "tenant", "title": "Multi-tenancy", "desc": "Standardized SaaS-ready multi-tenant architecture for shared schema scenarios." }
+    ]
+  },
+  "workflow": {
+    "title": "How it works",
+    "subtitle": "A simple loop that keeps enterprise systems consistent as they grow.",
+    "steps": [
+      { "title": "Model the business", "desc": "Describe data, fields, and constraints with a unified metadata layer." },
+      { "title": "Ship the system", "desc": "Generate consistent UI and APIs, then integrate workflows and automations." },
+      { "title": "Evolve with confidence", "desc": "Version and publish changes across environments with governance in place." }
+    ]
+  },
+  "values": {
+    "title": "Core value, end to end",
+    "subtitle": "Reduce repeated plumbing and focus on business outcomes—without compromising governance.",
+    "items": [
+      { "title": "Standard OpenAPI", "desc": "AI-understandable APIs with complete Swagger documentation for easy integrations." },
+      { "title": "Security & privacy", "desc": "Enterprise-grade controls, fine-grained permissions, and strong data protection." },
+      { "title": "Flexibility at scale", "desc": "Metadata-driven architecture adapts to change and evolves safely over time." }
+    ]
+  },
+  "principles": {
+    "title": "Principles we build by",
+    "items": [
+      { "icon": "security", "title": "Safety", "desc": "Enterprise security standards to protect every piece of your data." },
+      { "icon": "integration", "title": "Professionalism", "desc": "Quality-first engineering for predictable outcomes in production." },
+      { "icon": "metadata", "title": "Strictness", "desc": "Rigorous design and governance to keep complexity under control." },
+      { "icon": "timeline", "title": "Sustainable evolution", "desc": "Continuous iteration without breaking the system’s long-term maintainability." }
+    ]
+  },
+  "closing": {
+    "title": "Ready to start?",
+    "desc": "Join the community and build the next generation of enterprise applications with Softa.",
+    "primaryCta": "Read the docs",
+    "secondaryCta": "Star on GitHub",
+    "linksTitle": "Explore",
+    "links": [
+      { "title": "Quick Start", "href": "/docs/start/quickStart" },
+      { "title": "Architecture", "href": "/docs/arch" },
+      { "title": "Contribution", "href": "/docs/contribution" },
+      { "title": "OpenAPI", "href": "https://api.softa.io", "external": true }
+    ]
+  }
+}

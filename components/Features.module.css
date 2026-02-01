@@ -1,0 +1,37 @@
+.featuresContainer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 40px;
+}
+
+.featureItem {
+  flex: 1 1 300px;
+  margin: 10px;
+  padding: 20px;
+  border: 1px solid #ddd;
+  text-align: center;
+}
+
+:global(.dark) .featureItem {
+  border: 1px solid #888;
+}
+
+/* Override global font styles for h2 */
+.featureItem h2 {
+  font-size: 1.5rem; /* Set the desired font size */
+  font-weight: bold; /* Set the desired font weight */
+}
+
+.featureItem p {
+  color: hsl(204 20% 40%);
+}
+
+/* Add media query for responsiveness */
+@media (max-width: 768px) {
+  .featureItem {
+    flex: 1 1 100%;
+  }
+}

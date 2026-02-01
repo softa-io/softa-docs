@@ -1,0 +1,82 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body{
+  text-transform: default;
+}
+
+/* --- Navbar readability (reduce excessive transparency) ---
+   Nextra defaults to a fairly transparent sticky navbar background which can
+   let page content show through and reduce hierarchy/legibility.
+   We slightly increase opacity while keeping a subtle blur. */
+
+.nextra-nav-container,
+.nextra-navbar {
+  background-color: rgba(255, 255, 255, 0.5) !important;
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+/* Keep the bottom edge crisp in light mode */
+.nextra-nav-container {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+/* If dark mode is enabled upstream in the future */
+.dark .nextra-nav-container,
+.dark .nextra-navbar {
+  background-color: rgba(17, 17, 17, 0.5) !important;
+  border-bottom-color: rgba(255, 255, 255, 0.10);
+}
+
+/* --- Nextra Search (Pagefind) results highlight fix ---
+   In Nextra 4.6.x the results panel can end up with very low-contrast
+   active/selected item styling (appearing "white on white").
+   We override the active/selected option colors to ensure readability. */
+
+/* Ensure panel text isn't washed out in light mode */
+.nextra-search-results {
+  color: rgb(17 24 39); /* slate-900 */
+}
+
+/* Active option (mouse hover / keyboard focus) */
+.nextra-search-results [role='option'][data-headlessui-state~='active'],
+.nextra-search-results [role='option'][aria-selected='true'] {
+  background: rgba(37, 99, 235, 0.12) !important; /* blue-600 @ 12% */
+  color: rgb(30 64 175) !important; /* blue-800 */
+}
+
+/* Keep excerpt text readable when active */
+.nextra-search-results [role='option'][data-headlessui-state~='active'] :is(div, p, span),
+.nextra-search-results [role='option'][aria-selected='true'] :is(div, p, span) {
+  color: inherit;
+}
+
+/* Dark mode (if enabled by upstream styles/classes) */
+.dark .nextra-search-results {
+  color: rgb(243 244 246); /* gray-100 */
+}
+.dark .nextra-search-results [role='option'][data-headlessui-state~='active'],
+.dark .nextra-search-results [role='option'][aria-selected='true'] {
+  background: rgba(96, 165, 250, 0.18) !important; /* blue-400 @ 18% */
+  color: rgb(191, 219, 254) !important; /* blue-200 */
+}
+
+/* Matched term highlight (<mark>) inside excerpts */
+.nextra-search-results mark {
+  /* Override Nextra's `text-white` to keep contrast in light mode */
+  color: rgb(17 24 39) !important; /* slate-900 */
+  background: rgba(37, 99, 235, 0.22) !important; /* blue-600 @ 22% */
+  border-radius: 0.25rem;
+  padding: 0 0.15em;
+}
+.nextra-search-results [role='option'][data-headlessui-state~='active'] mark,
+.nextra-search-results [role='option'][aria-selected='true'] mark {
+  background: rgba(37, 99, 235, 0.30) !important; /* slightly stronger when active */
+}
+.dark .nextra-search-results mark {
+  /* Dark mode can keep bright text on a stronger accent */
+  color: rgb(255 255 255) !important;
+  background: rgba(96, 165, 250, 0.35) !important; /* blue-400 @ 35% */
+}

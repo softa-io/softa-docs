@@ -1,0 +1,107 @@
+---
+description: Project architecture + i18n conventions for Nextra 4 / Next.js 16
+alwaysApply: true
+---
+
+# softa-docs — Architecture & i18n Rules (Static Export)
+
+## Stack & routing
+
+- **Framework**: Next.js (App Router) + Nextra 4 (`nextra` + `nextra-theme-docs`).
+- **Static export**: `next.config.mjs` uses `output: 'export'` and outputs to `out/`.
+- **Docs routing**:
+  - `app/page.tsx`: `/` → client-side locale redirect
+  - `app/[...mdxPath]/page.tsx`: catch-all for all other paths
+    - If first segment is a locale (`en-US`/`zh-CN`), render MDX via `importPage(mdxPath)`
+    - Otherwise render a static redirect page that sends the user to `/<locale>/<path>`
+- **Docs layout**: `app/[...mdxPath]/layout.tsx` renders the docs theme layout.
+- **Content source**: `content/<locale>/...` (Nextra “content directory” convention), where `<locale>` is a top-level folder.
+
+## Locales (canonical)
+
+- **Supported locales**: `en-US`, `zh-CN` (canonical; do NOT rename to `en`/`zh`).
+- **No legacy SEO redirects**: keep only canonical locale paths.
+
+## Locale detection & first-visit redirect (pure static / CDN-friendly)
+
+- Implemented in the client component `app/_components/LocaleRedirectClient.tsx`.
+- **Behavior**:
+  - If request path is NOT prefixed with `/en-US` or `/zh-CN`, redirect to `/<locale><path>` using client-side navigation.
+  - Locale preference order:
+    1) cookie `NEXT_LOCALE` or `SOFTA_LOCALE`
+    2) `navigator.languages` / `navigator.language` (maps `zh* -> zh-CN`, `en* -> en-US`)
+    3) fallback `en-US`
+  - Sets cookie `SOFTA_LOCALE` on redirect.
+
+## Navigation & home entry points
+
+- **Logo click goes to localized home**: `app/[...mdxPath]/layout.tsx` sets `logoLink={`/${locale}`}`.
+- **Home menu item exists** via `content/en-US/_meta.ts` and `content/zh-CN/_meta.ts`:
+  - `index.type = "page"`
+  - `index.title = "Home" / "首页"`
+
+## Theme UI strings (docs theme dictionary)
+
+- Files:
+  - `app/_dictionaries/en-US.json`
+  - `app/_dictionaries/zh-CN.json`
+  - Loader: `app/_dictionaries/get-dictionary.ts`
+- Used in `app/[...mdxPath]/layout.tsx` for:
+  - search placeholder/messages
+  - theme switch labels
+  - toc labels
+  - edit/feedback/last updated text
+
+## Component i18n (JSON + compile-time typing)
+
+- Component dictionaries live in `components/i18n/**` as JSON per locale.
+- Each dictionary folder has:
+  - `types.ts` (TypeScript types)
+  - `index.ts` (imports JSON and validates shape at compile time)
+  - `{en-US,zh-CN}.json` (translation content)
+- Compile-time validation pattern (do not remove):
+
+```ts
+const DICTS: Record<Lang, SomeType> = { 'en-US': enUS, 'zh-CN': zhCN }
+```
+
+## Presentation components rule
+
+- Components must be **presentation-only**:
+  - No internal locale detection inside UI components.
+  - Locale detection happens at the page/container layer.
+- `components/i18n/lang.ts` is the single source for:
+  - `SUPPORTED_LANGS`
+  - `normalizeLang(input)`
+  - `toLocalePath(lang)` (`/en-US` or `/zh-CN`)
+
+## Home page (evolvable)
+
+- Home is expected to remain a **localized route** under `/<locale>` (e.g. `/en-US`, `/zh-CN`).
+- Do **not** lock Home’s layout/information architecture in rules—Home may be redesigned freely.
+- Only stable contracts to keep:
+  - Home copy lives in `components/i18n/home/{types.ts,index.ts,en-US.json,zh-CN.json}` with compile-time type validation.
+  - Internal links stored in dictionaries should be locale-agnostic (e.g. `/docs/...`) and prefixed at runtime with `toLocalePath(lang)`.
+  - External links must include `"external": true` and full URL.
+
+## Nextra content structure conventions
+
+- Content layout:
+  - `content/en-US/...`
+  - `content/zh-CN/...`
+- Navigation is defined by co-located `_meta.ts` files.
+- **Important pitfall**: if a folder route is navigable (e.g. `/docs/features`), ensure an `index.md` exists in that folder, otherwise production may error with:
+  - `Cannot find module 'private-next-content-dir/<locale>/undefined'`
+
+## Global UI toggles
+
+- **Copy page** is disabled globally:
+  - `app/[...mdxPath]/layout.tsx` sets `copyPageButton={false}`.
+
+## Build & tooling gotchas
+
+- **Build bundler**: `pnpm build` uses `next build --webpack`.
+- **Static output directory**: `out/` (deploy this to CDN / Cloudflare Pages).
+- `postbuild` runs Pagefind for static export:
+  - `pagefind --site .next/server/app --output-path out/_pagefind`
+- CSS Modules global selector must use `:global(...)` (NOT `::global(...)`).

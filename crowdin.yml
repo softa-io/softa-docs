@@ -1,0 +1,8 @@
+files:
+  # Content pages: use zh-CN as source of truth; translate into other locales.
+  - source: /content/zh-CN/**
+    translation: /content/%locale%/**/%original_file_name%
+
+  # UI dictionaries (JSON): same pattern; translate into other locales.
+  - source: /components/i18n/**/zh-CN.json
+    translation: /components/i18n/**/%locale%.json

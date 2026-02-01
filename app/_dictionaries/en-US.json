@@ -1,0 +1,15 @@
+{
+  "backToTop": "Back to top",
+  "dark": "Dark",
+  "editPage": "Edit this page on GitHub →",
+  "feedback": "Question? Give us feedback →",
+  "footer": "Copyright © Softa.io",
+  "lastUpdated": "Last updated on",
+  "light": "Light",
+  "searchEmptyResult": "No results found.",
+  "searchError": "Failed to load search index.",
+  "searchLoading": "Loading…",
+  "searchPlaceholder": "Search docs…",
+  "system": "System",
+  "tocTitle": "On this page"
+}

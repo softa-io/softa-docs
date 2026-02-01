@@ -1,0 +1,21 @@
+.trailContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 800px;
+  margin: 20px auto;
+  padding: 20px;
+  text-align: center;
+}
+
+.sectionTitle {
+  font-size: 2rem;
+  font-weight: bold;
+  margin-bottom: 20px;
+}
+
+.trailDescription {
+  font-size: 1.2rem;
+  margin-bottom: 20px;
+  color: hsl(204 20% 40%);
+}
