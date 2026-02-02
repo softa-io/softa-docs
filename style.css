@@ -17,6 +17,17 @@
   --nextra-border-color: rgba(0, 0, 0, 0.10);
   /* Subtle interactive background (hover/selected) */
   --nextra-primary-color: rgba(0, 0, 0, 0.06);
+
+  /* ------------------------------------------------------------------------
+     Global layout container (limit wide screens)
+     ------------------------------------------------------------------------
+     Used to prevent docs/header/pages from stretching infinitely on large
+     displays while keeping a responsive gutter on smaller screens. */
+  --container: 1440px;
+  --gutter: clamp(16px, 4vw, 32px);
+
+  /* Nextra layout width: used by `x:max-w-(--nextra-content-width)` */
+  --nextra-content-width: var(--container);
 }
 
 .dark {
@@ -27,6 +38,13 @@
 
 body{
   text-transform: default;
+}
+
+/* Optional utility container for custom pages/components */
+.container {
+  max-width: var(--container);
+  margin: 0 auto;
+  padding: 0 var(--gutter);
 }
 
 /* --- Navbar readability (reduce excessive transparency) ---
@@ -102,4 +120,14 @@ body{
   /* Dark mode can keep bright text on a stronger accent */
   color: rgb(255 255 255) !important;
   background: rgba(96, 165, 250, 0.35) !important; /* blue-400 @ 35% */
+}
+
+/* --- Mobile menu panel background (avoid transparency on small screens) ---
+   The mobile sidebar (`.nextra-mobile-nav`) overlays page content.
+   Ensure the panel itself is opaque for legibility. */
+.nextra-mobile-nav {
+  background-color: rgba(255, 255, 255, 0.97) !important;
+}
+.dark .nextra-mobile-nav {
+  background-color: rgba(17, 17, 17, 0.97) !important;
 }

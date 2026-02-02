@@ -1,15 +1,15 @@
 {
   "hero": {
-    "badge": "Metadata-driven · AI-ready · Enterprise-grade",
-    "h1": "Build next‑gen",
-    "h2": "enterprise apps",
-    "lead": "Softa is a metadata-driven application framework with built-in AI integrations—secure, strict, and designed for long-term evolution.",
+    "badge": "Build Enterprise Apps 10× Faster with Governance Built‑in",
+    "h1": "Build enterprise apps",
+    "h2": "10× faster with governance built‑in",
+    "lead": "A metadata-driven platform that generates secure UI, OpenAPI, and workflow—while keeping ABAC, audit, and version control by design.",
     "primaryCta": "Read the docs",
     "secondaryCta": "View GitHub",
     "assurances": [
-      { "label": "Security-first governance" },
-      { "label": "OpenAPI-first integration" },
-      { "label": "AI-ready workflow building blocks" }
+      { "label": "70% less boilerplate" },
+      { "label": "100% consistent API/UI" },
+      { "label": "SOC-ready security" }
     ],
     "quickTitle": "Quick links",
     "quickLinks": [
@@ -59,7 +59,7 @@
     "items": [
       { "icon": "security", "title": "Safety", "desc": "Enterprise security standards to protect every piece of your data." },
       { "icon": "integration", "title": "Professionalism", "desc": "Quality-first engineering for predictable outcomes in production." },
-      { "icon": "metadata", "title": "Strictness", "desc": "Rigorous design and governance to keep complexity under control." },
+      { "icon": "metadata", "title": "Governance", "desc": "Rigorous design and governance to keep complexity under control." },
       { "icon": "timeline", "title": "Sustainable evolution", "desc": "Continuous iteration without breaking the system’s long-term maintainability." }
     ]
   },
