@@ -2,7 +2,7 @@ import 'server-only'
 
 import { readdir } from 'node:fs/promises'
 import { join, relative, sep } from 'node:path'
-import { DEFAULT_LOCALE, SUPPORTED_LOCALES } from './locales'
+import { SUPPORTED_LOCALES } from './locales'
 
 function isMarkdownFile(name: string) {
   return name.endsWith('.md') || name.endsWith('.mdx')
@@ -54,22 +54,6 @@ export async function getAllMdxStaticParams(): Promise<Array<{ mdxPath: string[]
       const segments = toSegments(contentRoot, file)
       // `/en-US` => `content/en-US/index.mdx` (segments = [])
       params.push({ mdxPath: [locale, ...segments] })
-    }
-  }
-
-  // 2) Non-prefixed URLs that should redirect to `/<locale><path>`
-  // (generated based on the default locale’s content tree).
-  {
-    const contentRoot = join(process.cwd(), 'content', DEFAULT_LOCALE)
-    const files = await walk(contentRoot)
-    const set = new Set<string>()
-    for (const file of files) {
-      const segments = toSegments(contentRoot, file)
-      const key = segments.join('/')
-      if (key) set.add(key)
-    }
-    for (const key of Array.from(set)) {
-      params.push({ mdxPath: key.split('/') })
     }
   }
 

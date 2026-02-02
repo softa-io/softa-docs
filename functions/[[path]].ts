@@ -13,7 +13,6 @@
 import {
   detectPreferredLocaleFromHeaders,
   ensureTrailingSlash,
-  isLocalePrefixedPathname,
   readPreferredLocaleFromCookie
 } from '../app/_utils/locales'
 
@@ -26,26 +25,9 @@ export async function onRequest(context: any) {
   // Only redirect safe navigation requests.
   if (request.method !== 'GET' && request.method !== 'HEAD') return next()
 
-  // Pass through locale-prefixed routes.
-  if (isLocalePrefixedPathname(pathname)) return next()
-
-  // Ignore well-known probes.
-  if (pathname === '/.well-known' || pathname.startsWith('/.well-known/')) return next()
-
-  // Skip internal/static assets.
-  // - Next.js export assets
-  // - Pagefind output (out/_pagefind)
-  // - Common static files
-  const skipPrefixes = ['/_next/', '/_pagefind/', '/assets/', '/images/', '/image/']
-  const skipExact = ['/favicon.ico', '/robots.txt', '/sitemap.xml']
-  if (skipPrefixes.some((p) => pathname.startsWith(p)) || skipExact.includes(pathname)) {
-    return next()
-  }
-
-  // If it looks like a direct file request (has an extension), do not redirect.
-  // e.g. /logo.png, /manifest.webmanifest, /sw.js
-  const last = pathname.split('/').pop() || ''
-  if (last.includes('.')) return next()
+  // Only handle the site root. All other pages are expected to be locale-prefixed already.
+  // This intentionally does NOT redirect `/docs/*` or other unprefixed paths.
+  if (pathname !== '/') return next()
 
   const cookieHeader = request.headers.get('Cookie') || ''
   // `detectPreferredLocaleFromHeaders` already implements:
@@ -60,7 +42,9 @@ export async function onRequest(context: any) {
       })
 
   const targetPath = ensureTrailingSlash(pathname)
-  const redirectTo = `/${locale}${targetPath}${url.search}`
+  const redirectPathWithQuery = `/${locale}${targetPath}${url.search}`
+  // Workers `Response.redirect()` requires an absolute URL.
+  const redirectTo = new URL(redirectPathWithQuery, url).toString()
 
   const res = Response.redirect(redirectTo, 302)
   // Avoid caching locale redirects across users.

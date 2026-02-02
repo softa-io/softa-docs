@@ -1,7 +1,6 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { importPage } from 'nextra/pages'
-import { LocaleRedirectScript } from '../_components/LocaleRedirectScript'
 import { useMDXComponents as getMDXComponents } from '../../mdx-components'
 import { normalizeLocale } from '../_utils/locales'
 import { getAllMdxStaticParams } from '../_utils/static-paths'
@@ -41,12 +40,9 @@ const Wrapper = getMDXComponents().wrapper
 
 export default async function Page(props: PageProps) {
   const { mdxPath } = await props.params
-  const pathname = `/${mdxPath.join('/')}`.replace(/\/+$/, '') || '/'
-
-  // Non-locale-prefixed routes are static redirect pages (CDN-friendly).
-  if (!normalizeLocale(mdxPath?.[0])) {
-    return <LocaleRedirectScript originalPathname={pathname} />
-  }
+  // All pages under this catch-all route must be locale-prefixed.
+  // Locale detection + redirect is handled only on the site root (`/`).
+  if (!normalizeLocale(mdxPath?.[0])) notFound()
 
   // Ignore browser/OS well-known probes (e.g. Chrome devtools).
   if (mdxPath?.[0] === '.well-known') notFound()
@@ -68,4 +64,3 @@ export default async function Page(props: PageProps) {
     </Wrapper>
   )
 }
-
