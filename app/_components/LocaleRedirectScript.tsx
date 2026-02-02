@@ -1,4 +1,4 @@
-import { DEFAULT_LOCALE } from '../_utils/locales'
+import { DEFAULT_LOCALE, ensureTrailingSlash, LOCALE_LABELS, SUPPORTED_LOCALES } from '../_utils/locales'
 
 function escapeJsStringLiteral(value: string) {
   return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
@@ -6,17 +6,28 @@ function escapeJsStringLiteral(value: string) {
 
 export function LocaleRedirectScript({ originalPathname }: { originalPathname: string }) {
   const path = originalPathname || '/'
-  const pathLiteral = escapeJsStringLiteral(path)
+  const normalizedPath = ensureTrailingSlash(path)
+  const pathLiteral = escapeJsStringLiteral(normalizedPath)
   const defaultLocaleLiteral = escapeJsStringLiteral(DEFAULT_LOCALE)
+  const supportedLiteral = escapeJsStringLiteral(JSON.stringify(SUPPORTED_LOCALES))
 
   // Inline script runs immediately on static HTML load (no React hydration needed).
   const js = `(function(){
+  var SUPPORTED = JSON.parse('${supportedLiteral}');
+  var DEFAULT = '${defaultLocaleLiteral}';
   function normalizeLocale(input){
     if(!input) return null;
-    if(input === 'en-US' || input === 'zh-CN') return input;
-    var base = String(input).toLowerCase().split('-')[0];
-    if(base === 'zh') return 'zh-CN';
-    if(base === 'en') return 'en-US';
+    var s = String(input).trim();
+    if(!s) return null;
+    s = s.replace(/_/g,'-');
+    var lower = s.toLowerCase();
+    for(var i=0;i<SUPPORTED.length;i++){
+      if(String(SUPPORTED[i]).toLowerCase() === lower) return SUPPORTED[i];
+    }
+    var base = lower.split('-')[0];
+    for(var j=0;j<SUPPORTED.length;j++){
+      if(String(SUPPORTED[j]).toLowerCase().split('-')[0] === base) return SUPPORTED[j];
+    }
     return null;
   }
   function readCookie(){
@@ -32,7 +43,7 @@ export function LocaleRedirectScript({ originalPathname }: { originalPathname: s
       var l = normalizeLocale(langs[i]);
       if(l) return l;
     }
-    return '${defaultLocaleLiteral}';
+    return DEFAULT;
   }
   function persist(locale){
     var maxAge = 60 * 60 * 24 * 365;
@@ -43,7 +54,7 @@ export function LocaleRedirectScript({ originalPathname }: { originalPathname: s
   persist(locale);
 
   var basePath = '${pathLiteral}';
-  var path = (basePath === '/' ? '' : basePath);
+  var path = basePath;
   var suffix = (location.search || '') + (location.hash || '');
   location.replace('/' + locale + path + suffix);
 })();`
@@ -57,16 +68,14 @@ export function LocaleRedirectScript({ originalPathname }: { originalPathname: s
           language:
         </p>
         <ul>
-          <li>
-            <a href={`/en-US${path === '/' ? '' : path}`}>English</a>
-          </li>
-          <li>
-            <a href={`/zh-CN${path === '/' ? '' : path}`}>简体中文</a>
-          </li>
+          {SUPPORTED_LOCALES.map((l) => (
+            <li key={l}>
+              <a href={`/${l}${normalizedPath}`}>{LOCALE_LABELS[l] || l}</a>
+            </li>
+          ))}
         </ul>
       </noscript>
       <script dangerouslySetInnerHTML={{ __html: js }} />
     </main>
   )
 }
-
