@@ -46,17 +46,20 @@ export async function onRequest(context: any) {
   // Workers `Response.redirect()` requires an absolute URL.
   const redirectTo = new URL(redirectPathWithQuery, url).toString()
 
-  const res = Response.redirect(redirectTo, 302)
+  // NOTE: In Workers, `Response.redirect()` returns a response with immutable headers,
+  // so we construct the redirect response manually to attach cookies.
+  const headers = new Headers()
+  headers.set('Location', redirectTo)
   // Avoid caching locale redirects across users.
-  res.headers.set('Cache-Control', 'private, no-store')
+  headers.set('Cache-Control', 'private, no-store')
 
   // Persist choice for subsequent visits (JS-readable to stay compatible with current client logic).
   const maxAge = 60 * 60 * 24 * 365
   const secure = url.protocol === 'https:' ? '; Secure' : ''
-  res.headers.append(
+  headers.append(
     'Set-Cookie',
     `SOFTA_LOCALE=${encodeURIComponent(locale)}; Path=/; Max-Age=${maxAge}; SameSite=Lax${secure}`
   )
 
-  return res
+  return new Response(null, { status: 302, headers })
 }
