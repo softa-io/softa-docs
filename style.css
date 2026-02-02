@@ -2,6 +2,29 @@
 @tailwind components;
 @tailwind utilities;
 
+/* --------------------------------------------------------------------------
+   Nextra variable shims
+   --------------------------------------------------------------------------
+   Some custom UI pieces (e.g. `app/_components/LocaleSwitchClient.tsx`) use
+   these CSS variables. Nextra does not guarantee they exist, so we define
+   reasonable defaults for both light and dark themes.
+*/
+
+:root {
+  /* Surface/background for popovers/menus */
+  --nextra-background-color: #ffffff;
+  /* Subtle border for surfaces */
+  --nextra-border-color: rgba(0, 0, 0, 0.10);
+  /* Subtle interactive background (hover/selected) */
+  --nextra-primary-color: rgba(0, 0, 0, 0.06);
+}
+
+.dark {
+  --nextra-background-color: rgb(17, 17, 17);
+  --nextra-border-color: rgba(255, 255, 255, 0.12);
+  --nextra-primary-color: rgba(255, 255, 255, 0.10);
+}
+
 body{
   text-transform: default;
 }
