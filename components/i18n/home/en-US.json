@@ -2,13 +2,13 @@
   "hero": {
     "badge": "Build Enterprise Apps 10× Faster with Governance Built‑in",
     "h1": "Build enterprise apps",
-    "h2": "10× faster with governance built‑in",
-    "lead": "A metadata-driven platform that generates secure UI, OpenAPI, and workflow—while keeping ABAC, audit, and version control by design.",
+    "h2": "10× Faster Development",
+    "lead": "A metadata-driven platform that generates secure OpenAPI, and workflow—while keeping ABAC, audit, and version control by design.",
     "primaryCta": "Read the docs",
     "secondaryCta": "View GitHub",
     "assurances": [
-      { "label": "70% less boilerplate" },
-      { "label": "100% consistent API/UI" },
+      { "label": "80% less boilerplate" },
+      { "label": "Built-in AI capabilities" },
       { "label": "SOC-ready security" }
     ],
     "quickTitle": "Quick links",

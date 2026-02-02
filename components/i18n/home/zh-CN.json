@@ -2,13 +2,13 @@
   "hero": {
     "badge": "企业应用开发提速 10×，内置治理能力",
     "h1": "构建企业应用",
-    "h2": "快 10×，治理内置",
-    "lead": "一个元数据驱动的平台：自动生成安全的 UI、OpenAPI 与流程，同时从设计上内置 ABAC、审计与版本控制。",
+    "h2": "10× 高效开发",
+    "lead": "一个元数据驱动的平台：自动生成安全的 OpenAPI 与流程，同时从设计上内置 ABAC、审计与版本控制。",
     "primaryCta": "阅读文档",
     "secondaryCta": "查看 GitHub",
     "assurances": [
-      { "label": "减少 70% 样板代码" },
-      { "label": "API/UI 100% 一致" },
+      { "label": "减少 80% 样板代码" },
+      { "label": "内置 AI 能力" },
       { "label": "SOC 就绪的安全体系" }
     ],
     "quickTitle": "快速入口",
