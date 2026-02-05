@@ -78,7 +78,7 @@ docker-compose -f deploy/minio/docker-compose.yml up -d
 如果连接到已有的 ElasticSearch、Pulsar 和 OSS，修改 `deploy/demo-app/docker-compose.yml` 中的 `demo-app` 服务的环境变量，指定相关的服务地址。其中 `SPRING_PULSAR_CLIENT_SERVICE_URL` 需要配置 Pulsar 服务的地址。
 ```yml
   demo-app:
-    image: softa/demo-app:1.0.2
+    image: softa/demo-app:1.0.3
     ports:
       - 80:80
     environment:

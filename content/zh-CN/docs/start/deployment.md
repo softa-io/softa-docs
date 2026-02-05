@@ -25,7 +25,7 @@
 
 构建 Demo 应用镜像示例：
 ```bash
-./deploy/build.sh apps/demo-app 1.0.2
+./deploy/build.sh apps/demo-app 1.0.3
 ```
 
 # 2. 通过 Docker Compose 启动 EFK（可选）

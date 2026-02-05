@@ -23,7 +23,7 @@ Your can specify the `REGISTRY_NAMESPACE` to push the image to your own docker i
 
 Example to build the demo application image:
 ```bash
-./deploy/build.sh apps/demo-app 1.0.2
+./deploy/build.sh apps/demo-app 1.0.3
 ```
 
 # 2. Start EFK by Docker Compose (Optional)
