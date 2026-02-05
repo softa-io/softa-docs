@@ -40,13 +40,13 @@ curl -X POST 'http://localhost/api/mini/SysField/searchPage' \
 -d '{}'
 ```
 
-## 3、运行 demo-app 应用
-demo-app 是一个实验性应用，依赖了开发过程中新增的 starters，用来验证新增的功能特性。因此，准备工作也会复杂一些。
+## 3、运行 demo-app 应用体验所有功能
+demo-app 是一个聚合应用，依赖了所有 starter 模块，用来体验所有的功能特性。因此，准备工作也会复杂一些。
 
 由于 Demo 应用依赖了 ElasticSearch、Pulsar、OSS，需要先运行这些服务，或者连接到已有的测试环境。
 
 ### 3.1 运行服务依赖
-如果已经有 ElasticSearch、Pulsar、OSS 测试环境，可以跳过运行步骤，直接创建 ES index 、消息 Topics 和 OSS Bucket。
+如果已经有 ElasticSearch、Pulsar、OSS 远程服务环境，可以跳过运行步骤，直接创建 ES index 、消息 Topics 和 OSS Bucket。
 
 #### 3.1.1 Docker Compose 运行 ElasticSearch
 ```bash
@@ -60,6 +60,9 @@ docker-compose -f deploy/pulsar/docker-compose.yml up -d
 ```
 Pulsar 客户端地址： http://localhost:8080
 
+如果在 spring 配置文件中未配置 `mq.topics.xxx` 相关 topics 属性，则不会启动对应的 Listener。
+也即如果还没有准备好 pulsar 环境，可以通过不配置 `mq.topics` 属性避免无法启动。
+
 #### 3.1.3 Docker Compose 运行 OSS（Minio）
 Softa 的 OSS 存储，支持 Minio 和 阿里云 OSS 服务。在测试过程中，为了减少外部依赖，通过运行单机 Minio 服务提供 OSS 服务。
 ```bash
@@ -72,10 +75,10 @@ docker-compose -f deploy/minio/docker-compose.yml up -d
 
 ### 3.2 Docker Compose 运行 Demo 应用
 #### 3.2.1 配置环境变量
-如果连接到已有的 ElasticSearch、Pulsar 和 OSS，修改 `deploy/demo-app/docker-compose.yml` 中的 `demo-app` 服务的环境变量，指定相关的服务地址。其中 `SPRING_PULSAR_CLIENT_SERVICE_URL` 需要配置 Pulsar 服务的 IP 地址。
+如果连接到已有的 ElasticSearch、Pulsar 和 OSS，修改 `deploy/demo-app/docker-compose.yml` 中的 `demo-app` 服务的环境变量，指定相关的服务地址。其中 `SPRING_PULSAR_CLIENT_SERVICE_URL` 需要配置 Pulsar 服务的地址。
 ```yml
   demo-app:
-    image: softa/demo-app:1.0
+    image: softa/demo-app:1.0.2
     ports:
       - 80:80
     environment:

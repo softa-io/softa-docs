@@ -40,9 +40,9 @@ curl -X POST 'http://localhost/api/mini/SysField/searchPage' \
 ```
 
 ## 3. Run the demo-app Application
-The demo-app is an experimental application that relies on newly added starters developed during the process. It is used to verify new feature capabilities and thus requires more preparation.
+Demo app is an aggregated application that depends on all starter modules, and is used to experience all feature capabilities. Therefore, the preparation work is a bit more involved.
 
-Since the demo application depends on ElasticSearch, Pulsar and OSS, these services must be running first, or it must connect to an existing testing environment.
+Because the Demo application depends on ElasticSearch, Pulsar, and OSS, you need to start these services first, or connect to an existing test environment.
 
 ### 3.1 Run ElasticSearch and Pulsar
 If there is an existing ElasticSearch, Pulsar and OSS testing environment, you can skip these steps and directly create the necessary ES indices and message topics.
@@ -59,6 +59,10 @@ docker-compose -f deploy/pulsar/docker-compose.yml up -d
 ```
 Access the Pulsar console at [http://localhost:8080](http://localhost:8080)
 
+If the `mq.topics.xxx` topic properties are not configured in the Spring configuration file, the corresponding listener will not be started.
+
+In other words, if the Pulsar environment is not ready yet, you can avoid startup failures by simply not configuring the `mq.topics` properties.
+
 #### 3.1.3 Running OSS (Minio) with Docker Compose
 
 The OSS storage for Softa supports both Minio and Alibaba Cloud OSS services. During testing, to reduce external dependencies, a standalone Minio service is used to provide OSS functionality.
@@ -74,10 +78,10 @@ docker-compose -f deploy/minio/docker-compose.yml up -d
 
 ### 3.2 Run the Demo Application with Docker Compose
 #### 3.2.1 Configure Environment Variables
-If connecting to an existing ElasticSearch, Pulsar and OSS, modify the environment variables of `demo-app` in `deploy/demo-app/docker-compose.yml`.`SPRING_PULSAR_CLIENT_SERVICE_URL` requires the IP address of the Pulsar server.
+If connecting to an existing ElasticSearch, Pulsar and OSS, modify the environment variables of `demo-app` in `deploy/demo-app/docker-compose.yml`.`SPRING_PULSAR_CLIENT_SERVICE_URL` requires the address of the Pulsar server.
 ```yaml
   demo-app:
-    image: softa/demo-app:1.0
+    image: softa/demo-app:1.0.2
     ports:
       - 80:80
     environment:

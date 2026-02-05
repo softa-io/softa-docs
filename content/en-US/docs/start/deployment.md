@@ -1,43 +1,69 @@
-# System Deployment
+# 1. Build multi-platform images
 
-## 1. Build Multi-Architecture Images and Push to Image Registry
-When building Docker images, it is necessary to create images for each CPU architecture. Here, only `linux/amd64` and `linux/arm64` architectures are considered, as they cover the majority of CPUs.
+## 1.1 Build & Push by GitHub Actions
+You can use the GitHub Actions workflow or any other CI tools, to build and push multi-platform images to Docker container registry.
+Refer to the `.github/workflows/build-and-push.yml` file for more details.
+Trigger build action on push of tags starting with "v", e.g., v1.0.0
 
-### 1.1 Prepare Multi-Architecture Environment
-Docker Engine includes the `buildx` plugin, which supports building multi-architecture images.
+`./deploy/Dockerfile` is a common multi-stage Dockerfile, which can be used to build the app image.
+The `APP_PATH`, `APP_NAME` parameters are passed as build arguments in the GitHub Actions workflow.
+The image `version` is extracted from the tag name e.g., `v1.0.0` -> `1.0.0`.
 
-Create and use a new builder to enable multi-architecture builds:
-```bash
-docker buildx create --name multi-arch --use
+## 1.2 Build & Push by Local Script Manually
+Build images and push them to Docker container registry
+Specify the `APP_PATH`, `APP_VERSION` to build the image for the Java application.
 ```
-
-List existing builders to verify the new builder was created successfully:
-```bash
-docker buildx ls
-```
-
-### 1.2 Build Multi-Architecture Docker Images
-In the root directory of the code repository, build Java application images by specifying `APP_PATH` and `APP_VERSION`:
-```bash
 ./deploy/build.sh <APP_PATH> <APP_VERSION> [<REGISTRY_NAMESPACE>]
 ```
+The `APP_PATH` is the relative path to the application source code directory, such as `apps/demo-app`.
+And the last name in `APP_PATH` is the application name, such as `demo-app`.
 
-In the parameters:
-- `APP_PATH` is the relative directory of the application to be built. The last segment of the string serves as the application name. For example, the directory for the demo application is `apps/demo-app`.
-- `REGISTRY_NAMESPACE` is an optional parameter. The default value is `softa`, which corresponds to the `softa` namespace in the official Docker Hub registry.
-  You can specify `REGISTRY_NAMESPACE` to push the Docker image to a private image registry.
+The `REGISTRY_NAMESPACE` is optional, and the default value is `softa`.
+Your can specify the `REGISTRY_NAMESPACE` to push the image to your own docker image repository.
 
-Example for building the demo application image:
+Example to build the demo application image:
 ```bash
-./deploy/build.sh apps/demo-app 1.0
+./deploy/build.sh apps/demo-app 1.0.2
 ```
 
-## 2. Launch the Demo Application Using Docker Compose
+# 2. Start EFK by Docker Compose (Optional)
+```bash
+docker-compose -f deploy/efk/docker-compose.yml up -d
+```
+Access the Kibana console at http://localhost:5601
+
+Or you can specify the `spring.elasticsearch.uris` property to connect to your own Elasticsearch cluster.
+
+# 3. Start Pulsar by Docker Compose (Optional)
+```bash
+docker-compose -f deploy/pulsar/docker-compose.yml up -d
+```
+Access the Pulsar console at http://localhost:8080
+
+Or you can specify the `spring.pulsar.service-url` property to connect to your own Pulsar cluster.
+
+The most crucial information is you need to configure the `mq.topics.xxx.topic` properties to enable the corresponding Listeners.
+
+On the other hand, if you are not ready to set up the pulsar service, you can also choose not to configure
+or comment out the `mq.topics.xxx` topics to avoid the issue of being unable to start.
+
+# 4. Start Minio by Docker Compose (Optional)
+```bash
+docker-compose -f deploy/minio/docker-compose.yml up -d
+```
+### Minio API Endpoints
+http://localhost:9000
+
+### Minio Web UI Dashboard
+http://localhost:9001
+Username: minioadmin
+Password: minioadmin
+
+# 5. Start the demo application by Docker Compose
 ```bash
 docker-compose -f ./deploy/demo-app/docker-compose.yml up -d
 ```
+Create a database instance and execute the SQL scripts in `deploy/demo-app/init_mysql`.
 
-For detailed configuration and launch instructions, refer to the [Quick Start Guide](./quickStart) section for the demo application.
-
-## 3. Production Environment
-It is recommended to deploy the production environment using CI/CD pipelines and Kubernetes.
+# 6. Production Environment
+It is highly recommended that the production environment be deployed using a pipeline and Kubernetes for containerization.

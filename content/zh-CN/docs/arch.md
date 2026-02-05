@@ -5,7 +5,7 @@
 
 该架构以**Softa 应用开发平台（Application Development Platform）**为核心，采用自上而下的分层模型。
 
-最上层为业务应用（Business Apps），如 CoreHR、Payroll、Talent、Workforce、Expenses 等，直接承载业务场景与用户功能。
+最上层为业务应用（Business Apps），如 CoreHR、Payroll、Talent、Workforce、Expense 等，直接承载业务场景与用户功能。
 
 中间是平台能力层，由两部分组成：
 

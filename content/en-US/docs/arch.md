@@ -5,7 +5,7 @@
 
 This architecture is centered on the Softa Application Development Platform, following a top-down layered model.
 
-The top layer is Business Apps, such as CoreHR, Payroll, Talent, Workforce, and Expenses, which directly serve business scenarios and end users.
+The top layer is Business Apps, such as CoreHR, Payroll, Talent, Workforce, and Expense, which directly serve business scenarios and end users.
 
 The middle layer provides platform capabilities and consists of:
 
