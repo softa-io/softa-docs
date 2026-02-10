@@ -42,7 +42,7 @@ docker-compose -f deploy/pulsar/docker-compose.yml up -d
 ```
 通过 `http://localhost:8080` 访问 Pulsar 控制台。
 
-或者你也可以通过配置 `spring.pulsar.service-url` 属性，连接到你自己的 Pulsar 集群。
+或者你也可以通过配置 `spring.pulsar.client.service-url` 属性，连接到你自己的 Pulsar 集群。
 
 最关键的是：你需要配置 `mq.topics.xxx.topic` 属性，才能启用对应的 Listener。
 

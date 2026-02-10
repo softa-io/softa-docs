@@ -12,8 +12,7 @@ Softa natively supports two multi-tenancy modes: shared application with shared 
 Enable multi-tenancy by setting `system.multi-tenancy.enable=true` in the configuration file. For example:
 ```yaml
 system:
-  multi-tenancy:
-    enable: true
+  enable-multi-tenancy: true
 ```
 
 ### 2.2 Multi-Tenancy Mode 2: Shared Application with Independent Database
@@ -24,8 +23,7 @@ When a user logs in, these fields can be populated in the `ContextInterceptor` i
 Enable multi-tenancy in the configuration file by setting `system.multi-tenancy.enable=true`, and also enable dynamic multi-data source with the `mode` set to `multi-tenancy-isolated`.
 ```yaml
 system:
-  multi-tenancy:
-    enable: true
+  enable-multi-tenancy: true
 spring:
   datasource:
     dynamic:

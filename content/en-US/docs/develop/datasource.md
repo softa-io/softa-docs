@@ -134,8 +134,7 @@ Enable both multi-tenancy and multi-data sources, and set the multi-data source 
 In the implementation of the `ContextInterceptor` (which loads user information), specify both the `tenantId` and the `datasourceKey`.
 ```yml
 system:
-  multi-tenancy:
-    enable: true
+  enable-multi-tenancy: true
 spring:
   datasource:
     dynamic:

@@ -10,8 +10,7 @@ Softa 原生支持两种多租户模式：共享应用-共享数据库模式、�
 在配置文件中设置 `system.multi-tenancy.enable=true` 启用多租户。如：
 ```yaml
 system:
-  multi-tenancy:
-    enable: true
+  enable-multi-tenancy: true
 ```
 
 ### 2.2 多租户模式二：共享应用-独立数据库
@@ -22,8 +21,7 @@ system:
 在配置文件中启用多租户 `system.multi-tenancy.enable=true`，同时启用动态多数据源，并且设置 `mode` 为 `multi-tenancy-isolated`。
 ```yaml
 system:
-  multi-tenancy:
-    enable: true
+  enable-multi-tenancy: true
 spring:
   datasource:
     dynamic:

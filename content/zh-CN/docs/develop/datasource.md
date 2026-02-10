@@ -133,8 +133,7 @@ spring:
 在 ContextInterceptor 拦截器（加载用户信息）的实现类中，同时指定 tenantId 和 datasourceKey 即可。
 ```yml
 system:
-  multi-tenancy:
-    enable: true
+  enable-multi-tenancy: true
 spring:
   datasource:
     dynamic:
