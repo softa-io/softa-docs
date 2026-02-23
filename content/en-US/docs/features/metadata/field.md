@@ -1,308 +1,321 @@
 # Field Metadata
 
-## 1. Introduction to Field Metadata
+Field metadata is a collection of descriptive information about model fields. It defines the fields used by a model in business scenarios, as well as the type, length, default value, required/readonly constraints, relationships, and more. With this metadata, Softa can handle data responses, processing, and interactions in a consistent way, and can abstract common requirements to ensure data consistency, accuracy, and integrity.
 
-Field metadata is a collection of descriptive information about model fields. It defines various fields used in the business scenario for that model, as well as the field type, length, default value, required status, readonly status, and relationships of each field. Through this metadata, the system can control data response, processing, and interaction according to a unified pattern. It also allows for the abstraction of common requirements, ensuring data consistency, accuracy, and integrity.
+## 1. Field Type Overview
+
+| No. | Type | Type Name | Default Value | Description |
+| --- | --- | --- | --- | --- |
+| 1 | String | String | "" | Configure the maximum string length via `length`. |
+| 2 | Integer | Integer | 0 | Configure the number of integer digits via `length`. |
+| 3 | Long | Long | 0L |  |
+| 4 | Double | Double | 0.00 | General-purpose decimals (precision loss acceptable). |
+| 5 | BigDecimal | BigDecimal | "0" | High-precision decimals (money/currency/exchange rate, etc.). |
+| 6 | Boolean | Boolean | false |  |
+| 7 | Date | Date |  | Format `yyyy-MM-dd`, e.g. `2026-02-01`. |
+| 8 | DateTime | DateTime |  | Format `yyyy-MM-dd HH:mm:ss`, e.g. `2026-02-01 12:15:20`. |
+| 9 | Option | Single select |  |  |
+| 10 | MultiOption | Multi select | [] |  |
+| 11 | MultiString | String list | [] |  |
+| 12 | File | Single file |  | Virtual field: upload and bind a file. |
+| 13 | MultiFile | Multiple files |  | Virtual field: upload and bind multiple files. |
+| 14 | JSON | JSON |  | Stored as a JSON string. |
+| 15 | Filters | Filters |  | Stores filter conditions (infix expression). |
+| 16 | Orders | Orders |  | Stores multi-field ordering conditions. |
+| 17 | OneToOne | One-to-one |  | Configure `relatedModel`. |
+| 18 | ManyToOne | Many-to-one |  | Configure `relatedModel`. |
+| 19 | OneToMany | One-to-many |  | Virtual field: configure `relatedModel` + `relatedField`. |
+| 20 | ManyToMany | Many-to-many |  | Virtual field: configure `relatedModel` + `joinModel` + `joinLeft` + `joinRight`. |
+
+> Notes:
+> 1. For OneToOne/ManyToOne/OneToMany/ManyToMany, the foreign keys are **logical** foreign keys, not physical database foreign keys.
+> 2. Virtual fields do not exist as columns in the current table. When operating on virtual fields, the framework handles the related processing automatically.
+
+**Field types that need additional explanation:**
+
+### 1.1 `Date`
+
+In code, it is a `LocalDate` object. The display format is `yyyy-MM-dd`, e.g. `2026-02-01`.
+
+### 1.2 `DateTime`
+
+A date-time type accurate to seconds. In code, it is a `LocalDateTime` object. In the database, it is stored as a timestamp. The display format is `yyyy-MM-dd HH:mm:ss`, e.g. `2026-02-01 12:15:20`.
+
+### 1.3 `Option`
+
+A single-select field. You must configure the `optionCode` attribute (the option set code).
+
+When saving a single-select field, the value passed and stored is the option item code.
+
+When fetching a single-select field through the API, the default response format is `[itemCode, itemName]` (both the code and name are returned).
+
+For option set configuration and usage, see the [Option Set](option) section.
+
+### 1.4 `MultiOption`
+
+Multi-select fields allow selecting multiple options from the same option set. When saving, you pass a list of option item codes, and the database stores the codes separated by `,`.
+
+When reading a multi-select field through the API, the default response format is `[[itemCode, itemName], ...]`.
+
+### 1.5 `MultiString`
+
+Used to store multiple string values in a single field. In code, it is processed as a string list; in the database, values are stored separated by `,`.
+
+### 1.6 `File`
+
+Used to upload and bind a single file. The file is automatically stored in the `FileRecord` model.
+
+### 1.7 `MultiFile`
+
+Used to upload and bind multiple files. Files are automatically stored in the `FileRecord` model.
+
+### 1.8 `JSON`
+
+Typically used only for JSON storage and object conversion. If you need indexing or conditional querying on JSON data, you must handle it manually.
+
+### 1.9 `Filters`
+
+Used only for storing the JSON string of a `Filters` object.
+
+### 1.10 `Orders`
+
+Used only for storing the JSON string of an `Orders` object.
+
+### 1.11 `OneToOne`
+
+A relational field. Configure `relatedModel` and `relatedField`. The selected data is unique.
+
+### 1.12 `ManyToOne`
+
+A relational field. Configure `relatedModel` and `relatedField`.
+
+### 1.13 `OneToMany`
+
+In most cases, OneToMany data is created/edited/deleted on the client side for a single record by calling the model API of the Many side.
+
+For batch editing scenarios of OneToMany values:
+
+(1) If the field value is `[]`, the empty list indicates deleting all historical records.
+
+(2) If the field value is not empty and is a list like `[{...}, {...}]` (the Many side records), the framework automatically identifies which records are added/updated/deleted and processes them accordingly.
+
+### 1.14 `ManyToMany`
+
+(1) Updating a `ManyToMany` field
+
+In Create/Update scenarios, the value passed for a ManyToMany field is the list of IDs of the related model. For example, an Update request:
+
+```json
+{
+  "id": 12,
+  "attendeeIds": [1, 2, 3]
+}
+```
+
+The framework automatically detects and removes deleted relationships.
+
+(2) Cascading search for a `ManyToMany` field
+
+Use case: filter records of the current table by conditions on fields in the join table. See the [Query Conditions](../../develop/query) section.
 
 ## 2. Field Metadata Attributes
 
-| No. | Field Information | Data Type | Description | Remarks |
+| No. | Attribute | Data Type | Description | Notes |
 | --- | --- | --- | --- | --- |
 | 1 | labelName | String | Field label |  |
 | 2 | modelName | String | Model name |  |
 | 3 | fieldName | String | Field name |  |
 | 4 | fieldType | Option | Field type |  |
 | 5 | optionCode | String | Option set code |  |
-| 6 | defaultValue | String | Field default value |  |
+| 6 | defaultValue | String | Default value |  |
 | 7 | length | Integer | Field length |  |
 | 8 | scale | Integer | Decimal places |  |
-| 9 | required | Boolean | Required field, default `false` |  |
-| 10 | readonly | Boolean | Readonly field, default `false` |  |
+| 9 | required | Boolean | Required, default `false` |  |
+| 10 | readonly | Boolean | Readonly, default `false` |  |
 | 11 | hidden | Boolean | Hidden, default `false` |  |
-| 12 | copyable | Boolean | Copyable field, default `true` |  |
-| 13 | searchable | Boolean | Searchable field, default `true` |  |
-| 14 | dynamic | Boolean | Dynamic field, default `false` |  |
-| 15 | translatable | Boolean | Translatable field, default `false` |  |
-| 16 | encrypted | Boolean | Encrypted field, default `false` |  |
-| 17 | maskingType | Boolean | Masking type |  |
-| 18 | computed | Boolean | Computed field, default `false` |  |
+| 12 | copyable | Boolean | Copyable, default `true` |  |
+| 13 | searchable | Boolean | Searchable, default `true` |  |
+| 14 | dynamic | Boolean | Dynamic, default `false` |  |
+| 15 | translatable | Boolean | Translatable, default `false` |  |
+| 16 | encrypted | Boolean | Encrypted, default `false` |  |
+| 17 | maskingType | Option | Masking type |  |
+| 18 | computed | Boolean | Computed, default `false` |  |
 | 19 | expression | String | Computation expression |  |
 | 20 | cascadedField | String | Cascaded field | Relationship attribute |
 | 21 | relatedModel | String | Related model | Relationship attribute |
-| 22 | middleModel | String | Middle model | Relationship attribute |
-| 23 | relatedField | String | Related field | Relationship attribute |
-| 24 | inverseLinkField | String | Inverse link field | Relationship attribute |
-| 25 | filters | String | Filtering conditions for relational fields | Relationship attribute |
-| 26 | columnName | String | Data table column name | Read-only |
-| 27 | description | String | Field description |  |
+| 22 | relatedField | String | Related field | For OneToMany: the Many-side field name |
+| 23 | joinModel | String | Join model (ManyToMany) | Middle model |
+| 24 | joinLeft | String | Left-side field in join model | Stores the left model FK |
+| 25 | joinRight | String | Right-side field in join model | Stores the right model FK |
+| 26 | filters | String | Relational field filter conditions | Relationship attribute |
+| 27 | columnName | String | Table column name | Read-only |
+| 28 | description | String | Field description |  |
 
-### 2.1 `labelName` Field Label
+### 2.1 `labelName`
 
-The label name of the field, i.e., the semantic name of the field, usually displayed as the field name in the list page header or form page. For example, `Contact Number`.
+The label (semantic) name of the field. It is typically displayed as a column header on list pages or as a field label on forms, e.g. `Contact Number`.
 
-### 2.2 `modelName` Model Name
+### 2.2 `modelName`
 
-The name of the model to which the field belongs. The model name here refers to the technical name of the model, such as `ProductCategory`.
+The model the field belongs to (technical model name), e.g. `ProductCategory`.
 
-### 2.3 `fieldName` Field Name
+### 2.3 `fieldName`
 
-The technical name of the field, corresponding to the property name definition of the entity class, such as `unitPrice`. Before querying, the field name is converted to `underscore naming` based on the storage type, such as `unit_price`.
+The technical name of the field (lower camelCase), corresponding to the property name in the entity class, e.g. `unitPrice`.
 
-### 2.4 `fieldType` Field Type
+Before querying, Softa converts field names to underscore naming based on the storage type, e.g. `unit_price`.
 
-Predefined field types in the system include string text, various numeric types, date types, option set types, JSON types, and various relationship types. For details, refer to the `FieldType` section.
+### 2.4 `fieldType`
 
-### 2.5 `optionCode` Option Set Code
+The field type from the built-in type set, including string, numeric, date/time, option set, JSON, and relationship types. See the field types section above for details.
 
-Option sets are generally used in scenarios where options are relatively fixed, the number of options is limited, but expansion support is needed. In Softa, all option information is stored in the `SysOptionSet` and `SysOptionItem`.
+### 2.5 `optionCode`
 
-When the field type is `Option` or `MultiOption`, the `optionCode` option set code property needs to be configured.
+Option sets are suitable for business scenarios where options are relatively stable, the number of options is limited, but extensibility is needed. In Softa, option information is stored in the `OptionSet` model and the `OptionItem` model.
 
-### 2.6 `defaultValue` Default Field Value
+When the field type is `Option` or `MultiOption`, you must configure `optionCode`.
 
-Configuration of the field's default value. When creating a new record, if the current field is not assigned a value, the default value will be used.
+### 2.6 `defaultValue`
 
-Logic for assigning default values in the Create scenario:
-(1) Check if the field has a value (not `NULL`). If there is a value, use the current value, and the default value will not be used. An empty string `` for text fields and 0 for numeric fields are considered values.
+Default value configuration. When creating a new record, if the field is not assigned, the default value will be used.
 
-(2) If the current field has not been assigned a value, the default value will be used.
+Default value assignment logic in Create:
 
-(3) If the field is not configured with a default value, the default value corresponding to the field type will be used. Refer to the `FieldType` section for specific default values for different field types.
+1. If the field already has a value (not `NULL`), Softa uses the current value and does not apply the default value. For text fields, an empty string `""` is considered a value; for numeric fields, `0` is also considered a value.
+2. If the field is not assigned, Softa uses `defaultValue` first.
+3. If `defaultValue` is not configured, Softa uses the global default for the given field type (see field types above).
 
-### 2.7 `length` Field Length
+### 2.7 `length`
 
-The length of the field, corresponding to the character length for string types and the number of digits for integer types and high-precision numeric types.
+Field length: string character length, integer digit count, and digit count for high-precision numeric types.
 
-### 2.8 `scale` Decimal Places
+### 2.8 `scale`
 
-Decimal places for float and high-precision numeric types, with a default of 2 decimal places.
+Decimal places for floating-point and high-precision numeric types. The default is 2.
 
-### 2.9 `required` Required Field
+### 2.9 `required`
 
-Control for the field's required property. Softa's data processing layer immediately performs validation, independent of the database. When creating or updating data, the field's required property is checked. Unlike the database's `not null` property, a `required=true` field must be assigned a value during creation, and the value cannot be empty (including not allowing empty strings). Updating this field cannot set it to null.
+Required-field validation. Softa validates required fields in the application layer and does not rely on the database.
 
-### 2.10 `readonly` Read-Only Field
+When creating or updating data, Softa checks the `required` attribute. This is different from the database `NOT NULL` constraint: a database `NOT NULL` column may have a default value and thus may not be “required” from the application’s perspective. Softa’s `required` is stricter:
 
-Whether client updates are allowed. For fields with `readonly=true`, client/API assignments and updates are not allowed; only server-side updates are supported, such as for calculated or auto-fill fields. Client-side creation and updating data check this property, and an error will occur when assigning a value to a read-only field.
+- When `required=true`, you must provide a value during creation, and the value cannot be empty (including disallowing empty strings).
+- When updating the field, you cannot set it to null/empty.
 
-Audit fields createdId, createdTime, updatedId, and updatedTime are automatically maintained by the underlying system, defaulting to `readonly=true`.
+### 2.10 `readonly`
 
-### 2.11 `hidden` Hidden Field
+Whether the client is allowed to update this field. If `readonly=true`, the client/API cannot assign or update the field; only server-side updates are allowed (e.g. computed fields or auto-filled fields). Client-side create/update validates this attribute; attempting to assign a value will cause an error.
 
-Whether to hide this field by default on the client, defaulting to `false`.
+Audit fields `createdId`, `createdTime`, `updatedId`, `updatedTime` are maintained automatically and are `readonly=true` by default.
 
-### 2.12 `copyable` Copyable Field
+### 2.11 `hidden`
 
-Whether the data of the current field is copied when duplicating data on the client, defaulting to `true`. All fields are copyable, except for the primary key `id` field.
+Whether the field is hidden by default on the client. Default is `false`.
 
-### 2.13 `searchable` Searchable Field
+### 2.12 `copyable`
 
-Whether this field can be used as a query condition in a general search scenario. Defaults to `true`, meaning all fields are searchable.
+Whether the field is copied when duplicating data on the client. Default is `true`. All fields are copyable except the primary key `id`.
 
-### 2.14 `dynamic` Dynamic Field
-Whether this field a dynamic field. The default is `false`. The value of the dynamic field is automatically calculated at runtime and is not stored in the database.
+### 2.13 `searchable`
 
-Scenarios where it can be `true`: dynamic computed fields, dynamic cascade fields. The value of the dynamic field generally represents the calculation result of the latest data. When using dynamic computed fields, the impact on client performance needs to be considered.
+Whether the field can be used as a query condition in general search. Default is `true`.
 
-### 2.15 `translatable` Translatable Field
+### 2.14 `dynamic`
 
-In multilingual data scenarios, indicates whether the value of this field can be translated. `translatable=true` indicates that this field is a multilingual field. Defaults to `false`.
+Whether the field is dynamic. Default is `false`. The value of a dynamic field is computed at runtime and is not stored in the database.
 
-### 2.16 `encrypted` Encrypted Field
+Typical scenarios for `dynamic=true`: dynamic computed fields and dynamic cascaded fields. Dynamic field values often represent the latest computed result; consider the impact on client performance.
 
-Whether this field is an encrypted field, defaulting to AES256 encryption.
+### 2.15 `translatable`
 
-### 2.17 `maskingType` Masking Type
-When this field contains sensitive data, the data masking type can be configured according to rules for phone numbers, names, ID numbers, bank card numbers, etc.
+In multilingual data scenarios, `translatable=true` means the field value is translatable (a multilingual field). Default is `false`.
 
-When the client retrieves data through the API, the program will automatically mask the data of this field. The masking method can be configured to replace all or part of the field's data with the `****` string.
+### 2.16 `encrypted`
 
-Masked fields do not affect cascade fields or calculated fields that are processed on the server side. This means calculated fields can rely on masked fields, or calculated fields can also be masked fields simultaneously.
+Whether the field is encrypted. Softa uses AES256 by default.
 
-The client can obtain sensitive data of specified fields through the `getUnmaskedField` interface, during which the server will record access logs of sensitive data.
+### 2.17 `maskingType`
 
-- `All`: Full masking, replacing all characters with `****`.
-- `Name`: Name masking, retaining the first and last characters, and retaining the last character if the name has only two characters.
-- `Email`: Email masking, retaining the first 4 characters.
-- `PhoneNumber`: Phone number masking, masking the last 4 characters.
-- `IdNumber`: ID number masking, retaining the first and last 4 characters.
-- `CardNumber`: Card number masking, retaining the last 4 characters.
+When the field contains sensitive data, configure the masking type (phone number, name, ID number, bank card number, etc.).
 
-### 2.18 `computed` Computed Field
+When the client fetches data through the API, Softa automatically masks the field value. Masking can replace all or part of the value with `****`.
 
-Indicates whether this field is a computed field. Computed fields can be configured with computation expressions and depend on other fields of the current model in the computation expression.
+Masked fields do not affect server-side computed fields or cascaded fields. A computed field can depend on a masked field, and a computed field itself can also be masked.
 
-Currently, due to performance considerations, cross-model field references are not supported in a single computation expression. If necessary, you can read field data across models in Flow orchestration and participate in computations.
+The client can use the `getUnmaskedField` API to obtain the sensitive value for a specific field; the server records access logs during this process.
 
-For `dynamic=false` computed fields, when the dependent fields change, recalculation is triggered automatically.
+- `All`: mask all characters (replace with `****`).
+- `Name`: keep the first and last character; if the name has only 2 characters, keep the last character.
+- `Email`: keep the first 4 characters.
+- `PhoneNumber`: mask the last 4 characters.
+- `IdNumber`: keep the first and last 4 characters.
+- `CardNumber`: keep the last 4 characters.
 
-For `dynamic=true` computed fields, the computation result is not stored in the database. When reading this computed field, the computation is executed automatically.
+### 2.18 `computed`
 
-### 2.19 `expression` Computation Expression
+Whether the field is computed. Computed fields can be configured with an expression and can depend on other fields of the current model.
 
-In the `expression` expression, you can reference other fields of the current model for computation. In the expression, common utility functions such as arithmetic operations, string functions, and date functions can be used.
+Currently, for performance reasons, a single expression does not support cross-model field references. If needed, you can read field values across models in Flow orchestration and include them in computations.
 
-For numeric types, high-precision computations are used to avoid precision loss, with 16 decimal places retained during the computation process, using the `banker's rounding` method at the end. Since the decimal places parameter configuration for numeric fields is generally less than or equal to 16, the precision of this computation process does not affect the precision control of the field itself.
+- For computed fields with `dynamic=false`, when dependent fields change, Softa automatically triggers recalculation.
+- For computed fields with `dynamic=true`, the computed result is not stored. Softa evaluates the expression on read.
 
-Softa uses **[AviatorScript](https://github.com/killme2008/aviatorscript)** as the expression engine and sets it to safe sandbox mode.
+### 2.19 `expression`
 
-### 2.20 `cascadedField` Cascaded Field
+The computation expression. You can reference other fields of the current model and use arithmetic operations, string functions, date functions, and other common utility functions.
 
-Refers to the values of fields in related models through OneToOne/ManyToOne field references. The configuration format is dot-separated cascaded fields, with the left side being the OneToOne/ManyToOne field name of the current model, and the right side being the field name of the related model, such as `productId.productName`.
+For numeric types, Softa uses high-precision computation to avoid precision loss: it keeps 16 decimal places during calculation and applies **banker’s rounding** at the end. Since the `scale` for numeric fields is typically \(\le 16\), this does not affect the field’s own precision control.
 
-For `dynamic=false` cascaded fields, recalculation is triggered automatically when the dependent OneToOne/ManyToOne field changes.
+Softa uses **[AviatorScript](https://github.com/killme2008/aviatorscript)** as the expression engine and runs it in a safe sandbox mode.
 
-For `dynamic=true` cascaded fields, it means that the cascaded value is not stored in the database. When reading this cascaded field, the latest field values are automatically cascaded.
+### 2.20 `cascadedField`
 
-This cascade is a logical cascade, not a database cascade.
+A cascaded field references a field value from a related model via a OneToOne/ManyToOne relationship. The format is dot-separated: the left side is the OneToOne/ManyToOne field name on the current model, and the right side is the field name on the related model, e.g. `productId.productName`.
 
-### 2.21 `relatedModel` Related Model
+- For `dynamic=false` cascaded fields, when the dependent OneToOne/ManyToOne field changes, Softa triggers recalculation automatically.
+- For `dynamic=true` cascaded fields, the cascaded value is not stored. On read, Softa fetches the latest related value dynamically.
 
-The associated model for relational fields, i.e., the model name for OneToOne, ManyToOne, OneToMany, and ManyToMany field types. For ManyToMany field types, this associated model is the model name of the intermediate table.
+This is a logical cascade, not a database cascade. Only OneToOne/ManyToOne supports cascaded value access.
 
-### 2.22 `middleModel` Middle Model
+### 2.21 `relatedModel`
 
-The ManyToMany field stores the middle model for the relationship data between the left and right models, which is also the intermediate table.
+The related model for relationship fields (OneToOne, ManyToOne, OneToMany, ManyToMany).
 
-### 2.23 `relatedField` Related Field
+### 2.22 `relatedField`
 
-* When the field type is OneToMany, the related model stores the field name of the current model id.
-* When the field type is ManyToMany, the middle model stores the field name of the current model id.
-* In the case of OneToOne and ManyToOne, this attribute defaults to the id of the related model.
+- For OneToMany, this is the field name in the related model (Many side) that stores the foreign key of the current model; it must not be empty.
+- For OneToOne/ManyToOne, this defaults to the related model’s `id`.
 
-### 2.24 `inverseLinkField` Inverse Link Field
+### 2.23 `joinModel`
 
-When the field type is ManyToMany, the field name in the target table that is linked to the middle table.
+For ManyToMany, `joinModel` must not be empty. It is the join (middle) model that stores the mapping relationship between the two models.
 
-### 2.25 `filters` Filtering Conditions for Relational Fields
+When querying, Softa first queries the mapping relationships from `joinModel`, then reads the related model data from `relatedModel` to complete the many-to-many query.
 
-Basic filtering conditions for OneToOne, ManyToOne relational fields, used to filter optional data based on business scenarios. When executing queries, clients can carry fixed filtering conditions along with user search conditions; the relationship is an `AND` relationship.
+Default naming rule: Softa automatically concatenates the left model name + right model name + `Rel`, e.g. `User` + `Role` + `Rel` → `UserRoleRel`.
 
-### 2.26 `columnName` Data Table Column Name
+### 2.24 `joinLeft`
 
-Read-only field, the data table column name corresponding to the field, automatically converted from the field name, such as `unit_price`.
+For ManyToMany, the field name in the join model that stores the foreign key of the left model.
 
-When the field name changes, the data table column name is synchronized by default. The automatic modification of the data table can be turned off through the global DDL switch to meet the scenario of submitting DDL in other ways.
+Default naming rule: lowercase the first letter of the left model name, then append `Id`, e.g. `User` → `userId`.
 
-### 2.27 `description` Field Description
+### 2.25 `joinRight`
+
+For ManyToMany, the field name in the join model that stores the foreign key of the right model.
+
+Default naming rule: lowercase the first letter of the right model name, then append `Id`, e.g. `Role` → `roleId`.
+
+### 2.26 `filters`
+
+Basic filtering conditions for OneToOne/ManyToOne relationship fields. This is a fixed filter based on business scenarios; it is combined with user search conditions using `AND`.
+
+### 2.27 `columnName`
+
+Read-only attribute: the physical table column name derived from the field name (e.g. `unitPrice` → `unit_price`).
+
+When `fieldName` changes, Softa synchronizes the column name by default. You can disable automatic table column renaming via a global DDL switch to support workflows where DDL is applied by other means.
+
+### 2.28 `description`
 
 The business description of the field.
-
-## 3 Field Types FieldType
-
-| No. | Type | Type Name | Default Value |
-| --- | --- | --- | --- |
-| 1 | String | String | "" |
-| 2 | Integer | Integer | 0 |
-| 3 | Long | Long | 0L |
-| 4 | Double | Double | 0.00 |
-| 5 | BigDecimal | BigDecimal | "0" |
-| 6 | Boolean | Boolean | false |
-| 7 | Date | Date |  |
-| 8 | DateTime | DateTime |  |
-| 9 | Option | Single select |  |
-| 10 | MultiOption | Multi select | [] |
-| 11 | MultiString | String list | [] |
-| 12 | JSON | JSON |  |
-| 13 | Filter | Filter |  |
-| 14 | OneToOne | OneToOne |  |
-| 15 | ManyToOne | ManyToOne |  |
-| 16 | OneToMany | OneToMany |  |
-| 17 | ManyToMany | ManyToMany |  |
-
-* The default value of a field is automatically set to its zero value based on the field type.
-* The foreign keys of OneToOne and ManyToOne are logical foreign keys, not physical database foreign keys.
-
-### 3.1 `String`
-
-A field of string type, using `length` to configure the length of the string.
-
-### 3.2 `Integer`
-
-An integer type field, using `length` to configure the number of integer digits.
-
-### 3.3 `Long`
-
-Long integer type.
-
-### 3.4 `Double`
-
-Ordinary decimal type, used in scenarios that accept precision loss in calculations.
-
-### 3.5 `BigDecimal`
-
-Precise decimal type, used in high-precision calculation scenarios such as money, currency, and exchange rates.
-
-### 3.6 `Boolean`
-
-Boolean type field.
-
-### 3.7 `Date`
-
-Date type, `LocalDate` object, displayed in the format `yyyy-MM-dd`, such as `2026-02-01`.
-
-### 3.8 `DateTime`
-
-Date and time type accurate to seconds, `LocalDateTime` object, stored as a timestamp in the database, displayed in the format `yyyy-MM-dd HH:mm:ss`, such as `2026-02-01 12:15:20`.
-
-### 3.9 `Option` Single Select
-
-Single select field, must configure the `OptionCode` property, i.e., the option set code.
-
-When saving the value of a single select field, the actual transmission and storage are the codes of the option entries.
-
-When fetching the value of a single select field through the API, it defaults to returning the format `[itemCode, itemName]`, i.e., returning both the code and name of the entry.
-
-For configuration and usage of option sets, refer to the [Option Set](option) section.
-
-### 3.10 `MultiOption` Multi Select
-
-The difference between multi-select fields and single select fields is that multi-select fields allow multiple selections from the same option set. When saving, a list of code strings for the selected options is passed, and in the database, the codes of multiple option entries are stored, separated by `,`.
-
-When reading the value of a multi-select field through the API, it defaults to returning the format `[[itemCode, itemName], ...]`, i.e., the codes and names of multiple options.
-
-### 3.11 `MultiString` String List
-
-Used to store multiple string values through a single field. In the program, it processes a string list object, and in the database, it is stored with `,` as the separator.
-
-### 3.12 `JSON` JSON Field
-
-JSON format field, generally used for storing JSON data and object conversion. When indexing and querying conditions for JSON data are required, manual processing is needed.
-
-### 3.13 `Filter` Filter Condition Field
-
-Used only for storing and converting filter condition objects, stored in the database as a string.
-
-### 3.14 `OneToOne` One-to-One
-
-Relational field, requires configuration of `relatedModel` and `relatedField` properties. The selected data is unique.
-
-### 3.15 `ManyToOne` Many-to-One
-
-Relational field, requires configuration of `relatedModel` and `relatedField` properties.
-
-### 3.16 `OneToMany` One-to-Many
-
-Data for the OneToMany field is generally added, edited, and deleted on the client side for a single piece of data by calling the model interface of the Many side.
-
-For scenarios where multiple OneToMany field values are edited in batches:
-
-(1) If the field value is `[]`, an empty list indicates the deletion of all historical records.
-
-(2) When the field value is not empty, such as `[{...}, {...}]`, a list structure of Many side data, it automatically recognizes added, edited, and deleted records on the Many side and processes them accordingly.
-
-### 3.17 `ManyToMany` Many-to-Many
-
-(1) Updating `ManyToMany` Fields
-
-In Create/Update scenarios, the values of ManyToMany fields are passed with a list of associated model IDs. For example, in an Update request:
-
-```json
-{
-	"id": 12,
-	"attendeeIds": [1, 2, 3]
-}
-
-(2) Cascading Search for ManyToMany Fields
-
-Use case: Filter data in the current table through the filter conditions of the associated table field. Refer to the [Query Conditions](../../develop/query) section for details.

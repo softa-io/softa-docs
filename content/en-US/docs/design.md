@@ -1,4 +1,5 @@
 # Design Principles
+![Design Principles](/image/design_principles.png)
 
 ## I. Metadata Driven
 
@@ -46,7 +47,7 @@ This defines the structured information for importing and exporting Excel/CSV fi
 
 (5) Report Configuration Metadata
 
-In Softa, reports are categorized into data reports, file reports, and visual reports. The definition of each report type requires metadata to define the structured information of the report, including report layout, data sources, field information, filter conditions, sorting rules, grouping strategies, and display styles. Report metadata allows flexible design and generation of various reports to meet different business needs, enhancing report maintainability and scalability.
+In Softa, reports are categorized into data reports, file reports, and visual reports. Defining each report type requires metadata that describes the report’s structured information, including layout, data sources, fields, filters, sorting rules, grouping strategies, and display styles. With report metadata, you can flexibly design and generate various reports to meet different business needs, while improving maintainability and extensibility.
 
 Additionally, during the development of Softa Pro-code, the underlying metadata engine is still relied upon.
 
@@ -112,29 +113,29 @@ Softa incorporates specialized components such as a computation engine, process 
 
 ## VII. User Experience First
 
-The design principle of `User Experience First` emphasizes focusing on the needs and satisfaction of the end-user during the design and development of business systems, while also creating business value. This principle aims to provide an excellent user experience by enhancing user interaction, improving system usability, and continuously refining the system to ensure it is not only powerful but also comfortable and efficient for users.
+The design principle of `User Experience First` emphasizes that, while creating business value, the needs and satisfaction of end users should be at the core of system design and development. This principle aims to deliver an excellent user experience by enhancing interactions, improving usability, and continuously iterating so the system is not only powerful, but also comfortable and efficient to use.
 
 Specific applications of the user experience first principle include the following key points:
 
-1. Enhancing Search Box Capabilities with Integrated AI Interactive Search
+1. Enhance search with AI interactive experiences
 
     By incorporating intelligent recommendation results and innovative automatic field matching, users can experience more convenient and efficient search functionalities.
 
-2. Compatibility with Simplicity and Flexibility
+2. Balance simplicity and flexibility
 
-   Flexibility often leads to complexity. Softa strives to hide complexity within the system's underlying layers, offering simplified and professional versions of various configuration options. The system design enhances the builder experience, ensuring it meets the needs of simple operations while providing flexible configuration and expansion capabilities.
+    Flexibility often leads to complexity. Softa strives to hide complexity in underlying layers, offering both simplified and professional versions of configuration options. This improves the builder experience and ensures the system supports easy operations while remaining highly configurable and extensible.
 
-3. Continuous Evaluation and Analysis
+3. Continuous evaluation and analysis
 
-   User behavior analysis helps understand how users interact with the system and identify their pain points, leading to data-driven optimization.
+    Use user behavior analytics to understand how the system is used and where pain points are, enabling data-driven optimization.
 
-4. Continuous Iterative Improvement
+4. Continuous iteration and improvement
 
-   Constantly optimizing and updating system functions based on user feedback ensures the system can continuously adapt to changing user needs, improving user satisfaction and loyalty.
+    Continuously optimize and update features based on feedback so the system adapts to evolving user needs and improves satisfaction and loyalty.
 
 ## VIII. Abstraction-First Design
 
-The design principle of `Abstraction-First Design` emphasizes enhancing system flexibility, maintainability, and elegance by encapsulating and abstracting common methods and components. This principle leverages classic design methods such as object-oriented design, design patterns, SOLID principles, DRY principles, and modular design to establish robust abstractions and layered structures. Developers can easily add new features or modify existing ones without disrupting the overall system structure and stability, avoiding hard coding and code duplication, while improving code readability and development efficiency. This also enhances the overall stability and scalability of the system.
+The design principle of `Abstraction-First Design` emphasizes improving flexibility, maintainability, and elegance by encapsulating and abstracting common methods and components. It leverages classic approaches such as object-oriented design, design patterns, SOLID, DRY, and modular design to establish robust abstractions and layered structures. Developers can more easily add new features or modify existing ones without breaking the overall structure, while avoiding hard-coding and duplication, improving readability and efficiency, and enhancing stability and scalability.
 
 In the long run, `Abstraction-First Design` better supports efficient system expansion and innovation, providing a solid foundation for the continuous evolution of the system. This helps meet the ever-changing business requirements and technological advancements.
 
