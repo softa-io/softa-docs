@@ -4,7 +4,8 @@ export default {
   arch: "技术架构",
   start: "开始",
   features: "特性",
-  develop: "开发文档",
+  backend_dev: "后端开发",
+  frontend_dev: "前端开发",
   contribution: "参与贡献",
   faq: "常见问题"
 }

@@ -4,7 +4,8 @@ export default {
   arch: "Technical Arch",
   start: "Getting Started",
   features: "Features",
-  develop: "Development",
+  backend_dev: "Backend Development",
+  frontend_dev: "Frontend Development",
   contribution: "Contribution",
   faq: "FAQ"
 }
