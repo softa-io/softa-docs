@@ -1,11 +1,11 @@
-# 应用导航清单指南
+# 前端模块开发
 
 本文是 `src/app` 模块导航的开发者指南。
 它定义了导航声明的**唯一可信来源**，以及如何安全地新增页面/模块。
 
 ## 1) 唯一来源
 
-领域清单文件：
+模块 Manifest 文件：
 
 - `src/app/system/manifest.ts` -> `SYSTEM_NAVIGATION_MANIFESTS`
 - `src/app/user/manifest.ts` -> `USER_NAVIGATION_MANIFESTS`
@@ -15,9 +15,9 @@
 
 - `src/modules.ts` -> `MODULE_NAVIGATION_MANIFESTS`
 
-注册表消费方：
+自动注册消费方：
 
-- `src/navigation/registry.ts` 读取 `MODULE_NAVIGATION_MANIFESTS` 并构建：
+- `src/navigation/registry.ts` 自动读取 `MODULE_NAVIGATION_MANIFESTS` 并构建：
   - 模块列表
   - 默认路由
   - 页面查找/面包屑/命令面板/侧边栏索引
@@ -30,12 +30,12 @@
   - 图标
   - 描述
   - 排序
-- `src/modules.ts` 仅聚合并导出清单，不包含业务逻辑。
+- `src/modules.ts` 仅聚合并导出 Manifests，不包含业务逻辑。
 - 引入新领域时：
   1. 添加 `src/app/<domain>/manifest.ts`
   2. 在 `src/modules.ts` 中注册
 
-## 3) 清单契约
+## 3) Manifest 契约
 
 每个 `NavigationManifest` 有 3 层：
 
@@ -95,7 +95,7 @@
 
 1. 创建路由页面文件（示例）：
    - `src/app/user/user-role/page.tsx`
-2. 在目标领域清单的对应分组中添加页面元数据：
+2. 在模块 Manifest 声明文件的对应分组中添加页面元数据：
    - `src/app/user/manifest.ts`
 3. 确保：
    - `page.id` 全局唯一。
@@ -110,7 +110,7 @@
 3. 在 `src/app/<domain>/...` 下添加与声明路由匹配的页面。
 4. 验证模块排序/分类/默认页行为。
 
-## 6) 清单示例片段
+## 6) Manifest 示例
 
 ```ts
 import type { NavigationManifest } from "@/navigation/types";
@@ -178,20 +178,20 @@ export const USER_NAVIGATION_MANIFESTS: NavigationManifest[] = [
 ];
 ```
 
-## 7) 当前模块清单
+## 7) 当前模块 Manifest
 
-基于当前清单：
+基于当前 Manifest：
 
 - `system`（默认页由第一个页面推断）
 - `users`（默认页由第一个页面推断）
-- `AI`（默认页由第一个页面推断）
+- `ai`（默认页由第一个页面推断）
 
-## 8) 合并前检查清单
+## 8) 提交代码前检查 Manifest
 
 - 路由文件存在且可访问。
 - `page.id` 和 `page.route` 全局唯一。
 - 模块/分组/页面 `order` 设计明确。
-- 清单路由与真实 Next.js 路由路径一致。
+- Manifest 路由与真实 Next.js 路由路径一致。
 - 导航项在以下位置展示正确：
   - 侧边栏
   - 面包屑/页头
