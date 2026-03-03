@@ -6,5 +6,6 @@ export default {
   datasource: "Multi-datasource",
   database: "Multi-database",
   tenant: "Multi-tenancy",
+  cron: "Cron Jobs",
   exception: "Exception Handling"
 }

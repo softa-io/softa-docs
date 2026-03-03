@@ -1,6 +1,6 @@
 export default {
+  index: "Overview",
   import: "Excel Import",
   export: "Excel Export",
-  print: "File Printing",
+  document: "Document Export",
 }
-

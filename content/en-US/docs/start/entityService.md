@@ -1,15 +1,6 @@
 # Building a Pro-code Application
 
-## 1. Filters
-```java
-
-```
-
-For more details, refer to the [Query Conditions](develop/query) sections.
-
-## 2. FlexQuery
-
-## 3. `EntityService` interface methods
+## 1. `EntityService` interface methods
 
 ### count
 ```java
