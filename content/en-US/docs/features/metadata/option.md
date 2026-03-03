@@ -17,9 +17,19 @@ Read option items by option set code:
 GET /SysOptionSet/getOptionItems/{optionSetCode}
 ```
 
-Example:
-```
-GET /SysOptionSet/getOptionItems/OrderStatus
+Response is a list of `OptionReference` objects.
+
+```json
+{
+    "data": [
+        {
+            "itemCode": "Male",
+            "itemName": "Male",
+            "itemColor": "Red"
+        },
+        ...
+    ]
+}
 ```
 
 Response is a list of `MetaOptionItem` objects.

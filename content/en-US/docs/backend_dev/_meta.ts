@@ -1,7 +1,7 @@
 export default {
   index: "Overview",
   newApp: "Create New App",
-  query: "Data Query",
+  query: "Query & Response",
   i18n: "Multi-language",
   datasource: "Multi-datasource",
   database: "Multi-database",

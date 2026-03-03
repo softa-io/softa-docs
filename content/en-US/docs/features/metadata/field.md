@@ -91,32 +91,72 @@ A relational field. Configure `relatedModel` and `relatedField`.
 
 ### 1.13 `OneToMany`
 
-In most cases, OneToMany data is created/edited/deleted on the client side for a single record by calling the model API of the Many side.
+In most cases, OneToMany data is `Create/Update/Delete` on the client side for a single record by calling the model API of the Many side.
 
 For batch editing scenarios of OneToMany values:
 
-(1) If the field value is `[]`, the empty list indicates deleting all historical records.
+(1) If the field value is `[]`, no change will be happen.
 
-(2) If the field value is not empty and is a list like `[{...}, {...}]` (the Many side records), the framework automatically identifies which records are added/updated/deleted and processes them accordingly.
+(2) For `Create/Update/Delete` operations on OneToMany fields, the client sends only the changed rows in the `OneToMany` field.
+
+Each row in this list must include a `_state` flag with one of: `Create | Update | Delete`.
+
+Payload rules:
+- Only rows that have changed are included in the field value.
+- `_state`: `Create`: New record, no id required. Other business fields are required as usual (e.g. sku, qty).
+- `_state`: `Update`: Existing record to be updated, must include id. Only the fields that changed need to be sent; unchanged fields may be omitted.
+- `_state`: `Delete`: Existing record to be deleted, must include id. Other business fields can be omitted.
+- `_state`: Empty / missing, it means no changes.
+
+```json
+{
+  "orderItemsChanges": [
+    { "_state": "Create", "sku": "C", "qty": 1 },
+    { "_state": "Update", "id": 10, "qty": 8 },
+    { "_state": "Delete", "id": 12 }
+  ]
+}
+```
+
+(2) The API response of `OneToMany` field is a `List<ModelReference>` object or `List<Row Map>`, according to `QueryParams.fields` and `QueryParams.subQueries`.
+
+For more details, refer to [API Response](../../backend_dev/query/apiResponse.md)
 
 ### 1.14 `ManyToMany`
 
 (1) Updating a `ManyToMany` field
 
-In Create/Update scenarios, the value passed for a ManyToMany field is the list of IDs of the related model. For example, an Update request:
+In both **Create** and **Update** scenarios, the value passed for a `ManyToMany` field is the **complete list of related IDs** for that field.
+The framework will compare this new list with the existing relationships and automatically determine which join records to **create** or **delete**.
+
+For a ManyToMany field `roleIds` (ManyToMany → `User`),
+- **Semantics**
+  - `roleIds: [1, 2, 3]`
+    - Means “after this operation, the `roles` of this user should be exactly `{1, 2, 3}`”.
+    - The framework will:
+      - Create join records for IDs that are **in the new list but not in the existing list**.
+      - Delete join records for IDs that are **in the existing list but not in the new list**.
+  - `roleIds: []`
+    - Means “clear all attendees” → all existing join records for this field will be deleted.
+  - `roleIds: null` or field **omitted**
+    - Means “do not change this ManyToMany field” → existing relationships remain unchanged.
 
 ```json
 {
   "id": 12,
-  "attendeeIds": [1, 2, 3]
+  "roleIds": [1, 2, 3]
 }
 ```
 
-The framework automatically detects and removes deleted relationships.
+In this case, the framework will automatically compute the diff with the current attendee set and apply the necessary create/delete operations on the join table.
 
 (2) Cascading search for a `ManyToMany` field
 
 Use case: filter records of the current table by conditions on fields in the join table. See the [Query Conditions](../../develop/query) section.
+
+The API response of `ManyToMany` field is a `List<ModelReference>` object or `List<Row Map>`, according to `QueryParams.fields` and `QueryParams.subQueries`.
+
+For more details, refer to [API Response](../../backend_dev/query/apiResponse.md).
 
 ## 2. Field Metadata Attributes
 

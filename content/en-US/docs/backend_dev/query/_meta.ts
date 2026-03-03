@@ -1,5 +1,6 @@
 export default {
   concept: "General Query Concept",
-  apiFilters: "API Query",
+  apiQuery: "API Query",
+  apiResponse: "API Response",
   codeFilters: "Query in Code"
 }

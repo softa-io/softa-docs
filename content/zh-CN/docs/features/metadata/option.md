@@ -22,13 +22,20 @@
 GET /SysOptionSet/getOptionItems/{optionSetCode}
 ```
 
-示例：
+返回值为 `OptionReference` 对象列表。
 
-```http
-GET /SysOptionSet/getOptionItems/OrderStatus
+```json
+{
+    "data": [
+        {
+            "itemCode": "Male",
+            "itemName": "Male",
+            "itemColor": "Red"
+        },
+        ...
+    ]
+}
 ```
-
-返回值为 `MetaOptionItem` 对象列表。
 
 ## 代码中使用
 
@@ -57,4 +64,3 @@ boolean exists = OptionManager.existsItemCode("OrderStatus", "PENDING");
 
 - 当传入不存在的 `optionSetCode` 时，`OptionManager` 会抛出异常。需要时可通过 `OptionManager.existsOptionSetCode` 进行校验。
 - 选项集数据必须在应用启动前写入数据库，否则缓存会为空。
-
