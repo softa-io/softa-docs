@@ -110,13 +110,21 @@
 
 ### 2.9、`idStrategy` 主键生成策略
 
-支持3种主键生成策略：
-* （1）DbAutoID：数据库自增主键 ID，默认策略。
-* （2）ULID：唯一有序ID，26个字符长度（Base32）, 10个字符时间戳 + 16个字符随机数。
-* （3）TSIDLong：长整数类型的时间有序ID，SnowflakeID 变种。
-* （4）TSIDString：字符串类型的时间有序ID，13个字符长度，SnowflakeID 变种。
-* （5）UUID：程序自动生成的标准 UUID。
-* （6）ExternalId：外部输入 ID
+支持多种主键生成策略：
+
+* （1）`DbAutoID`：数据库自增主键 ID，为默认策略。
+* （2）`DistributedLong`：
+  - 分布式长整型（64 位）唯一 ID。
+  - 基于 CosID 提供的 SnowflakeId 实现。
+  - 按时间有序，采用 41 位时间戳 + 10 位机器 ID + 12 位序列号结构。
+  - 适用于多节点分布式系统中需要全局唯一 ID 的场景。
+* （3）`DistributedString`：
+  - 分布式字符串类型唯一 ID。
+  - 同样基于 CosID 的 SnowflakeId 实现。
+  - 默认使用 Base36 编码，生成 13 位字符串。
+  - 也可以配置为 Base62 编码，此时为 11 位字符串。
+  - 适用于数据量不算特别大的分布式系统场景，同时希望 ID 可读性更好。
+* （4）`ExternalId`：外部输入 ID，由外部系统或调用方显式传入主键值。
 
 ### 2.10、`storageType` 存储类型
 

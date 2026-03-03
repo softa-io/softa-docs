@@ -106,11 +106,18 @@ Configuration property for versioned management of business data. When the model
 
 Supports three primary key generation strategies:
 * (1) `DbAutoID`: Database auto-increment primary key ID, the default strategy.
-* (2) `ULID`: Unique Lexicographically Sortable Identifier, 128-bit with 48-bit timestamp and 80-bit random value. 26-character string with 10-character timestamp and 16-character random value.
-* (3) `TSIDLong`: Numeric TSID, Combined SnowflakeID and ULID, 64-bit with 42-bit timestamp, 10-bit server ID and 12-bit sequence number by default.
-* (4) `TSIDString`: 13-character string TSID.
-* (5) `UUID`: Programmatically generated standard UUID, with 32-character hexadecimal string.
-* (6) `ExternalId`: External input ID.
+* (2) `DistributedLong`:
+    - Distributed Unique ID of a Long type (64-bit).
+    - An implementation of SnowflakeId by CosID library.
+    - Time-sorted, with 41-bit timestamp, 10-bit machine ID, and 12-bit sequence number.
+    - Suitable for distributed systems to ensure uniqueness across multiple nodes.
+* (3) `DistributedString`:
+    - Distributed Unique ID of a String type
+    - An implementation of SnowflakeId by CosID library.
+    - Encoded in Base36, resulting in a 13-character string.
+    - Also, it can be configured to be Base62, resulting in an 11-character string.
+    - Suitable for distributed systems without large-scale data volume requirements.
+* (4) `ExternalId`: External input ID.
 
 ### 2.10 `storageType` Storage Type
 
