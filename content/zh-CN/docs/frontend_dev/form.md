@@ -6,15 +6,9 @@
 - [对话框组件](./dialog)
 - [表格组件](./table)
 
-## 导入
-
-```tsx
-import { ModelForm } from "@/components/views/form/ModelForm";
-```
-
 ## 快速开始
 
-推荐在 `src/app/**/[id]/page.tsx` 中这样使用：
+在 `src/app/**/[id]/page.tsx` 中定义：
 
 ```tsx
 import { UserAccountUnlockActionDialog } from "@/app/user/user-account/components/user-account-unlock-action-dialog";
@@ -417,10 +411,8 @@ import { ExternalLink, RefreshCw } from "lucide-react";
 详细的对话框 API、props 和完整示例维护在：
  - [对话框组件](./dialog)
 
-快速选择：
+快速参考：
 
 - `ActionDialog`：调用模型操作 `/{modelName}/{operation}`（单条/批量）。
 - `ModelDialog`：单条记录的元数据驱动创建/更新对话框。
 - `WizardDialog`：带自定义提交逻辑的多步骤流程。
-
-为避免文档漂移，本文件只保留表单页面指引；对话框细节统一维护在 dialogs README。

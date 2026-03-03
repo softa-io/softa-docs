@@ -417,7 +417,7 @@ Inside `ModelForm` children, use `useModelFormContext()` to access:
 Detailed dialog API, props, and full examples are maintained in:
  - [Dialog components](./dialog)
 
-Quick selection:
+Quick reference:
 
 - `ActionDialog`: invoke model operation `/{modelName}/{operation}` (single/bulk).
 - `ModelDialog`: metadata-driven create/update dialog for one record.
