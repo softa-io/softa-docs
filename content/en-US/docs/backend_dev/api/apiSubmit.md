@@ -65,6 +65,8 @@ The backend distinguishes mode by field value type:
 1. `List` -> full submit mode (existing behavior, backend infers add/update/delete by diff)
 2. `Object(Map)` -> patch submit mode (execute operations by patch keys directly)
 
+In the frontend `ModelForm` component, XToMany fields support pagination, so patch submit is used by default; the operation type is indicated by `PatchType` in the submitted payload.
+
 `PatchType` Options:
 - OneToMany fields: `Create`、 `Update`、`Delete`；
 - ManyToMany fields: `Add`、`Remove`；

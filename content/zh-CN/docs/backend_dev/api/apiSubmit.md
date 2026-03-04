@@ -78,6 +78,8 @@
 1. **`List`** → 全量提交模式，后端通过差集推断增/改/删；
 2. **`Object(Map)`** → 增量提交模式，按 `PatchType` 属性值直接执行对应操作；
 
+在前端 `ModelForm` 组件中，支持 XToMany 数据分页，因此默认采用增量提交方式，在提交的数据中，通过 `PatchType` 区分数据操作类型。
+
 `PatchType` 可选项：
 - OneToMany 场景: `Create`、 `Update`、`Delete`；
 - ManyToMany 场景：`Add`、`Remove`；
