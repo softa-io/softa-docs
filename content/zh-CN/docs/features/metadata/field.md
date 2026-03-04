@@ -89,68 +89,42 @@ JSON 格式字段，一般仅用于 JSON 数据存储和对象转换。需要针
 
 ### 1.12 `OneToMany` 一对多
 
-在大多数场景中，OneToMany 字段的数据是通过客户端在单条记录上下文中进行 Create/Update/Delete 的：前端直接调用 Many 端模型的接口完成新增、编辑、删除。
+在大多数场景中，OneToMany 字段的数据是通过客户端在单条记录上下文中进行 Create/Update/Delete 的：前端直接调用 Many 端模型的接口完成增量的新增、编辑、删除。
 
-针对**批量编辑 OneToMany 字段值**的场景，采用“仅上送变更行 + `_state` 标记”的协议：
-
-1. 当字段值为 `[]` 空列表时，表示**没有任何变更**（不会清空历史记录）。
-2. 当字段值不为空时，其值是一个 `[{...}, {...}]` 的列表，仅包含**发生变更的子记录**，每一条都必须携带 `_state` 字段，取值为 `Create` / `Update` / `Delete` 之一。
-
-字段含义与规则示例：
-
+1. **全量提交**：`[{row1}, {row2}]`，当字段值为 `[]` 时，清空历史记录。
+2. **增量提交**，以 `PatchType` 为 Key：
 ```json
 {
-  "orderItemsChanges": [
-    { "_state": "Create", "sku": "C", "qty": 1 },
-    { "_state": "Update", "id": 10, "qty": 8 },
-    { "_state": "Delete", "id": 12 }
-  ]
+  "Create": [{ "name": "new row" }],
+  "Update": [{ "id": 101, "name": "changed" }],
+  "Delete": [102, 103]
 }
 ```
+更多详情， 参考 [API 数据提交](../../backend_dev/api/apiSubmit)
 
-- `_state = "Create"`：表示新建记录，不需要传 `id`，但需要传必要的业务字段（如 sku、qty 等）。
-- `_state = "Update"`：表示更新已有记录，必须包含 `id`，只需要传有变更的字段，未变更字段可以省略。
-- `_state = "Delete"`：表示删除已有记录，必须包含 `id`，其它业务字段可以省略。
-- `_state` 为空或缺失：表示该行不触发变更。
+3. **接口响应**：
 
-OneToMany 字段在 API 响应中的返回形式，取决于 `QueryParams.fields`、`QueryParams.subQueries` 以及 `ConvertType` 配置，具体见 [API Response](../../backend_dev/query/apiResponse.md) 文档中的 OneToMany 部分。
+OneToMany 字段在 API 响应中的返回形式，取决于 `QueryParams.fields`、`QueryParams.subQueries` 以及 `ConvertType` 配置，具体见 [API Response](../../backend_dev/api/apiResponse.md) 文档中的 OneToMany 部分。
 
 ### 1.13 `ManyToMany` 多对多
 
-（1）`ManyToMany` 字段的更新
-
-在 Create / Update 场景中，ManyToMany 字段的值为**完整的关联 ID 列表**。框架会对比新列表与当前关联关系，自动推断需要新增或删除的连接记录。
-
-以 ManyToMany 字段 `roleIds`（例如用户与角色的多对多）为例：
-
-- 语义约定：
-  - `roleIds: [1, 2, 3]`
-    表示“本次操作之后，该用户的角色集合**恰好是** `{1, 2, 3}`”。
-    框架会：
-    - 为**新列表中有而当前没有**的 ID 创建连接记录；
-    - 删除**当前已有而新列表中没有**的 ID 的连接记录。
-  - `roleIds: []`
-    表示“清空所有角色”，即删除该字段下所有现有关联关系。
-  - `roleIds: null` 或请求体中**省略该字段**
-    表示“不修改该 ManyToMany 字段”，即保留当前所有关联关系不变。
-
-示例：
-
+1. **全量提交**：`[id1, id2, id3]`，框架会自动计算数据库差集，完成 JoinModel 数据的新增与删除。
+2. **增量提交**，以 `PatchType` 为 Key：
 ```json
 {
-  "id": 12,
-  "roleIds": [1, 2, 3]
+  "Add": [1, 2, 3],
+  "Remove": [4, 5]
 }
 ```
+更多详情， 参考 [API 数据提交](../../backend_dev/api/apiSubmit)
 
-在上述请求中，框架会自动根据当前已有角色集合与 `[1, 2, 3]` 的差集，完成连接表中记录的新增与删除。
-
-（2）`ManyToMany` 字段的级联搜索
+3. `ManyToMany` 字段的级联搜索
 
 典型场景：通过连接表中的字段筛选当前模型的数据，例如“查询在某个时间段内被分配过某角色的用户”。
-具体语法与查询规则参考 [查询条件](../../develop/query) 章节。
+具体语法与查询规则参考 [查询条件](../../backend_dev/api/apiQuery) 章节。
 
-ManyToMany 字段在 API 响应中的返回形式（`List<ModelReference>` 或 `List<Row Map>`），同样由 `QueryParams.fields`、`QueryParams.subQueries` 和 `ConvertType` 决定，详见 [API Response](../../backend_dev/query/apiResponse.md) 文档中的 ManyToMany 部分。
+4. **接口响应**
+ManyToMany 字段在 API 响应中的返回形式（`List<ModelReference>` 或 `List<Row Map>`），同样由 `QueryParams.fields`、`QueryParams.subQueries` 和 `ConvertType` 决定，详见 [API Response](../../backend_dev/api/apiResponse.md) 文档中的 ManyToMany 部分。
 
 ## 2、字段元数据属性
 
