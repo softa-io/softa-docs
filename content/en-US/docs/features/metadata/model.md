@@ -137,7 +137,7 @@ Before enabling multi-tenant control, the global multi-tenant configuration need
 
 When enabling multi-data-source configuration at the model level, you can optionally specify the data source key for the model, indicating which data source the model data is stored in.
 
-If the data source key is not specified, the model data will be stored in the default data source. For details, refer to [Multi-Data Source](../../develop/datasource).
+If the data source key is not specified, the model data will be stored in the default data source. For details, refer to [Multi-Data Source](../../backend_dev/datasource).
 
 ### 2.14 `businessKey` Business Key
 
