@@ -106,6 +106,9 @@ JSON 格式字段，一般仅用于 JSON 数据存储和对象转换。需要针
 
 OneToMany 字段在 API 响应中的返回形式，取决于 `QueryParams.fields`、`QueryParams.subQueries` 以及 `ConvertType` 配置，具体见 [API Response](../../backend_dev/api/apiResponse.md) 文档中的 OneToMany 部分。
 
+备注：
+- `OneToMany` 是一个虚拟字段，基于关联模型的逻辑外键查询和绑定数据，当前字段本身不存在数据库列。
+
 ### 1.13 `ManyToMany` 多对多
 
 1. **全量提交**：`[id1, id2, id3]`，框架会自动计算数据库差集，完成 JoinModel 数据的新增与删除。
@@ -125,6 +128,9 @@ OneToMany 字段在 API 响应中的返回形式，取决于 `QueryParams.fields
 
 4. **接口响应**
 ManyToMany 字段在 API 响应中的返回形式（`List<ModelReference>` 或 `List<Row Map>`），同样由 `QueryParams.fields`、`QueryParams.subQueries` 和 `ConvertType` 决定，详见 [API Response](../../backend_dev/api/apiResponse.md) 文档中的 ManyToMany 部分。
+
+备注：
+- `ManyToMany` 也是一个虚拟字段，基于 JoinModel 的逻辑外键查询和绑定数据，当前字段本身不存在数据库列。
 
 ## 2、字段元数据属性
 
@@ -224,9 +230,11 @@ Create 场景下默认值的赋值逻辑：
 
 ### 2.14 `dynamic` 动态字段
 
-该字段是否为动态字段，默认 `false`，程序运行时自动计算动态字段的值，该值不存储在数据库中。
+该字段是否为动态字段，默认 `false`。
 
-可为 `true` 的场景：动态计算字段、动态级联字段，动态字段的值一般代表最新数据的计算结果值，使用动态计算字段时，需要考虑对客户端性能的影响。
+当 `dynamic=true` 时，表示该字段的值是动态计算出来的。可为 `true` 的场景：动态计算字段、动态级联字段。程序运行时自动计算动态字段的值，该字段不存在数据库列。
+
+动态字段的值一般代表最新数据的计算结果值，使用动态计算字段时，需要考虑适用场景，以及对客户端性能的影响。
 
 ### 2.15 `translatable` 可翻译字段
 

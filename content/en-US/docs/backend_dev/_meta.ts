@@ -7,5 +7,6 @@ export default {
   database: "Multi-database",
   tenant: "Multi-tenancy",
   cron: "Cron Jobs",
-  exception: "Exception Handling"
+  exception: "Exception Handling",
+  debug: "Debug",
 }

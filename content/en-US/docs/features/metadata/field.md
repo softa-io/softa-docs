@@ -108,6 +108,10 @@ For more details, refer to [API Submit](../../backend_dev/api/apiSubmit.md).
 
 3. **API response**: The return shape of a OneToMany field depends on `QueryParams.fields`, `QueryParams.subQueries`, and `ConvertType`. See the OneToMany section in [API Response](../../backend_dev/api/apiResponse.md).
 
+Note:
+- `OneToMany` is a virtual field. It queries and binds data based on the logical foreign key of the related model, and the field itself does not have a physical database column.
+
+
 ### 1.14 `ManyToMany`
 
 1. **Full submit**: `[id1, id2, id3]`. The framework computes the diff and creates or deletes join (middle) table rows accordingly.
@@ -125,6 +129,10 @@ For more details, refer to [API Submit](../../backend_dev/api/apiSubmit.md).
 3. **Cascading search for ManyToMany**: Use case—filter records of the current table by conditions on fields in the join table (e.g. “users who were assigned a given role in a time range”). See the [Query Conditions](../../backend_dev/api/apiQuery.md) section.
 
 4. **API response**: The return shape of a ManyToMany field (`List<ModelReference>` or `List<Row Map>`) is determined by `QueryParams.fields`, `QueryParams.subQueries`, and `ConvertType`. See the ManyToMany section in [API Response](../../backend_dev/api/apiResponse.md).
+
+Note:
+- `ManyToMany` is also a virtual field. It queries and binds data based on the logical foreign keys in the JoinModel, and the field itself does not have a physical database column.
+
 
 ## 2. Field Metadata Attributes
 
@@ -230,9 +238,13 @@ Whether the field can be used as a query condition in general search. Default is
 
 ### 2.14 `dynamic`
 
-Whether the field is dynamic. Default is `false`. The value of a dynamic field is computed at runtime and is not stored in the database.
+Whether the field is dynamic. Default is `false`.
 
-Typical scenarios for `dynamic=true`: dynamic computed fields and dynamic cascaded fields. Dynamic field values often represent the latest computed result; consider the impact on client performance.
+When `dynamic=true`, the field value is computed dynamically. Typical cases include dynamic computed fields and dynamic cascaded fields.
+
+At runtime, the system automatically computes the value of a dynamic field, and this field does not have a physical column in the database.
+
+The value of a dynamic field usually represents the latest computed result. When using dynamic computed fields, you should carefully consider whether the scenario is appropriate and the potential impact on client performance.
 
 ### 2.15 `translatable`
 
