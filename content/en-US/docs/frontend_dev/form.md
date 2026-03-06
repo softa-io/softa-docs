@@ -141,6 +141,15 @@ Set `fullWidth={false}` to render in normal grid width.
 <Field fieldName="description" hideLabel={true} />
 ```
 
+### ReadOnly vs Disabled
+
+Use `readOnly` and `disabled` with different intent:
+
+- `readOnly`: user can view value clearly, and the field remains part of the normal detail-reading experience. Prefer this for detail pages, audit-style viewing, and fields that should stay easy to scan/copy.
+- `disabled`: control is temporarily or structurally unavailable. Prefer this for permission restrictions, unmet prerequisites, async submitting/loading, workflow/state locks, or feature gating.
+
+In HR SaaS forms, detail pages should generally prefer `readOnly` over `disabled`.
+
 ## XToMany Fields (Incremental Submit by Default)
 
 `ReferenceField` now only handles:
@@ -158,9 +167,34 @@ Set `fullWidth={false}` to render in normal grid width.
 
 - UI: local relation table in form body
 - supports: add, edit, delete
-- row edit/create uses built-in runtime local-draft editor dialog
-- optional `formView` can mount a custom `ModelDialog` component
+- no `formView`: row edit uses table-cell inline edit (click row to enter edit)
+- with `formView`: row edit/create uses runtime `ModelDialog`
 - submit default: patch map (incremental)
+
+Inline edit behavior (`OneToMany`, without `formView`):
+
+- row enters edit mode only after row click (no auto-select on page enter)
+- edited value is written directly to main form relation array and saved with parent `Save/Create`
+- editable cells are limited to `tableView.fields` intersected with editable related-model fields
+- if `tableView.fields` is omitted, table falls back to `id` column only
+- inline edit is available only in local table mode (`!isPaged` or remote conditions not met)
+
+Enable patterns:
+
+```tsx
+// Enable table-cell inline edit (recommended for local relation editing)
+<Field fieldName="optionItems" tableView={optionItemsInitialParams} />
+
+// Disable inline edit and use dialog editing
+<Field
+  fieldName="optionItems"
+  tableView={optionItemsInitialParams}
+  formView={OptionItemsFormView}
+/>
+
+// Paged relation table (pagination enabled; may switch to remote searchPage mode)
+<Field fieldName="optionItems" tableView={optionItemsInitialParams} isPaged />
+```
 
 Submit payload shape:
 
@@ -319,12 +353,12 @@ Notes:
 
 - `tableView` controls relation-table query/columns behavior (`fields/orders/pageSize/...`).
 - `isPaged` (OneToMany/ManyToMany fields only):
-  - `false` (default): include relation `subQuery` in `getById` and render local table sort/page (no pagination limit, full relation data).
-  - `true`: skip relation `subQuery`; relation table loads by `relatedModel.searchPage` when `recordId` is available.
+  - `false` (default): include relation `subQuery` in `getById`; relation table does not paginate in UI and renders all local rows.
+  - `true`: relation table enables pagination UI; when `recordId + relatedModel + scoped relation filter` are ready, data is loaded by `relatedModel.searchPage` (remote mode), otherwise paginated locally.
 - Without `tableView.renderers`, Boolean values are rendered as default badges (`True`/`False`).
 - `tableView.renderers[fieldName]`: customize table cell rendering (status badge, tags, localized text).
 - `tableView.sortAccessors[fieldName]`: optional advanced hook for local relation table sort value mapping.
-- relation table pageSize default is `50` and can be changed in the page bar.
+- relation table pageSize default is `50`; page-size selector is shown only when pagination is enabled (`isPaged=true`).
 - ManyToMany picker dialog (`Add`) is server-driven; search/sort/page changes trigger `searchPage` requests.
 - `formView` is optional. In `ManyToMany`, row-click opens `ModelDialog` in read mode; add/remove still uses picker behavior.
 

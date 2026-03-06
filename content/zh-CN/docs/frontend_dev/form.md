@@ -6,9 +6,15 @@
 - [对话框组件](./dialog)
 - [表格组件](./table)
 
+## 导入
+
+```tsx
+import { ModelForm } from "@/components/views/form/ModelForm";
+```
+
 ## 快速开始
 
-在 `src/app/**/[id]/page.tsx` 中定义：
+推荐在 `src/app/**/[id]/page.tsx` 中使用：
 
 ```tsx
 import { UserAccountUnlockActionDialog } from "@/app/user/user-account/components/user-account-unlock-action-dialog";
@@ -76,6 +82,8 @@ export default function EditUserAccountPage() {
   labelName="Custom Label"
   readonly
   required={false}
+  hideLabel={true}
+  fullWidth={false}
   widgetType="URL"
   filters='[["active","=",true]]'
   defaultValue="https://example.com"
@@ -94,9 +102,270 @@ export default function EditUserAccountPage() {
   fieldName="photo"
   widgetType="Image"
 />
+
+<Field
+  fieldName="content"
+  widgetType="RichText"
+/>
 ```
 
 `File` / `MultiFile` 在编辑模式下会自动使用当前 `ModelForm` 记录 id。
+
+### Field 全宽
+
+`Field` 在以下字段渲染器上支持 `fullWidth`：
+
+- `TextField`（`fieldType="String"` + `widgetType="Text"`）
+- `RichTextField`（`fieldType="String"` + `widgetType="RichText"`）
+- `OneToManyField`
+- `ManyToManyField`
+
+以上字段默认均为 `fullWidth={true}`。
+设置 `fullWidth={false}` 时，会按普通栅格宽度渲染。
+
+```tsx
+<Field fieldName="description" widgetType="Text" />
+<Field fieldName="notes" widgetType="RichText" fullWidth={false} />
+<Field fieldName="optionItems" fullWidth={false} />
+<Field fieldName="userIds" fullWidth={false} />
+```
+
+### Field 标签可见性
+
+`Field` 支持通过 `hideLabel` 控制是否渲染整个字段标签块（`FormLabelWithTooltip`）。
+
+- 默认：`hideLabel={false}`（显示标签）
+- 设置 `hideLabel={true}` 后，会隐藏整个标签块（标签文本 + tooltip 图标）
+
+```tsx
+<Field fieldName="description" hideLabel={true} />
+```
+
+### ReadOnly vs Disabled
+
+请基于不同意图使用 `readOnly` 和 `disabled`：
+
+- `readOnly`：用户仍可清晰查看字段值，字段也仍属于正常的详情阅读体验。更适合详情页、审计式查看，以及需要方便扫读 / 复制的字段。
+- `disabled`：控件在当前状态下暂时不可用，或在结构上不可操作。更适合权限限制、前置条件未满足、异步提交 / 加载中、工作流 / 状态锁定或功能开关关闭等场景。
+
+在 HR SaaS 表单中，详情页通常应优先使用 `readOnly`，而不是 `disabled`。
+
+## XToMany 字段（默认增量提交）
+
+`ReferenceField` 现在仅处理：
+
+- `ManyToOne`
+- `OneToOne`
+
+`OneToMany` 和 `ManyToMany` 由专用字段组件在内部处理，使用方式仍然是：
+
+```tsx
+<Field fieldName="..." />
+```
+
+### OneToMany
+
+- UI：表单主体中的本地关联表格
+- 支持：新增、编辑、删除
+- 无 `formView`：行编辑采用表格单元格内联编辑（点击行进入编辑）
+- 有 `formView`：行编辑 / 新增通过运行时 `ModelDialog`
+- 默认提交：patch map（增量）
+
+内联编辑行为（`OneToMany` 且未配置 `formView`）：
+
+- 仅在点击行后进入编辑态（页面进入时不会自动选中）
+- 编辑后的值会直接写入主表单的关联数组，并随父级 `Save/Create` 一起保存
+- 可编辑单元格限制为 `tableView.fields` 与关联模型可编辑字段的交集
+- 若省略 `tableView.fields`，表格仅回退显示 `id` 列
+- 仅在本地表格模式下支持内联编辑（`!isPaged` 或远程条件未满足）
+
+启用方式：
+
+```tsx
+// 启用表格单元格内联编辑（推荐用于本地关联编辑）
+<Field fieldName="optionItems" tableView={optionItemsInitialParams} />
+
+// 关闭内联编辑，改用对话框编辑
+<Field
+  fieldName="optionItems"
+  tableView={optionItemsInitialParams}
+  formView={OptionItemsFormView}
+/>
+
+// 分页关联表格（启用分页；可能切换为远程 searchPage 模式）
+<Field fieldName="optionItems" tableView={optionItemsInitialParams} isPaged />
+```
+
+提交 payload 结构：
+
+```json
+{
+  "Create": [{ "name": "new row" }],
+  "Update": [{ "id": "101", "name": "changed" }],
+  "Delete": ["102", "103"]
+}
+```
+
+创建模式约束：
+
+- 仅允许 `Create`
+
+更新模式：
+
+- 允许 `Create` / `Update` / `Delete`
+
+OneToMany 视图绑定示例：
+
+```tsx
+import { defineRelationTableView, Field } from "@/components/fields";
+
+export const optionItemsInitialParams = defineRelationTableView({
+  fields: ["sequence", "itemCode", "itemName", "active"],
+  orders: [["sequence", "ASC"]],
+  pageSize: 10,
+});
+
+function OptionItemsFormView() {
+  return (
+    <ModelDialog title="Option Item">
+      <FormBody
+        className="rounded-lg border border-border bg-card p-6"
+        enableAuditLog={false}
+        sectionNavMode="never"
+      >
+        <FormSection labelName="General" hideHeader>
+          <Field fieldName="itemCode" />
+          <Field fieldName="itemName" />
+          <Field fieldName="sequence" />
+          <Field fieldName="active" />
+          <Field fieldName="description" />
+        </FormSection>
+      </FormBody>
+    </ModelDialog>
+  );
+}
+
+
+export default function SysOptionSetFormPage() {
+
+  return (
+    <ModelForm modelName="SysOptionSet">
+      <FormHeader />
+      <FormToolbar />
+
+      <FormBody className="rounded-lg border border-border bg-card p-6">
+        <FormSection>
+          <Field fieldName="optionSetCode" />
+          <Field fieldName="name" />
+          <Field fieldName="description" />
+          <Field fieldName="active" />
+        </FormSection>
+
+        <FormSection>
+          <Field fieldName="optionItems"
+            tableView={optionItemsInitialParams}
+            formView={OptionItemsFormView}
+          />
+        </FormSection>
+      </FormBody>
+    </ModelForm>
+  );
+}
+```
+
+### ManyToMany
+
+- UI：表单主体中的本地关联表格
+- 支持：新增、删除
+- 新增会打开关联模型选择表格对话框（搜索 / 排序 / 列 / 分页）
+- 可选 `formView` 可挂载自定义只读 `ModelDialog`，用于行详情查看
+- 默认提交：patch map（增量）
+
+提交 payload 结构：
+
+```json
+{
+  "Add": ["1", "2", "3"],
+  "Remove": ["4", "5"]
+}
+```
+
+创建模式约束：
+
+- 仅允许 `Add`
+
+更新模式：
+
+- 允许 `Add` / `Remove`
+
+ManyToMany 视图绑定示例：
+
+```tsx
+import { defineRelationTableView, Field } from "@/components/fields";
+
+export const userRoleUserIdsInitialParams = defineRelationTableView({
+  fields: ["username", "nickname", "email", "mobile", "status"],
+  orders: [["username", "ASC"]],
+  pageSize: 10,
+});
+
+function UserRoleUserIdsFormView() {
+  return (
+    <ModelDialog title="User Detail">
+      <FormSection labelName="General" hideHeader>
+        <Field fieldName="username" />
+        <Field fieldName="nickname" />
+        <Field fieldName="email" />
+        <Field fieldName="mobile" />
+        <Field fieldName="status" />
+      </FormSection>
+    </ModelDialog>
+  );
+}
+
+export default function UserRoleFormPage() {
+
+  return (
+    <ModelForm modelName="UserRole">
+      <FormHeader />
+      <FormToolbar />
+
+      <FormBody className="rounded-lg border border-border bg-card p-6">
+        <FormSection labelName="General" hideHeader>
+          <Field fieldName="name" />
+          <Field fieldName="code" />
+          <Field fieldName="description" />
+          <Field fieldName="active" />
+        </FormSection>
+        <FormSection>
+          <Field fieldName="userIds"
+            tableView={userRoleUserIdsInitialParams}
+            formView={UserRoleUserIdsFormView}
+          />
+        </FormSection>
+      </FormBody>
+    </ModelForm>
+  );
+}
+```
+
+说明：
+
+- `tableView` 控制关联表格的查询 / 列行为（`fields/orders/pageSize/...`）。
+- `isPaged`（仅 `OneToMany` / `ManyToMany` 字段）：
+  - `false`（默认）：在 `getById` 中带上关联 `subQuery`；关联表格在 UI 中不分页，渲染所有本地行。
+  - `true`：关联表格启用分页 UI；当 `recordId + relatedModel + scoped relation filter` 就绪时，通过 `relatedModel.searchPage` 加载数据（远程模式），否则本地分页。
+- 若未提供 `tableView.renderers`，Boolean 值默认渲染为徽标（`True` / `False`）。
+- `tableView.renderers[fieldName]`：自定义表格单元格渲染（状态徽标、标签、本地化文本）。
+- `tableView.sortAccessors[fieldName]`：本地关联表格排序值映射的可选高级 hook。
+- 关联表格默认 `pageSize` 为 `50`；仅在启用分页（`isPaged=true`）时显示 page-size 选择器。
+- ManyToMany 选择器对话框（`Add`）由服务端驱动；搜索 / 排序 / 分页变化会触发 `searchPage` 请求。
+- `formView` 为可选项。在 `ManyToMany` 中，点击行会以只读模式打开 `ModelDialog`；新增 / 移除仍使用选择器行为。
+
+### 兼容性
+
+后端仍支持 XToMany 字段的整表提交。
+前端 `ModelForm` 默认采用增量提交（`PatchType` map），以避免分页关联编辑时整列表覆盖的风险。
 
 ## 页面结构
 
@@ -160,7 +429,7 @@ Schema 优先级：`schemaBuilder` > `zodSchema` > 元数据推导的基础 sche
 `Action` 通过以下方式同时支持静态值与上下文动态值：
 
 ```ts
-type ActionValue<T> = T | ((context: { id: string | number | null; modelName?: string; row?: Record<string, unknown> }) => T);
+type ActionValue<T> = T | ((context: { id: string | null; modelName?: string; row?: Record<string, unknown> }) => T);
 ```
 
 | Prop             | 类型                                    | 必填 | 默认值 | 说明                                                                 |
@@ -269,7 +538,12 @@ function UnlockDialog() {
       title="Unlock Account"
       abstractModelName="UnlockAccountAction"
       abstractFields={[
-        { fieldName: "reason", fieldType: "Text", labelName: "Reason" },
+        {
+          fieldName: "reason",
+          fieldType: "String",
+          widgetType: "Text",
+          labelName: "Reason",
+        },
       ]}
       defaultValues={{ reason: "" }}
     />
@@ -387,7 +661,9 @@ import { ExternalLink, RefreshCw } from "lucide-react";
 - 创建/编辑模式默认值与重置处理。
 - 元数据解析策略：始终从 `/metadata/getMetaModel` 获取；首次响应由 React Query 缓存并复用。
 - 通过 `FieldPropsProvider` 提供元数据驱动字段属性。
-- 脏表单取消确认。
+- 取消行为：
+  - 编辑模式：点击 `Cancel` 时会在表单脏状态下确认，重置到最新加载数据后切回只读模式
+  - 只读模式：点击 `Back` 返回列表页
 - 保存/创建 mutation 处理与 toast 提示。
 - 内置审计查询：`useGetChangeLogQuery(modelName, id)`，参数为：
   - `pageNumber=1`
@@ -395,6 +671,9 @@ import { ExternalLink, RefreshCw } from "lucide-react";
   - `order=DESC`
   - `includeCreation=true`
   - `dataMask=true`
+- 全局审计 API 开关：
+  - `configs.env.enableChangeLog`（`NEXT_PUBLIC_ENABLE_CHANGE_LOG`，默认 `true`）
+  - 关闭后，`FormAuditPanel` 不会发起 change-log API 请求，并显示禁用提示文本
 - `FormWorkflowActions` + `WorkflowActionGroup` 支持工作流状态：
   - `draft`：submit
   - `pending`：withdraw/approve/reject
@@ -414,5 +693,7 @@ import { ExternalLink, RefreshCw } from "lucide-react";
 快速参考：
 
 - `ActionDialog`：调用模型操作 `/{modelName}/{operation}`（单条/批量）。
-- `ModelDialog`：单条记录的元数据驱动创建/更新对话框。
+- `ModelDialog`：关联字段运行时对话框，不需要显式传 `modelName`。
 - `WizardDialog`：带自定义提交逻辑的多步骤流程。
+
+为了避免文档漂移，本文件仅保留表单页用法说明；对话框细节统一维护在 dialogs README 中。

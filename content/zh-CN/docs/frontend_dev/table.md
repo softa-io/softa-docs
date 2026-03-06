@@ -65,8 +65,36 @@ export default function UserAccountPage() {
 大多数页面不需要显式泛型参数。`ModelTable` 默认行类型为：
 
 ```ts
-type ModelTableRowData = { id: string | number };
+type ModelTableRowData = { id: string };
 ```
+
+## Inline Edit
+
+`ModelTable` 支持可选的行级内联编辑。
+
+```tsx
+<ModelTable
+  modelName="TenantOptionItem"
+  inlineEdit
+  initialParams={{
+    fields: ["sequence", "itemCode", "itemName", "active"],
+    orders: [["sequence", "ASC"]],
+  }}
+/>
+```
+
+行为说明：
+
+- 默认值为 `inlineEdit={false}`
+- `false`：点击行后跳转到详情页的只读模式
+- `true`：点击行后激活该行的内联编辑
+- 可编辑单元格会直接在表格单元格内渲染 `Field`
+- 激活行会显示行级 `Save` / `Cancel`
+- 只有在激活行存在实际变更时，`Save` 才可用
+- `Save` 仅通过更新 API 提交该行发生变化的可编辑字段
+- `Cancel` 会用最近一次加载的服务端快照恢复该行
+- 当当前行处于脏状态时，切换到另一行会提示确认是否丢弃更改
+- 只有元数据中可编辑的字段才会成为内联编辑器；不支持 / 只读列仍保持只读
 
 ## 开发者类型
 
@@ -231,6 +259,7 @@ const sideTree: SideTreeConfig = {
 | Prop | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
 | `modelName` | `string` | 是 | - | 用于获取 metadata API。 |
+| `inlineEdit` | `boolean` | 否 | `false` | 启用按行点击的内联编辑模式。启用后，激活行的可编辑单元格会渲染 `Field` 组件，而不是跳转到详情页。 |
 | `initialParams` | `Partial<QueryParams>` | 否 | - | 初始字段/排序/过滤/分页设置。 |
 | `queryOptions` | `UseQueryOptions`（partial） | 否 | - | 表格分页查询的 React Query 可选配置。 |
 | `children` | `ReactNode` | 否 | - | 表格操作区内容，使用 `<Action />`（行级）和 `<BulkAction />`（选中集级）。 |

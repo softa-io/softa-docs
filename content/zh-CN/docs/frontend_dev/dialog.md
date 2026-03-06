@@ -1,6 +1,6 @@
 # Dialog 视图
 
-可复用的对话框视图层，覆盖动作驱动表单、模型 CRUD 表单以及多步骤向导。
+可复用的对话框视图层，适用于动作驱动表单、关联字段对话框和多步骤向导。
 
 ## 导入
 
@@ -13,7 +13,7 @@ import { ActionDialog, ModelDialog, WizardDialog } from "@/components/views/dial
 | 组件 | 适用场景 | 提交行为 |
 | --- | --- | --- |
 | `ActionDialog` | 执行 `/{modelName}/{operation}`，可带可选表单字段 | 内置动作 API 调用（`invokeAction` 或 `invokeBulkAction`） |
-| `ModelDialog` | 基于元数据字段创建/更新单条模型记录 | 内置 CRUD（`createOneAndFetch` / `updateByIdAndFetch`） |
+| `ModelDialog` | 在关联字段 `formView` 中定义对话框布局，搭配 `FormHeader/FormToolbar/FormBody` 使用 | 关联运行时注入上下文 + 内置本地草稿提交 |
 | `WizardDialog` | 多步骤流程（模型相关或非模型） | 自定义 `onSubmit` |
 
 ## 仅使用公开 API
@@ -24,7 +24,37 @@ import { ActionDialog, ModelDialog, WizardDialog } from "@/components/views/dial
 - `ModelDialog`
 - `WizardDialog`
 
-`components/views/dialogs/components/*` 下文件属于内部构件。
+`components/views/dialogs/components/*` 下的文件属于内部构件。
+
+## ModelDialog
+
+`ModelDialog` 是 `OneToMany` / `ManyToMany` `formView` 的关联运行时对话框包装器。
+
+- 不需要 `modelName` prop
+- `open`、`mode`、`rowId`、`defaultValues`、`onSubmit` 由关联字段运行时注入
+- 适合复用页面式对话框布局（`FormHeader/FormToolbar/FormBody`）
+- 在 `ManyToMany` 行详情中，运行时会强制只读模式（禁用 `Confirm`，仅查看）
+- 若要自定义关联行编辑器，请在字段级 `formView` 中配置 `ModelDialog`
+
+### ModelDialog 示例
+
+```tsx
+function OptionItemsDialogView() {
+  return (
+    <ModelDialog title="Option Item">
+      <FormHeader />
+      <FormBody enableAuditLog={false} sectionNavMode="never">
+        <FormSection labelName="General" hideHeader>
+          <Field fieldName="itemCode" />
+          <Field fieldName="itemName" />
+          <Field fieldName="sequence" />
+          <Field fieldName="active" />
+        </FormSection>
+      </FormBody>
+    </ModelDialog>
+  );
+}
+```
 
 ## ActionDialog
 
@@ -42,11 +72,11 @@ import { ActionDialog, ModelDialog, WizardDialog } from "@/components/views/dial
 | Prop | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
 | `title` | `ReactNode` | 是 | - | 对话框标题。 |
-| `open` | `boolean` | 否 | 运行时上下文或 `false` | 可由 `Action`/`BulkAction` 运行时注入。 |
+| `open` | `boolean` | 否 | 运行时上下文或 `false` | 可由 `Action` / `BulkAction` 运行时注入。 |
 | `onOpenChange` | `(open: boolean) => void` | 否 | 运行时上下文 | 若不存在运行时 provider，则必填。 |
 | `operation` | `string` | 否 | 运行时上下文 | 若不存在运行时 provider，则必填。 |
-| `modelName` | `string` | 否 | 运行时/form/table 上下文 | 省略时从周边上下文自动解析。 |
-| `rowId` | `IdType \| null` | 否 | 运行时/form 上下文 id | 单记录目标 id。 |
+| `modelName` | `string` | 否 | 运行时 / form / table 上下文 | 省略时从周边上下文自动解析。 |
+| `rowId` | `IdType \| null` | 否 | 运行时 / form 上下文 id | 单记录目标 id。 |
 | `ids` | `IdType[] \| null` | 否 | 运行时批量 ids | 非空时为批量模式。 |
 | `payload` | `Record<string, unknown>` | 否 | `{}` | 提交前与表单值合并。 |
 | `defaultValues` | `Record<string, unknown>` | 否 | `{}` | 表单初始值。 |
@@ -116,73 +146,6 @@ export function UserAccountUnlockActionDialog() {
 />
 ```
 
-## ModelDialog
-
-单条记录的元数据驱动创建/更新对话框。
-
-- `mode="create"`：创建记录
-- `mode="update"`：更新记录（要求 `rowId`）
-- 省略 `mode`：根据 `rowId` 推断
-
-### ModelDialog Props
-
-| Prop | 类型 | 必填 | 默认值 | 说明 |
-| --- | --- | --- | --- | --- |
-| `open` | `boolean` | 是 | - | 受控对话框开关状态。 |
-| `onOpenChange` | `(open: boolean) => void` | 是 | - | 受控开关状态处理器。 |
-| `modelName` | `string` | 是 | - | 元数据与 CRUD 目标模型。 |
-| `mode` | `"create" \| "update"` | 否 | 根据 `rowId` 推断 | 有 `rowId` => `update`，否则 `create`。 |
-| `rowId` | `IdType \| null` | 否 | - | `mode="update"` 时必填。 |
-| `schemaBuilder` | `(context) => ZodTypeAny` | 否 | - | 运行时 schema 扩展器。 |
-| `zodSchema` | `ZodTypeAny` | 否 | 元数据推导 schema | 当未提供 `schemaBuilder` 时使用。 |
-| `defaultValues` | `DefaultValues` | 否 | 元数据默认值或转换后的记录值 | 在解析出的默认值之上合并。 |
-| `title` | `ReactNode` | 否 | - | 对话框标题。 |
-| `description` | `ReactNode` | 否 | - | 对话框描述。 |
-| `children` | `ReactNode \| (renderProps) => ReactNode` | 否 | - | 对话框表单内容。 |
-| `readOnly` | `boolean` | 否 | `false` | 继承自 `DialogForm`。 |
-| `confirmLabel` | `string` | 否 | `"Confirm"` | 继承自 `DialogForm`。 |
-| `cancelLabel` | `string` | 否 | `"Cancel"` | 继承自 `DialogForm`。 |
-| `pendingLabel` | `string` | 否 | `"Submitting..."` | 继承自 `DialogForm`。 |
-| `successMessage` | `string` | 否 | - | 继承自 `DialogForm`。 |
-| `errorMessage` | `string` | 否 | - | 继承自 `DialogForm`。 |
-| `confirmDisabled` | `boolean` | 否 | `false` | 继承自 `DialogForm`。 |
-| `closeOnSuccess` | `boolean` | 否 | `true` | 继承自 `DialogForm`。 |
-| `resetOnClose` | `boolean` | 否 | `true` | 继承自 `DialogForm`。 |
-| `onSubmit` | `(values, context) => Promise \| unknown` | 否 | 内置 CRUD | 默认提交：create => `createOneAndFetch`，update => `updateByIdAndFetch`。 |
-| `onSuccess` | `(result) => void` | 否 | - | 继承自 `DialogForm`。 |
-| `onError` | `(error) => void` | 否 | - | 继承自 `DialogForm`。 |
-
-### ModelDialog：最小示例
-
-```tsx
-import { ModelDialog } from "@/components/views/dialogs";
-
-<ModelDialog
-  open={open}
-  onOpenChange={setOpen}
-  modelName="UserAccount"
-  title="Create Account"
-/>;
-```
-
-### ModelDialog：常见配置示例
-
-```tsx
-import { Field } from "@/components/fields";
-import { ModelDialog } from "@/components/views/dialogs";
-
-<ModelDialog
-  open={open}
-  onOpenChange={setOpen}
-  modelName="UserAccount"
-  rowId={id}
-  title="Edit Account"
->
-  <Field fieldName="username" />
-  <Field fieldName="email" />
-</ModelDialog>
-```
-
 ## WizardDialog
 
 跨步骤共享表单状态的向导式对话框。
@@ -205,7 +168,7 @@ import { ModelDialog } from "@/components/views/dialogs";
 | `abstractFields` | `AbstractMetaField[]` | 否 | - | 非实体向导表单的字段元数据。 |
 | `zodSchema` | `ZodTypeAny` | 否 | - | 可选 schema 覆盖。 |
 | `defaultValues` | `DefaultValues` | 否 | `{}` | 初始表单值。 |
-| `recordId` | `string \| number \| null` | 否 | - | 透传给字段属性解析器。 |
+| `recordId` | `string \| null` | 否 | - | 透传给字段属性解析器。 |
 | `readOnly` | `boolean` | 否 | `false` | 强制只读模式。 |
 | `cancelLabel` | `string` | 否 | `"Cancel"` | 取消按钮文案。 |
 | `backLabel` | `string` | 否 | `"Back"` | 上一步按钮文案。 |

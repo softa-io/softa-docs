@@ -9,8 +9,8 @@ Composable data table view with:
 
 ## Related Docs
 
-- Dialog components: `src/components/views/dialogs/README.md`
-- Form components: `src/components/views/form/README.md`
+- [Dialog components](./dialog)
+- [Form components](./form)
 
 ## Quick Start
 
@@ -67,6 +67,34 @@ Most pages do not need explicit generic parameters. `ModelTable` defaults row ty
 ```ts
 type ModelTableRowData = { id: string };
 ```
+
+## Inline Edit
+
+`ModelTable` supports optional row-level inline editing.
+
+```tsx
+<ModelTable
+  modelName="TenantOptionItem"
+  inlineEdit
+  initialParams={{
+    fields: ["sequence", "itemCode", "itemName", "active"],
+    orders: [["sequence", "ASC"]],
+  }}
+/>
+```
+
+Behavior:
+
+- default is `inlineEdit={false}`
+- `false`: row click navigates to detail page in read mode
+- `true`: row click activates inline edit for that row
+- editable cells render `Field` directly inside the table cell
+- active row shows row-level `Save` / `Cancel`
+- `Save` stays disabled until the active row has actual changes
+- `Save` submits only changed editable fields for that row via update API
+- `Cancel` restores the row from the latest loaded server snapshot
+- switching to another row while current row is dirty asks for discard confirmation
+- only metadata-editable fields become inline editors; unsupported/readonly columns stay read-only
 
 ## Developer Types
 
@@ -231,6 +259,7 @@ Toolbar active state area can show and clear:
 | Prop | Type | Required | Default | Notes |
 | --- | --- | --- | --- | --- |
 | `modelName` | `string` | Yes | - | Used to fetch metadata API. |
+| `inlineEdit` | `boolean` | No | `false` | Enable row-click inline edit mode. When enabled, active-row editable cells render `Field` components instead of navigating to detail. |
 | `initialParams` | `Partial<QueryParams>` | No | - | Initial fields/order/filter/page settings. |
 | `queryOptions` | `UseQueryOptions` (partial) | No | - | Optional React Query options for table page query. |
 | `children` | `ReactNode` | No | - | Table actions using `<Action />` (row-level) and `<BulkAction />` (selection-level). |
