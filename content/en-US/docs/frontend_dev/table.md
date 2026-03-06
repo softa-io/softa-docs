@@ -65,7 +65,7 @@ export default function UserAccountPage() {
 Most pages do not need explicit generic parameters. `ModelTable` defaults row type to:
 
 ```ts
-type ModelTableRowData = { id: string | number };
+type ModelTableRowData = { id: string };
 ```
 
 ## Developer Types

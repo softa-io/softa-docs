@@ -1,6 +1,6 @@
 # Dialog Views
 
-Reusable dialog view layer for action-driven forms, model CRUD forms, and multi-step wizards.
+Reusable dialog view layer for action-driven forms, relation field dialogs, and multi-step wizards.
 
 ## Import
 
@@ -13,7 +13,7 @@ import { ActionDialog, ModelDialog, WizardDialog } from "@/components/views/dial
 | Component | Use when | Submit behavior |
 | --- | --- | --- |
 | `ActionDialog` | Execute `/{modelName}/{operation}` with optional form fields | Built-in invoke action API (`invokeAction` or `invokeBulkAction`) |
-| `ModelDialog` | Create/update one model record with metadata-driven fields | Built-in CRUD (`createOneAndFetch` / `updateByIdAndFetch`) |
+| `ModelDialog` | Use inside relation field `formView` to define dialog layout with `FormHeader/FormToolbar/FormBody` | Runtime-injected relation context + built-in local draft submit |
 | `WizardDialog` | Multi-step flow (model-related or non-model) | Custom `onSubmit` |
 
 ## Public API Only
@@ -25,6 +25,36 @@ Use only exports from `@/components/views/dialogs`:
 - `WizardDialog`
 
 Files under `components/views/dialogs/components/*` are internal building blocks.
+
+## ModelDialog
+
+`ModelDialog` is a relation-runtime dialog wrapper for `OneToMany`/`ManyToMany` `formView`.
+
+- no `modelName` prop required
+- `open`, `mode`, `rowId`, `defaultValues`, `onSubmit` are injected by relation field runtime
+- recommended for page-like dialog layout reuse (`FormHeader/FormToolbar/FormBody`)
+- in `ManyToMany` row detail, runtime forces read mode (`Confirm` disabled, view-only)
+- for relation row editor customization, configure field-level `formView` with `ModelDialog`
+
+### ModelDialog Example
+
+```tsx
+function OptionItemsDialogView() {
+  return (
+    <ModelDialog title="Option Item">
+      <FormHeader />
+      <FormBody enableAuditLog={false} sectionNavMode="never">
+        <FormSection labelName="General" hideHeader>
+          <Field fieldName="itemCode" />
+          <Field fieldName="itemName" />
+          <Field fieldName="sequence" />
+          <Field fieldName="active" />
+        </FormSection>
+      </FormBody>
+    </ModelDialog>
+  );
+}
+```
 
 ## ActionDialog
 
@@ -116,73 +146,6 @@ export function UserAccountUnlockActionDialog() {
 />
 ```
 
-## ModelDialog
-
-Metadata-driven create/update dialog for one record.
-
-- `mode="create"`: create record
-- `mode="update"`: update record (`rowId` required)
-- mode omitted: inferred from `rowId`
-
-### ModelDialog Props
-
-| Prop | Type | Required | Default | Notes |
-| --- | --- | --- | --- | --- |
-| `open` | `boolean` | Yes | - | Controlled dialog open state. |
-| `onOpenChange` | `(open: boolean) => void` | Yes | - | Controlled open-state handler. |
-| `modelName` | `string` | Yes | - | Metadata and CRUD target model. |
-| `mode` | `"create" \| "update"` | No | Inferred from `rowId` | `rowId` present => `update`, otherwise `create`. |
-| `rowId` | `IdType \| null` | No | - | Required when `mode="update"`. |
-| `schemaBuilder` | `(context) => ZodTypeAny` | No | - | Runtime schema extender. |
-| `zodSchema` | `ZodTypeAny` | No | Metadata-derived schema | Used when `schemaBuilder` is not provided. |
-| `defaultValues` | `DefaultValues` | No | Metadata defaults or transformed record | Merged over resolved metadata/record defaults. |
-| `title` | `ReactNode` | No | - | Dialog title. |
-| `description` | `ReactNode` | No | - | Dialog description. |
-| `children` | `ReactNode \| (renderProps) => ReactNode` | No | - | Dialog form content. |
-| `readOnly` | `boolean` | No | `false` | Inherited from `DialogForm`. |
-| `confirmLabel` | `string` | No | `"Confirm"` | Inherited from `DialogForm`. |
-| `cancelLabel` | `string` | No | `"Cancel"` | Inherited from `DialogForm`. |
-| `pendingLabel` | `string` | No | `"Submitting..."` | Inherited from `DialogForm`. |
-| `successMessage` | `string` | No | - | Inherited from `DialogForm`. |
-| `errorMessage` | `string` | No | - | Inherited from `DialogForm`. |
-| `confirmDisabled` | `boolean` | No | `false` | Inherited from `DialogForm`. |
-| `closeOnSuccess` | `boolean` | No | `true` | Inherited from `DialogForm`. |
-| `resetOnClose` | `boolean` | No | `true` | Inherited from `DialogForm`. |
-| `onSubmit` | `(values, context) => Promise \| unknown` | No | Built-in CRUD | Default submit: create => `createOneAndFetch`, update => `updateByIdAndFetch`. |
-| `onSuccess` | `(result) => void` | No | - | Inherited from `DialogForm`. |
-| `onError` | `(error) => void` | No | - | Inherited from `DialogForm`. |
-
-### ModelDialog: Minimal Example
-
-```tsx
-import { ModelDialog } from "@/components/views/dialogs";
-
-<ModelDialog
-  open={open}
-  onOpenChange={setOpen}
-  modelName="UserAccount"
-  title="Create Account"
-/>;
-```
-
-### ModelDialog: Common Setup Example
-
-```tsx
-import { Field } from "@/components/fields";
-import { ModelDialog } from "@/components/views/dialogs";
-
-<ModelDialog
-  open={open}
-  onOpenChange={setOpen}
-  modelName="UserAccount"
-  rowId={id}
-  title="Edit Account"
->
-  <Field fieldName="username" />
-  <Field fieldName="email" />
-</ModelDialog>
-```
-
 ## WizardDialog
 
 Step-by-step dialog with shared form state across steps.
@@ -205,7 +168,7 @@ Step-by-step dialog with shared form state across steps.
 | `abstractFields` | `AbstractMetaField[]` | No | - | Field metadata for non-entity wizard forms. |
 | `zodSchema` | `ZodTypeAny` | No | - | Optional schema override. |
 | `defaultValues` | `DefaultValues` | No | `{}` | Initial form values. |
-| `recordId` | `string \| number \| null` | No | - | Passed to field props resolver. |
+| `recordId` | `string \| null` | No | - | Passed to field props resolver. |
 | `readOnly` | `boolean` | No | `false` | Force read-only mode. |
 | `cancelLabel` | `string` | No | `"Cancel"` | Cancel button label. |
 | `backLabel` | `string` | No | `"Back"` | Back button label. |
