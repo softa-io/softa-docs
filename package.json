@@ -3,7 +3,7 @@
 		"dev": "next dev --webpack",
 		"dev:turbopack": "next dev --turbopack",
 		"build": "next build --webpack",
-		"postbuild": "node scripts/patch-pagefind-html-lang.mjs && pagefind --site .next/server/app --output-path out/_pagefind && node scripts/sync-pagefind-to-public.mjs"
+		"postbuild": "node scripts/patch-pagefind-html-lang.mjs && pagefind --site .next/server/app --output-path public/_pagefind && node scripts/sync-pagefind-to-out.mjs"
 	},
 	"dependencies": {
 		"@vercel/analytics": "^1.2.1",
