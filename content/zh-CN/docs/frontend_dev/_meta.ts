@@ -5,5 +5,5 @@ export default {
   form: "表单",
   dialog: "对话框",
   tree: "树",
-  component: "组件",
+  field: "字段 & 组件",
 }

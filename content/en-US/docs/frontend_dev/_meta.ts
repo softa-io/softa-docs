@@ -5,5 +5,5 @@ export default {
   form: "Form",
   dialog: "Dialog",
   tree: "Tree",
-  component: "Component",
+  field: "Field & Widget",
 }

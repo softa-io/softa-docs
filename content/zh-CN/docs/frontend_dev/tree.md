@@ -2,6 +2,9 @@
 
 基于 `react-arborist` + shadcn/ui 的可复用树形视图。
 
+## 相关文档
+- [字段与 widgets](./field)
+
 ## 导入
 
 ```tsx
@@ -203,7 +206,6 @@ import { TreePanel } from "@/components/views/tree";
 | `autoLocateOnOpen` | `boolean` | 否 | `true` | 打开时自动定位当前选中项。 |
 | `destroyOnClose` | `boolean` | 否 | `true` | Popover 关闭时卸载树面板。 |
 | `searchMode` | `"off" \| "local" \| "server"` | 否 | `"local"` | Popover 树搜索模式。 |
-| `clearable` | `boolean` | 否 | `true` | 有值时显示清空按钮。 |
 
 ### SelectTreePanel：最小示例
 
@@ -243,7 +245,6 @@ export function DepartmentPicker() {
       onChange={setValue}
       placeholder="Select departments"
       searchMode="local"
-      clearable
       autoLocateOnOpen
       defaultExpandedLevel={2}
       treeFilters={["enabled", "=", true]}

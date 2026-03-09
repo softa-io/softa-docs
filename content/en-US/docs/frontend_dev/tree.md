@@ -2,6 +2,9 @@
 
 Reusable tree view built on `react-arborist` + shadcn/ui.
 
+## Related Docs
+- [Fields and widgets](./field)
+
 ## Import
 
 ```tsx
@@ -203,7 +206,6 @@ import { TreePanel } from "@/components/views/tree";
 | `autoLocateOnOpen` | `boolean` | No | `true` | Auto-locate current selection on open. |
 | `destroyOnClose` | `boolean` | No | `true` | Unmount tree panel when popover closes. |
 | `searchMode` | `"off" \| "local" \| "server"` | No | `"local"` | Search mode in popover tree. |
-| `clearable` | `boolean` | No | `true` | Show trigger clear button when value exists. |
 
 ### SelectTreePanel: Minimal Example
 
@@ -243,7 +245,6 @@ export function DepartmentPicker() {
       onChange={setValue}
       placeholder="Select departments"
       searchMode="local"
-      clearable
       autoLocateOnOpen
       defaultExpandedLevel={2}
       treeFilters={["enabled", "=", true]}

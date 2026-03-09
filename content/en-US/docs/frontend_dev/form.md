@@ -3,6 +3,7 @@
 Metadata-driven create/edit form container based on `react-hook-form` and Zod.
 
 ## Related Docs
+- [Fields and widgets](./field)
 - [Dialog components](./dialog)
 - [Table components](./table)
 
@@ -70,7 +71,25 @@ export default function EditUserAccountPage() {
 - `params.id` exists and is not `"new"` => edit mode
 - if route has no `id` param => create mode by default
 
+Validation behavior:
+
+- `validationMode` is configurable
+- default is `onBlur`
+- `reValidateMode` follows `validationMode` conservatively:
+  - `onBlur` -> `onBlur`
+  - `onSubmit` / `onTouched` / `all` / `onChange` -> `onChange`
+
 Need custom variations? Use `useModelFormContext()` in children and rearrange `FormHeader/FormToolbar/FormBody` directly.
+
+Canonical field and widget usage now lives in `src/components/fields/README.md`.
+Use that document for:
+
+- `Field` props and metadata overrides
+- `FieldType -> WidgetType` compatibility
+- widget-specific `widgetProps`
+- relation field behavior (`Reference`, `OneToMany`, `ManyToMany`)
+
+The quick examples below are kept as local shortcuts, but the fields README is the source of truth.
 
 Default recommendation is `Field` (metadata auto-dispatch by `fieldType`) with metadata overrides only.
 
@@ -104,19 +123,160 @@ Examples of using `widgetType` to drive renderer behavior:
 />
 
 <Field
+  fieldName="gallery"
+  widgetType="MultiImage"
+  widgetProps={{ maxCount: 6, columns: 3, aspectRatio: "4 / 3", helperText: "Recommended 1200x900" }}
+/>
+
+<Field
+  fieldName="score"
+  widgetType="Slider"
+  widgetProps={{ minValue: 0, maxValue: 100, step: 5 }}
+/>
+
+<Field
   fieldName="content"
   widgetType="RichText"
+/>
+
+<Field
+  fieldName="notes"
+  widgetType="Markdown"
+  widgetProps={{ mode: "split", minHeight: 360 }}
+/>
+
+<Field
+  fieldName="script"
+  widgetType="Code"
+  widgetProps={{ language: "python", minHeight: 320, lineNumbers: true }}
+/>
+
+<Field
+  fieldName="startTime"
+  placeholder="Select start time"
 />
 ```
 
 `File` / `MultiFile` automatically use current `ModelForm` record id in edit mode.
 
+### Widget Props
+
+Use `placeholder` for field-level input placeholder text.
+Use `widgetProps` only for widget-specific configuration.
+
+Current supported examples:
+
+```tsx
+<Field
+  fieldName="progress"
+  widgetType="Slider"
+  widgetProps={{ minValue: 0, maxValue: 10, step: 0.5 }}
+/>
+
+<Field
+  fieldName="avatar"
+  widgetType="Image"
+  widgetProps={{
+    aspectRatio: "1 / 1",
+    objectFit: "cover",
+    helperText: "Square image recommended",
+    crop: { enabled: true, aspect: 1, shape: "round" },
+  }}
+/>
+
+<Field
+  fieldName="photos"
+  widgetType="MultiImage"
+  widgetProps={{
+    maxCount: 8,
+    columns: 4,
+    aspectRatio: "16 / 9",
+    uploadText: "Upload gallery",
+    crop: { enabled: true, aspect: 16 / 9 },
+  }}
+/>
+
+<Field
+  fieldName="status"
+  widgetType="Radio"
+  required
+/>
+
+<Field
+  fieldName="script"
+  widgetType="Code"
+  widgetProps={{
+    language: "sql",
+    minHeight: 320,
+    maxHeight: 560,
+    lineNumbers: true,
+    lineWrapping: false,
+    tabSize: 2,
+  }}
+/>
+
+<Field
+  fieldName="config"
+  widgetProps={{
+    minHeight: 320,
+    maxHeight: 560,
+    lineNumbers: true,
+    lineWrapping: true,
+    tabSize: 2,
+    formatOnBlur: true,
+  }}
+/>
+```
+
+`JsonField` now uses `react-codemirror` by default. Common JSON editor `widgetProps`:
+
+- `height`: fixed editor height
+- `minHeight`: minimum editor height
+- `maxHeight`: maximum editor height
+- `lineNumbers`: show or hide gutter line numbers
+- `lineWrapping`: wrap long lines
+- `tabSize`: indentation size
+- `formatOnBlur`: format valid JSON after blur
+- `autoFocus`: focus editor on mount
+
+`CodeWidget` supports these common `widgetProps`:
+
+- `language`: `plain`, `java`, `html`, `json`, `markdown`, `python`, `sql`, `yaml`, `yml`
+- `height`: fixed editor height
+- `minHeight`: minimum editor height
+- `maxHeight`: maximum editor height
+- `lineNumbers`: show or hide gutter line numbers
+- `lineWrapping`: wrap long lines
+- `tabSize`: indentation size
+- `autoFocus`: focus editor on mount
+
+`MarkdownWidget` supports these common `widgetProps`:
+
+- `mode`: `split`, `edit`, `preview` (default: `split`)
+- `height`: fixed editor/preview height
+- `minHeight`: minimum editor/preview height
+- `maxHeight`: maximum editor/preview height
+- `lineNumbers`: show or hide editor line numbers
+- `lineWrapping`: wrap long lines in editor mode
+- `tabSize`: indentation size
+- `autoFocus`: focus editor on mount
+
+`MarkdownWidget` uses `react-markdown` for preview and enables `remark-gfm` by default.
+
+`mode` behavior:
+
+- `split`: show editor and preview side by side on desktop; stack vertically on smaller screens
+- `edit`: show editor only
+- `preview`: show preview only
+
 ### Field Full Width
 
 `Field` supports `fullWidth` for these field renderers:
 
-- `TextField` (`fieldType="String"` + `widgetType="Text"`)
-- `RichTextField` (`fieldType="String"` + `widgetType="RichText"`)
+- `StringField + TextWidget` (`fieldType="String"` + `widgetType="Text"`)
+- `StringField + RichTextWidget` (`fieldType="String"` + `widgetType="RichText"`)
+- `StringField + MarkdownWidget` (`fieldType="String"` + `widgetType="Markdown"`)
+- `StringField + CodeWidget` (`fieldType="String"` + `widgetType="Code"`)
 - `OneToManyField`
 - `ManyToManyField`
 
@@ -389,6 +549,7 @@ Recommended default layout:
 | `zodSchema` | `ZodTypeAny`                                   | No       | -       | Optional schema override.                     |
 | `schemaBuilder` | `(context) => ZodTypeAny`                  | No       | -       | Runtime schema extender. Receives `{ metaModel, baseSchema }` built from resolved metadata. |
 | `readOnly`  | `boolean`                                      | No       | `false` | Force read-only mode.                         |
+| `validationMode` | `"onBlur" \| "onChange" \| "onSubmit" \| "onTouched" \| "all"` | No | `"onBlur"` | React Hook Form validation mode for `ModelForm`. |
 | `children`  | `ReactNode`                                    | Yes      | -       | Form page layout content (`FormHeader/FormToolbar/FormBody`). |
 
 Schema precedence: `schemaBuilder` > `zodSchema` > metadata-derived base schema.
@@ -659,6 +820,10 @@ Inside `ModelForm` children, use `useModelFormContext()` to access:
 ## Built-in Behavior
 
 - Create/edit mode defaults and reset handling.
+- Reset behavior is snapshot-guarded:
+  - record/model identity change => reset
+  - pristine form + remote snapshot changed => reset
+  - dirty form + background refetch => do not overwrite current edits
 - Metadata resolution policy: always fetch from `/metadata/getMetaModel`; first response is cached by React Query and reused.
 - Metadata-driven field props via `FieldPropsProvider`.
 - Cancel behavior:

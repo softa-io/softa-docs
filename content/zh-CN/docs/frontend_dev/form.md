@@ -3,6 +3,7 @@
 基于 `react-hook-form` 和 Zod 的元数据驱动创建/编辑表单容器。
 
 ## 相关文档
+- [字段与 widgets](./field)
 - [对话框组件](./dialog)
 - [表格组件](./table)
 
@@ -70,9 +71,27 @@ export default function EditUserAccountPage() {
 - `params.id` 存在且不为 `"new"` => 编辑模式
 - 路由没有 `id` 参数 => 默认创建模式
 
-需要自定义编排时，可在子组件中使用 `useModelFormContext()`，直接重排 `FormHeader/FormToolbar/FormBody`。
+校验行为：
 
-默认推荐使用 `Field`（按 `fieldType` 自动分发渲染），仅在需要时做元数据覆盖。
+- `validationMode` 可配置
+- 默认值是 `onBlur`
+- `reValidateMode` 会保守跟随 `validationMode`：
+  - `onBlur` -> `onBlur`
+  - `onSubmit` / `onTouched` / `all` / `onChange` -> `onChange`
+
+需要自定义变体时，可在子组件中使用 `useModelFormContext()`，直接重排 `FormHeader/FormToolbar/FormBody`。
+
+字段与 widget 的规范用法现统一维护在 `src/components/fields/README.md`。
+以下内容请以那份文档为准：
+
+- `Field` props 与元数据覆盖
+- `FieldType -> WidgetType` 兼容关系
+- widget 专属 `widgetProps`
+- 关联字段行为（`Reference`、`OneToMany`、`ManyToMany`）
+
+下面的快捷示例仅作为本地速查，fields README 才是事实来源。
+
+默认推荐使用 `Field`（按 `fieldType` 自动分发渲染），只在需要时做元数据覆盖。
 
 `Field` 元数据覆盖示例：
 
@@ -104,19 +123,160 @@ export default function EditUserAccountPage() {
 />
 
 <Field
+  fieldName="gallery"
+  widgetType="MultiImage"
+  widgetProps={{ maxCount: 6, columns: 3, aspectRatio: "4 / 3", helperText: "Recommended 1200x900" }}
+/>
+
+<Field
+  fieldName="score"
+  widgetType="Slider"
+  widgetProps={{ minValue: 0, maxValue: 100, step: 5 }}
+/>
+
+<Field
   fieldName="content"
   widgetType="RichText"
+/>
+
+<Field
+  fieldName="notes"
+  widgetType="Markdown"
+  widgetProps={{ mode: "split", minHeight: 360 }}
+/>
+
+<Field
+  fieldName="script"
+  widgetType="Code"
+  widgetProps={{ language: "python", minHeight: 320, lineNumbers: true }}
+/>
+
+<Field
+  fieldName="startTime"
+  placeholder="Select start time"
 />
 ```
 
 `File` / `MultiFile` 在编辑模式下会自动使用当前 `ModelForm` 记录 id。
 
+### Widget Props
+
+字段级输入占位文案请使用 `placeholder`。
+`widgetProps` 只用于 widget 专属配置。
+
+当前支持的示例：
+
+```tsx
+<Field
+  fieldName="progress"
+  widgetType="Slider"
+  widgetProps={{ minValue: 0, maxValue: 10, step: 0.5 }}
+/>
+
+<Field
+  fieldName="avatar"
+  widgetType="Image"
+  widgetProps={{
+    aspectRatio: "1 / 1",
+    objectFit: "cover",
+    helperText: "Square image recommended",
+    crop: { enabled: true, aspect: 1, shape: "round" },
+  }}
+/>
+
+<Field
+  fieldName="photos"
+  widgetType="MultiImage"
+  widgetProps={{
+    maxCount: 8,
+    columns: 4,
+    aspectRatio: "16 / 9",
+    uploadText: "Upload gallery",
+    crop: { enabled: true, aspect: 16 / 9 },
+  }}
+/>
+
+<Field
+  fieldName="status"
+  widgetType="Radio"
+  required
+/>
+
+<Field
+  fieldName="script"
+  widgetType="Code"
+  widgetProps={{
+    language: "sql",
+    minHeight: 320,
+    maxHeight: 560,
+    lineNumbers: true,
+    lineWrapping: false,
+    tabSize: 2,
+  }}
+/>
+
+<Field
+  fieldName="config"
+  widgetProps={{
+    minHeight: 320,
+    maxHeight: 560,
+    lineNumbers: true,
+    lineWrapping: true,
+    tabSize: 2,
+    formatOnBlur: true,
+  }}
+/>
+```
+
+`JsonField` 现在默认使用 `react-codemirror`。常用 JSON 编辑器 `widgetProps`：
+
+- `height`：固定编辑器高度
+- `minHeight`：编辑器最小高度
+- `maxHeight`：编辑器最大高度
+- `lineNumbers`：是否显示 gutter 行号
+- `lineWrapping`：是否自动换行
+- `tabSize`：缩进宽度
+- `formatOnBlur`：失焦后格式化合法 JSON
+- `autoFocus`：挂载后自动聚焦编辑器
+
+`CodeWidget` 支持这些常用 `widgetProps`：
+
+- `language`：`plain`、`java`、`html`、`json`、`markdown`、`python`、`sql`、`yaml`、`yml`
+- `height`：固定编辑器高度
+- `minHeight`：编辑器最小高度
+- `maxHeight`：编辑器最大高度
+- `lineNumbers`：是否显示 gutter 行号
+- `lineWrapping`：是否自动换行
+- `tabSize`：缩进宽度
+- `autoFocus`：挂载后自动聚焦编辑器
+
+`MarkdownWidget` 支持这些常用 `widgetProps`：
+
+- `mode`：`split`、`edit`、`preview`（默认：`split`）
+- `height`：固定编辑器 / 预览高度
+- `minHeight`：编辑器 / 预览最小高度
+- `maxHeight`：编辑器 / 预览最大高度
+- `lineNumbers`：是否显示编辑器行号
+- `lineWrapping`：编辑模式下是否自动换行
+- `tabSize`：缩进宽度
+- `autoFocus`：挂载后自动聚焦编辑器
+
+`MarkdownWidget` 使用 `react-markdown` 渲染预览，并默认启用 `remark-gfm`。
+
+`mode` 行为：
+
+- `split`：桌面端左右并排显示编辑器和预览；小屏设备上上下堆叠
+- `edit`：只显示编辑器
+- `preview`：只显示预览
+
 ### Field 全宽
 
 `Field` 在以下字段渲染器上支持 `fullWidth`：
 
-- `TextField`（`fieldType="String"` + `widgetType="Text"`）
-- `RichTextField`（`fieldType="String"` + `widgetType="RichText"`）
+- `StringField + TextWidget`（`fieldType="String"` + `widgetType="Text"`）
+- `StringField + RichTextWidget`（`fieldType="String"` + `widgetType="RichText"`）
+- `StringField + MarkdownWidget`（`fieldType="String"` + `widgetType="Markdown"`）
+- `StringField + CodeWidget`（`fieldType="String"` + `widgetType="Code"`）
 - `OneToManyField`
 - `ManyToManyField`
 
@@ -389,6 +549,7 @@ export default function UserRoleFormPage() {
 | `zodSchema` | `ZodTypeAny`                                   | 否       | -       | 可选 schema 覆盖。                     |
 | `schemaBuilder` | `(context) => ZodTypeAny`                  | 否       | -       | 运行时 schema 扩展器。接收由已解析元数据构建的 `{ metaModel, baseSchema }`。 |
 | `readOnly`  | `boolean`                                      | 否       | `false` | 强制只读模式。                         |
+| `validationMode` | `"onBlur" \| "onChange" \| "onSubmit" \| "onTouched" \| "all"` | 否 | `"onBlur"` | `ModelForm` 的 React Hook Form 校验模式。 |
 | `children`  | `ReactNode`                                    | 是      | -       | 表单页面布局内容（`FormHeader/FormToolbar/FormBody`）。 |
 
 Schema 优先级：`schemaBuilder` > `zodSchema` > 元数据推导的基础 schema。
@@ -659,6 +820,10 @@ import { ExternalLink, RefreshCw } from "lucide-react";
 ## 内置行为
 
 - 创建/编辑模式默认值与重置处理。
+- 重置行为带有快照保护：
+  - 记录 / 模型标识变化 => 重置
+  - 表单未修改且远端快照变化 => 重置
+  - 表单已修改且后台重新拉取 => 不覆盖当前编辑内容
 - 元数据解析策略：始终从 `/metadata/getMetaModel` 获取；首次响应由 React Query 缓存并复用。
 - 通过 `FieldPropsProvider` 提供元数据驱动字段属性。
 - 取消行为：

@@ -9,4 +9,4 @@ Practical frontend development guides for building Softa app pages and reusable 
 - [Form](./form)
 - [Dialog](./dialog)
 - [Tree](./tree)
-- [Component](./component)
+- [Field & Widget](./field)
