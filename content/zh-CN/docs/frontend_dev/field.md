@@ -67,7 +67,7 @@ import {
 | `readonly` | `FieldCondition` | 否 | 动态只读控制。支持 `boolean`、`FilterCondition` 或函数。 |
 | `hidden` | `FieldCondition` | 否 | 动态可见性控制。隐藏字段不会渲染，且会抑制其校验。 |
 | `defaultValue` | `unknown` | 否 | 元数据默认值覆盖。 |
-| `filters` | `string` | 否 | 元数据过滤条件覆盖，主要用于关联字段。 |
+| `filters` | `string \| FilterCondition` | 否 | 关联过滤条件覆盖。`Field.filters` 会覆盖 `metaField.filters`。支持 JSON 字符串形式的元数据过滤条件，以及声明式 `#{fieldName}` 引用。 |
 | `onChange` | `FieldOnChangeProp` | 否 | 远程字段联动。支持简写 `string[]` 或 `{ update?, with? }`。 |
 | `tableView` | `ReactElement<RelationTableViewProps>` | 否 | `OneToMany` / `ManyToMany` 表格配置。必须是一个 `<RelationTableView />` 元素。 |
 | `formView` | `RelationFormView` | 否 | 关联对话框 / 详情表单配置。 |
@@ -132,6 +132,60 @@ interface FieldConditionContext {
   }
 />
 ```
+
+## 关系字段 `filters`
+
+`filters` 主要用于关联字段：
+
+- `ManyToOne` / `OneToOne` 的可搜索关联查询
+- `SelectTree` 的关联选择器查询
+- `OneToMany` / `ManyToMany` 的远程关联表格查询
+- `ManyToMany` 选择器对话框查询
+
+可接受的输入：
+
+- 业务代码中的 `FilterCondition`
+- 来自元数据 / 后端载荷的 JSON 字符串形式
+
+推荐在过滤值中使用的声明式语法：
+
+- `#{fieldName}`：在发请求前从当前前端作用域解析
+- `TODAY`、`NOW`、`USER_ID`、`USER_EMP_ID`、`USER_POSITION_ID`、`USER_DEPT_ID`、`USER_COMP_ID`：原样透传，交给后端替换环境变量
+- `@{literal}`：原样透传，并强制后端按字面量解释
+
+示例：
+
+```tsx
+<Field
+  fieldName="departmentId"
+  filters={[
+    ["companyId", "=", "#{companyId}"],
+    "AND",
+    ["active", "=", true],
+    "AND",
+    ["effectiveDate", "<=", "TODAY"],
+    "AND",
+    ["type", "=", "@{TODAY}"],
+  ]}
+/>
+```
+
+行为说明：
+
+- `Field.filters` 会覆盖 `metaField.filters`
+- 若省略 `Field.filters`，关联 widget 会回退使用 `metaField.filters`
+- `#{fieldName}` 会基于当前作用域值解析：
+  - `ModelForm`：当前表单值
+  - `ModelTable` 内联编辑：当前编辑行
+  - `RelationTableView` 内联编辑：当前关联行
+- 字段值会在请求前做归一化：
+  - `ManyToOne` / `OneToOne` -> `id`
+  - `Option` -> `itemCode`
+  - `MultiOption` -> `itemCode[]`
+- 如果任意 `#{fieldName}` 依赖缺失，则关联查询会被视为未就绪，不会发出请求
+- 前端不会解释 `TODAY` 这类后端环境 token；它们会原样透传
+
+`RelationTableView.initialParams.filters` 支持同样的语法，并会与有效字段过滤条件通过 `AND` 合并。
 
 ## 远程 `Field.onChange`
 
@@ -498,6 +552,26 @@ Markdown 编辑器 + 预览 widget。
 <Field fieldName="departmentId" />
 ```
 
+依赖式关联过滤示例：
+
+```tsx
+<Field fieldName="companyId" />
+
+<Field
+  fieldName="departmentId"
+  filters={[
+    ["companyId", "=", "#{companyId}"],
+    "AND",
+    ["active", "=", true],
+  ]}
+/>
+```
+
+说明：
+
+- `filters` 会应用到默认的可搜索关联查询
+- 当 `#{companyId}` 当前没有值时，选择器会保持查询禁用，而不是加载全部部门
+
 层级选择场景可使用 `SelectTree`：
 
 ```tsx
@@ -510,7 +584,13 @@ Markdown 编辑器 + 预览 widget。
 
 ```tsx
 const optionItemsTableView = (
-  <RelationTableView initialParams={{ orders: [["sequence", "ASC"]], pageSize: 10 }}>
+  <RelationTableView
+    initialParams={{
+      orders: [["sequence", "ASC"]],
+      pageSize: 10,
+      filters: [["companyId", "=", "#{companyId}"]],
+    }}
+  >
     <Field fieldName="sequence" />
     <Field fieldName="itemCode" />
     <Field fieldName="itemName" />
@@ -526,6 +606,7 @@ const optionItemsTableView = (
 - `tableView`：通过子级 `<Field />` 声明关联表格列，并通过 `initialParams` 传入非字段查询参数
 - `formView`：行创建 / 编辑的对话框表单
 - `isPaged`：启用分页 / 远程关联模式
+- `tableView.initialParams.filters` 使用与 `Field.filters` 相同的声明式语法，并会与有效字段过滤条件通过 `AND` 合并
 
 默认提交行为是增量 patch map：
 
@@ -543,7 +624,13 @@ const optionItemsTableView = (
 
 ```tsx
 const userTableView = (
-  <RelationTableView initialParams={{ orders: [["username", "ASC"]], pageSize: 10 }}>
+  <RelationTableView
+    initialParams={{
+      orders: [["username", "ASC"]],
+      pageSize: 10,
+      filters: [["companyId", "=", "#{companyId}"]],
+    }}
+  >
     <Field fieldName="username" />
     <Field fieldName="nickname" />
     <Field fieldName="email" />
@@ -562,6 +649,11 @@ const userTableView = (
   "Remove": ["3"]
 }
 ```
+
+远程查询说明：
+
+- `ManyToMany` 选择器对话框会将 `RelationTableView.initialParams.filters`、有效字段过滤条件、内部 relation-scope 过滤条件、搜索过滤条件和列过滤条件统一以 `AND` 合并
+- 未解析出的 `#{fieldName}` 依赖会暂停远程 picker / 关联表格查询，直到源值出现
 
 ### 文件字段
 

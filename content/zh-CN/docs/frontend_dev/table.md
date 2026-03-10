@@ -91,6 +91,8 @@ type ModelTableRowData = { id: string };
 
 - `Field` 的顺序就是渲染列顺序
 - `widgetType`、`labelName`、`filters`、`defaultValue`、`onChange`，以及静态 `required` / `readonly` 覆盖，会同时复用于只读单元格和内联编辑器
+- 对于内联编辑中的关联列（`ManyToOne` / `OneToOne`），`filters` 可以使用 `#{fieldName}`，并会在发送关联查询前基于当前编辑行解析
+- 后端环境 token，例如 `TODAY`、`NOW`、`USER_ID`、`USER_COMP_ID`，会原样透传；若后端需要把一个看起来像 token 的字符串视为字面量，可使用 `@{literal}`
 - 在表格声明里，`hidden` 只支持 `boolean`；`hidden={true}` 会移除整列
 - 条件式 `required` / `readonly` 支持内联编辑，但条件式 `hidden` 不支持
 
@@ -107,7 +109,11 @@ type ModelTableRowData = { id: string };
   }}
 >
   <Field fieldName="sequence" readonly />
-  <Field fieldName="itemCode" required />
+  <Field fieldName="companyId" />
+  <Field
+    fieldName="departmentId"
+    filters={[["companyId", "=", "#{companyId}"]]}
+  />
   <Field
     fieldName="itemName"
     readonly={[["active", "=", false]]}
@@ -140,6 +146,8 @@ type ModelTableRowData = { id: string };
 - 当当前行处于脏状态时，切换到另一行会提示确认是否丢弃更改
 - `required` / `readonly` 支持 `boolean`、`FilterCondition` 和 `(ctx) => boolean`
 - 内联编辑条件会基于当前行对象求值，`scope="model-table"`，并附带 `rowIndex` 与 `rowId`
+- 使用 `#{fieldName}` 的关联字段过滤条件也会基于当前行对象求值
+- 如果某个关联字段过滤条件依赖缺失，则该行的关联查询会保持禁用，而不是加载未过滤选项
 - 只有元数据可编辑且当前不处于有效只读状态的列才会成为内联编辑器；不支持的列仍保持只读
 
 ### 远程 `Field.onChange`
@@ -363,6 +371,8 @@ type initialParams = QueryParamsWithoutFields;
 
 `ModelTable` 不接受顶层 `initialParams.fields`。
 表格查询字段列表始终来自按声明顺序排列的可见 `<Field />` 子节点。
+
+`initialParams.filters` 仍然只是表格查询本身的普通服务端基础过滤条件，不会解析 `#{fieldName}`；这套声明式语法只支持关系字段 `filters` 和关系 `tableView.initialParams.filters`。
 
 查询引导默认值：
 

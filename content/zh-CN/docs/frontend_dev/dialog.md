@@ -10,6 +10,12 @@
 
 这些属性接受 `boolean | FilterCondition | ((ctx) => boolean)`，并且也会参与对话框侧的校验。
 
+对话框内容里的关联字段 `filters` 与 `ModelForm` 遵循同一套规则：
+
+- `#{fieldName}` 会在发送关联查询之前，先从当前对话框表单值中解析
+- 后端环境 token，例如 `TODAY`、`NOW`、`USER_ID`、`USER_COMP_ID`，会原样透传
+- `@{literal}` 也会原样透传，便于后端将其视为强制字面量
+
 `Field.onChange` 的远程联动在对话框中有一个区别：
 
 - 当前已实现于 `ModelForm`、`ModelTable` 内联行、`RelationTableView` 内联行

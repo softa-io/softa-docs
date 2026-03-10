@@ -10,6 +10,12 @@ When dialog content uses `Field`, it supports the same runtime condition props a
 
 These accept `boolean | FilterCondition | ((ctx) => boolean)` and participate in dialog-side validation as well.
 
+Relation-field `filters` in dialog content follow the same rule as `ModelForm`:
+
+- `#{fieldName}` resolves from current dialog form values before the relation query is sent
+- backend env tokens such as `TODAY`, `NOW`, `USER_ID`, `USER_COMP_ID` are passed through unchanged
+- `@{literal}` is passed through unchanged so backend can treat it as a forced literal
+
 `Field.onChange` remote linkage is different:
 
 - implemented today for `ModelForm`, `ModelTable` inline row, and `RelationTableView` inline row

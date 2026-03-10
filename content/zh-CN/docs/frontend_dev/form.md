@@ -104,7 +104,7 @@ export default function EditUserAccountPage() {
   hideLabel={true}
   fullWidth={false}
   widgetType="URL"
-  filters='[["active","=",true]]'
+  filters={[["active", "=", true]]}
   defaultValue="https://example.com"
 />
 ```
@@ -143,6 +143,31 @@ export default function EditUserAccountPage() {
   onChange={{ update: ["itemName"], with: ["active"] }}
 />
 ```
+
+关系字段过滤联动示例：
+
+```tsx
+<Field fieldName="companyId" />
+
+<Field
+  fieldName="departmentId"
+  filters={[
+    ["companyId", "=", "#{companyId}"],
+    "AND",
+    ["active", "=", true],
+    "AND",
+    ["effectiveDate", "<=", "TODAY"],
+  ]}
+/>
+```
+
+`ModelForm` 中的关系过滤说明：
+
+- `#{companyId}` 会在发送关联查询之前，先从当前表单值中解析
+- 后端环境 token，例如 `TODAY`、`NOW`、`USER_ID`、`USER_COMP_ID`，会原样透传
+- 当后端需要把一个看起来像 token 的字符串当作字面量处理时，可使用 `@{literal}`
+- `Field.filters` 会覆盖 `metaField.filters`；如果省略，元数据过滤条件仍然生效
+- 未解析出的 `#{...}` 依赖会暂停关联查询，而不是加载未过滤的数据
 
 使用 `widgetType` 驱动渲染行为示例：
 
@@ -374,12 +399,19 @@ export default function EditUserAccountPage() {
 - 仅在本地表格模式下支持内联编辑（`!isPaged` 或远程条件未满足）
 - 行级 `required` / `readonly` 条件会针对当前关联行，并以 `scope="relation-table"` 求值
 - 行级 `Field.onChange` 远程联动也运行在 `scope="relation-table"` 中，并且只会 patch 当前关联行
+- `tableView.initialParams.filters` 支持 `#{fieldName}`，并会在远程关联查询前基于当前父表单值解析
 
 启用方式：
 
 ```tsx
 const optionItemsTableView = (
-  <RelationTableView initialParams={{ orders: [["sequence", "ASC"]], pageSize: 10 }}>
+  <RelationTableView
+    initialParams={{
+      orders: [["sequence", "ASC"]],
+      pageSize: 10,
+      filters: [["companyId", "=", "#{companyId}"]],
+    }}
+  >
     <Field fieldName="sequence" />
     <Field fieldName="itemCode" />
     <Field fieldName="itemName" />
@@ -564,6 +596,7 @@ export default function UserRoleFormPage() {
 说明：
 
 - `tableView` 通过子级 `<Field />` 声明关联表格列，并通过 `initialParams` 配置非字段查询设置。
+- `RelationTableView.initialParams.filters` 会与有效字段过滤条件（`Field.filters ?? metaField.filters`）通过 `AND` 合并。
 - `isPaged`（仅 `OneToMany` / `ManyToMany` 字段）：
   - `false`（默认）：在 `getById` 中带上关联 `subQuery`；关联表格在 UI 中不分页，渲染所有本地行。
   - `true`：关联表格启用分页 UI；当 `recordId + relatedModel + scoped relation filter` 就绪时，通过 `relatedModel.searchPage` 加载数据（远程模式），否则本地分页。
@@ -573,6 +606,7 @@ export default function UserRoleFormPage() {
 - 关联表格默认 `pageSize` 为 `50`；仅在启用分页（`isPaged=true`）时显示 page-size 选择器。
 - ManyToMany 选择器对话框（`Add`）由服务端驱动；搜索 / 排序 / 分页变化会触发 `searchPage` 请求。
 - `formView` 为可选项。在 `ManyToMany` 中，点击行会以只读模式打开 `ModelDialog`；新增 / 移除仍使用选择器行为。
+- 未解析出的 `#{fieldName}` 依赖会暂停远程关联查询和 picker 查询，直到依赖的父表单值出现。
 
 ### 兼容性
 

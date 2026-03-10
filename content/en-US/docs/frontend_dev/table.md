@@ -91,6 +91,8 @@ Table declaration notes:
 
 - `Field` order is the rendered column order
 - `widgetType`, `labelName`, `filters`, `defaultValue`, `onChange`, and static `required` / `readonly` overrides are reused by both read cells and inline editors
+- for relation columns (`ManyToOne` / `OneToOne`) in inline edit, `filters` may use `#{fieldName}` and resolves against the current editing row before the relation query is sent
+- backend env tokens such as `TODAY`, `NOW`, `USER_ID`, `USER_COMP_ID` are passed through unchanged; use `@{literal}` when backend should treat a token-like string as a literal
 - `hidden` only supports `boolean` in table declarations; `hidden={true}` removes the whole column
 - conditional `required` / `readonly` are supported in inline edit, but conditional `hidden` is not
 
@@ -107,7 +109,11 @@ Table declaration notes:
   }}
 >
   <Field fieldName="sequence" readonly />
-  <Field fieldName="itemCode" required />
+  <Field fieldName="companyId" />
+  <Field
+    fieldName="departmentId"
+    filters={[["companyId", "=", "#{companyId}"]]}
+  />
   <Field
     fieldName="itemName"
     readonly={[["active", "=", false]]}
@@ -140,6 +146,8 @@ Behavior:
 - switching to another row while current row is dirty asks for discard confirmation
 - `required` / `readonly` support `boolean`, `FilterCondition`, and `(ctx) => boolean`
 - inline-edit conditions are evaluated against the current row object with `scope="model-table"`, plus `rowIndex` and `rowId`
+- relation-field filters using `#{fieldName}` are also evaluated against the current row object
+- if a relation-field filter dependency is missing, that row's relation query stays disabled instead of loading unfiltered options
 - only metadata-editable and not effectively readonly columns become inline editors; unsupported columns stay read-only
 
 ### Remote `Field.onChange`
@@ -363,6 +371,8 @@ type initialParams = QueryParamsWithoutFields;
 
 `ModelTable` does not accept top-level `initialParams.fields`.
 The table query field list always comes from visible `<Field />` children in declaration order.
+
+`initialParams.filters` remains a normal server-side base filter for the table query itself. It does not resolve `#{fieldName}` references; that declarative syntax is only supported on relation-field `filters` and relation `tableView.initialParams.filters`.
 
 Query bootstrap defaults:
 

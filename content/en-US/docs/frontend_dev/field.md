@@ -66,7 +66,7 @@ Prefer direct use of `StringField`, `ReferenceField`, `JsonField`, `FieldDispatc
 | `readonly` | `FieldCondition` | No | Dynamic readonly control. Supports `boolean`, `FilterCondition`, or function. |
 | `hidden` | `FieldCondition` | No | Dynamic visibility control. Hidden fields are not rendered and their validation is suppressed. |
 | `defaultValue` | `unknown` | No | Metadata default value override. |
-| `filters` | `string` | No | Metadata filter override, mainly for relation fields. |
+| `filters` | `string \| FilterCondition` | No | Relation filter override. `Field.filters` overrides `metaField.filters`. Supports JSON-string metadata filters and declarative `#{fieldName}` references. |
 | `onChange` | `FieldOnChangeProp` | No | Remote field linkage. Supports shorthand `string[]` or `{ update?, with? }`. |
 | `tableView` | `ReactElement<RelationTableViewProps>` | No | OneToMany / ManyToMany table config. Must be a `<RelationTableView />` element. |
 | `formView` | `RelationFormView` | No | Relation dialog/detail form config. |
@@ -131,6 +131,60 @@ Examples:
   }
 />
 ```
+
+## Relation `filters`
+
+`filters` is mainly used by relation fields:
+
+- `ManyToOne` / `OneToOne` searchable reference queries
+- `SelectTree` relation picker queries
+- `OneToMany` / `ManyToMany` remote relation-table queries
+- `ManyToMany` picker dialog queries
+
+Accepted input:
+
+- `FilterCondition` in app code
+- JSON string form from metadata / backend payloads
+
+Recommended declarative value syntax inside filter values:
+
+- `#{fieldName}`: resolve from current frontend scope before request
+- `TODAY`, `NOW`, `USER_ID`, `USER_EMP_ID`, `USER_POSITION_ID`, `USER_DEPT_ID`, `USER_COMP_ID`: pass through unchanged and let backend replace environment variables
+- `@{literal}`: pass through unchanged and force literal interpretation on backend
+
+Examples:
+
+```tsx
+<Field
+  fieldName="departmentId"
+  filters={[
+    ["companyId", "=", "#{companyId}"],
+    "AND",
+    ["active", "=", true],
+    "AND",
+    ["effectiveDate", "<=", "TODAY"],
+    "AND",
+    ["type", "=", "@{TODAY}"],
+  ]}
+/>
+```
+
+Behavior:
+
+- `Field.filters` overrides `metaField.filters`
+- if `Field.filters` is omitted, relation widgets fall back to `metaField.filters`
+- `#{fieldName}` is resolved against current scope values:
+  - `ModelForm`: current form values
+  - `ModelTable` inline edit: current editing row
+  - `RelationTableView` inline edit: current relation row
+- resolved field values are normalized before request:
+  - `ManyToOne` / `OneToOne` -> `id`
+  - `Option` -> `itemCode`
+  - `MultiOption` -> `itemCode[]`
+- if any `#{fieldName}` dependency is missing, the relation query is treated as not ready and is not sent
+- frontend does not evaluate backend environment tokens such as `TODAY`; they are passed through unchanged
+
+`RelationTableView.initialParams.filters` supports the same syntax and is merged with effective field filters using `AND`.
 
 ## Remote `Field.onChange`
 
@@ -497,6 +551,26 @@ Default behavior is searchable reference selection:
 <Field fieldName="departmentId" />
 ```
 
+Dependent relation filter example:
+
+```tsx
+<Field fieldName="companyId" />
+
+<Field
+  fieldName="departmentId"
+  filters={[
+    ["companyId", "=", "#{companyId}"],
+    "AND",
+    ["active", "=", true],
+  ]}
+/>
+```
+
+Notes:
+
+- `filters` is applied to the default searchable reference query
+- when `#{companyId}` has no current value, the selector stays query-disabled instead of loading all departments
+
 Use `SelectTree` for hierarchical selection:
 
 ```tsx
@@ -509,7 +583,13 @@ Rendered as relation table with inline or dialog editing. Public usage is still 
 
 ```tsx
 const optionItemsTableView = (
-  <RelationTableView initialParams={{ orders: [["sequence", "ASC"]], pageSize: 10 }}>
+  <RelationTableView
+    initialParams={{
+      orders: [["sequence", "ASC"]],
+      pageSize: 10,
+      filters: [["companyId", "=", "#{companyId}"]],
+    }}
+  >
     <Field fieldName="sequence" />
     <Field fieldName="itemCode" />
     <Field fieldName="itemName" />
@@ -525,6 +605,7 @@ Common props:
 - `tableView`: relation table columns via `<Field />` children, plus non-field query params via `initialParams`
 - `formView`: dialog form for row create/edit
 - `isPaged`: enable pagination / remote relation mode
+- `tableView.initialParams.filters` uses the same declarative syntax as `Field.filters` and is merged with the effective field filter using `AND`
 
 Default submit behavior is incremental patch map:
 
@@ -542,7 +623,13 @@ Rendered as relation table + picker dialog.
 
 ```tsx
 const userTableView = (
-  <RelationTableView initialParams={{ orders: [["username", "ASC"]], pageSize: 10 }}>
+  <RelationTableView
+    initialParams={{
+      orders: [["username", "ASC"]],
+      pageSize: 10,
+      filters: [["companyId", "=", "#{companyId}"]],
+    }}
+  >
     <Field fieldName="username" />
     <Field fieldName="nickname" />
     <Field fieldName="email" />
@@ -561,6 +648,11 @@ Default submit behavior is incremental patch map:
   "Remove": ["3"]
 }
 ```
+
+Remote query notes:
+
+- `ManyToMany` picker dialog merges `RelationTableView.initialParams.filters`, the effective field filter, internal relation-scoped filters, search filter, and column filters using `AND`
+- unresolved `#{fieldName}` dependencies pause remote picker / relation-table queries until the source value exists
 
 ### File Fields
 

@@ -81,7 +81,7 @@ Validation behavior:
 
 Need custom variations? Use `useModelFormContext()` in children and rearrange `FormHeader/FormToolbar/FormBody` directly.
 
-Canonical field and widget usage now lives in `[fields](./fields)`.
+Canonical field and widget usage now lives in [fields](./fields).
 Use that document for:
 
 - `Field` props and metadata overrides
@@ -104,7 +104,7 @@ Example metadata overrides on `Field`:
   hideLabel={true}
   fullWidth={false}
   widgetType="URL"
-  filters='[["active","=",true]]'
+  filters={[["active", "=", true]]}
   defaultValue="https://example.com"
 />
 ```
@@ -143,6 +143,31 @@ Example remote field linkage:
   onChange={{ update: ["itemName"], with: ["active"] }}
 />
 ```
+
+Example relation filter linkage:
+
+```tsx
+<Field fieldName="companyId" />
+
+<Field
+  fieldName="departmentId"
+  filters={[
+    ["companyId", "=", "#{companyId}"],
+    "AND",
+    ["active", "=", true],
+    "AND",
+    ["effectiveDate", "<=", "TODAY"],
+  ]}
+/>
+```
+
+Relation filter notes in `ModelForm`:
+
+- `#{companyId}` resolves from current form values before the relation query is sent
+- backend env tokens such as `TODAY`, `NOW`, `USER_ID`, `USER_COMP_ID` are passed through unchanged
+- `@{literal}` can be used when backend should treat a token-like string as a literal
+- `Field.filters` overrides `metaField.filters`; if omitted, metadata filters still apply
+- unresolved `#{...}` dependencies pause the relation query instead of loading unfiltered data
 
 Examples of using `widgetType` to drive renderer behavior:
 
@@ -374,12 +399,19 @@ Inline edit behavior (`OneToMany`, without `formView`):
 - inline edit is available only in local table mode (`!isPaged` or remote conditions not met)
 - row-level `required` / `readonly` conditions evaluate against the current relation row with `scope="relation-table"`
 - row-level `Field.onChange` remote linkage also runs in `scope="relation-table"` and only patches the current relation row
+- `tableView.initialParams.filters` supports `#{fieldName}` and resolves against the current parent form values before remote relation queries
 
 Enable patterns:
 
 ```tsx
 const optionItemsTableView = (
-  <RelationTableView initialParams={{ orders: [["sequence", "ASC"]], pageSize: 10 }}>
+  <RelationTableView
+    initialParams={{
+      orders: [["sequence", "ASC"]],
+      pageSize: 10,
+      filters: [["companyId", "=", "#{companyId}"]],
+    }}
+  >
     <Field fieldName="sequence" />
     <Field fieldName="itemCode" />
     <Field fieldName="itemName" />
@@ -564,6 +596,7 @@ export default function UserRoleFormPage() {
 Notes:
 
 - `tableView` controls relation-table columns through child `<Field />` declarations and non-field query settings through `initialParams`.
+- `RelationTableView.initialParams.filters` is `AND`-merged with the effective field filter (`Field.filters ?? metaField.filters`).
 - `isPaged` (OneToMany/ManyToMany fields only):
   - `false` (default): include relation `subQuery` in `getById`; relation table does not paginate in UI and renders all local rows.
   - `true`: relation table enables pagination UI; when `recordId + relatedModel + scoped relation filter` are ready, data is loaded by `relatedModel.searchPage` (remote mode), otherwise paginated locally.
@@ -573,6 +606,7 @@ Notes:
 - relation table pageSize default is `50`; page-size selector is shown only when pagination is enabled (`isPaged=true`).
 - ManyToMany picker dialog (`Add`) is server-driven; search/sort/page changes trigger `searchPage` requests.
 - `formView` is optional. In `ManyToMany`, row-click opens `ModelDialog` in read mode; add/remove still uses picker behavior.
+- unresolved `#{fieldName}` dependencies pause remote relation queries and picker queries until the dependent parent form value exists
 
 ### Compatibility
 
