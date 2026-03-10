@@ -11,6 +11,7 @@
 
 - [对话框组件](./dialog)
 - [表单组件](./form)
+- [字段与 widgets](./field)
 
 ## 快速开始
 
@@ -19,27 +20,21 @@ import {
   UserAccountUnlockActionDialog,
 } from "@/app/user/user-account/components/user-account-unlock-action-dialog";
 import { Action } from "@/components/common/Action";
+import { Field } from "@/components/fields";
 import { ModelTable } from "@/components/views/table/ModelTable";
-import type { QueryParams } from "@/types/params/QueryParams";
 
 export default function UserAccountPage() {
-  const initialParams: Partial<QueryParams> = {
-    fields: [
-      "username",
-      "nickname",
-      "email",
-      "mobile",
-      "status",
-      "createdTime",
-    ],
-    orders: [["createdTime", "DESC"]],
-  };
-
   return (
     <ModelTable
       modelName="UserAccount"
-      initialParams={initialParams}
+      initialParams={{ orders: [["createdTime", "DESC"]] }}
     >
+      <Field fieldName="username" />
+      <Field fieldName="nickname" />
+      <Field fieldName="email" />
+      <Field fieldName="mobile" />
+      <Field fieldName="status" />
+      <Field fieldName="createdTime" />
       <Action
         labelName="Lock Account"
         operation="lockAccount"
@@ -68,6 +63,37 @@ export default function UserAccountPage() {
 type ModelTableRowData = { id: string };
 ```
 
+## 列声明
+
+`ModelTable` 采用 JSX-first：
+
+- 列来自按顺序声明的 `<Field />` 子节点
+- 顶层查询 `fields` 会根据这些声明自动生成
+- `initialParams` 只承载 `filters`、`orders`、`pageSize`、`groupBy` 等非列查询参数
+- `children` 可以混合 `<Field />`、`<Action />` 和 `<BulkAction />`
+- 运行时至少需要一个可见的 `<Field />` 声明
+
+示例：
+
+```tsx
+<ModelTable
+  modelName="SysOptionSet"
+  initialParams={{ orders: [["optionSetCode", "ASC"]], pageSize: 50 }}
+>
+  <Field fieldName="optionSetCode" readonly />
+  <Field fieldName="name" />
+  <Field fieldName="description" />
+  <Field fieldName="active" widgetType="CheckBox" />
+</ModelTable>
+```
+
+表格声明说明：
+
+- `Field` 的顺序就是渲染列顺序
+- `widgetType`、`labelName`、`filters`、`defaultValue`、`onChange`，以及静态 `required` / `readonly` 覆盖，会同时复用于只读单元格和内联编辑器
+- 在表格声明里，`hidden` 只支持 `boolean`；`hidden={true}` 会移除整列
+- 条件式 `required` / `readonly` 支持内联编辑，但条件式 `hidden` 不支持
+
 ## Inline Edit
 
 `ModelTable` 支持可选的行级内联编辑。
@@ -77,9 +103,27 @@ type ModelTableRowData = { id: string };
   modelName="TenantOptionItem"
   inlineEdit
   initialParams={{
-    fields: ["sequence", "itemCode", "itemName", "active"],
     orders: [["sequence", "ASC"]],
   }}
+>
+  <Field fieldName="sequence" readonly />
+  <Field fieldName="itemCode" required />
+  <Field
+    fieldName="itemName"
+    readonly={[["active", "=", false]]}
+  />
+  <Field fieldName="active" />
+</ModelTable>
+```
+
+条件函数示例：
+
+```tsx
+<Field
+  fieldName="itemName"
+  required={({ values, scope, rowId }) =>
+    scope === "model-table" && Boolean(rowId) && values.active === true
+  }
 />
 ```
 
@@ -94,7 +138,30 @@ type ModelTableRowData = { id: string };
 - `Save` 仅通过更新 API 提交该行发生变化的可编辑字段
 - `Cancel` 会用最近一次加载的服务端快照恢复该行
 - 当当前行处于脏状态时，切换到另一行会提示确认是否丢弃更改
-- 只有元数据中可编辑的字段才会成为内联编辑器；不支持 / 只读列仍保持只读
+- `required` / `readonly` 支持 `boolean`、`FilterCondition` 和 `(ctx) => boolean`
+- 内联编辑条件会基于当前行对象求值，`scope="model-table"`，并附带 `rowIndex` 与 `rowId`
+- 只有元数据可编辑且当前不处于有效只读状态的列才会成为内联编辑器；不支持的列仍保持只读
+
+### 远程 `Field.onChange`
+
+内联编辑也支持在声明列上启用远程字段联动：
+
+```tsx
+<ModelTable modelName="SysOptionSet" inlineEdit>
+  <Field fieldName="optionSetCode" onChange={["name", "description"]} />
+  <Field fieldName="name" />
+  <Field fieldName="description" />
+</ModelTable>
+```
+
+`ModelTable` 内联编辑中的行为：
+
+- 作用域只针对当前正在编辑的行
+- 请求路径为 `POST /<modelName>/onChange/<fieldName>`
+- `with: "all"` 序列化的是当前行，而不是整个表格
+- 响应中的 `values` 只 patch 当前行
+- 响应中的 `readonly` / `required` 只作用于当前行，并覆盖本地有效状态
+- 当该行保存、取消、重载，或切换到另一行编辑时，远程规则状态会被清除
 
 ## 开发者类型
 
@@ -174,12 +241,18 @@ const sideTree: SideTreeConfig = {
 <ModelTable
   modelName="SysField"
   initialParams={{
-    fields: ["modelName", "fieldName", "labelName", "fieldType"],
     orders: [["modelName", "ASC"]],
   }}
   sideTree={sideTree}
-/>
+>
+  <Field fieldName="modelName" />
+  <Field fieldName="fieldName" />
+  <Field fieldName="labelName" />
+  <Field fieldName="fieldType" />
+</ModelTable>
 ```
+
+`sideTree` 只改变过滤行为和布局。列声明仍然来自子级 `<Field />`。
 
 `SideTreeConfig` 类型：
 
@@ -260,9 +333,9 @@ const sideTree: SideTreeConfig = {
 | --- | --- | --- | --- | --- |
 | `modelName` | `string` | 是 | - | 用于获取 metadata API。 |
 | `inlineEdit` | `boolean` | 否 | `false` | 启用按行点击的内联编辑模式。启用后，激活行的可编辑单元格会渲染 `Field` 组件，而不是跳转到详情页。 |
-| `initialParams` | `Partial<QueryParams>` | 否 | - | 初始字段/排序/过滤/分页设置。 |
+| `initialParams` | `QueryParamsWithoutFields` | 否 | - | 初始的非列查询设置，例如 `filters`、`orders`、`pageSize`、`groupBy`。 |
 | `queryOptions` | `UseQueryOptions`（partial） | 否 | - | 表格分页查询的 React Query 可选配置。 |
-| `children` | `ReactNode` | 否 | - | 表格操作区内容，使用 `<Action />`（行级）和 `<BulkAction />`（选中集级）。 |
+| `children` | `ReactNode` | 否 | - | 有序的 `<Field />` 列声明，以及可选的 `<Action />` 和 `<BulkAction />`。运行时至少需要一个可见的 `<Field />`。 |
 | `toolbarActionsComponent` | `ReactNode \| ComponentType<{ table }>` | 否 | - | 自定义工具栏操作。 |
 | `tableProps` | `Omit<TableProps, "children">` | 否 | - | 透传给底层 table 组件的 props。 |
 | `className` | `string` | 否 | - | 外层容器 className。 |
@@ -285,8 +358,11 @@ const sideTree: SideTreeConfig = {
 `initialParams` 是 `ModelTable` 的服务端查询初始状态，定义如下：
 
 ```ts
-type initialParams = Partial<QueryParams>;
+type initialParams = QueryParamsWithoutFields;
 ```
+
+`ModelTable` 不接受顶层 `initialParams.fields`。
+表格查询字段列表始终来自按声明顺序排列的可见 `<Field />` 子节点。
 
 查询引导默认值：
 
@@ -298,7 +374,6 @@ type initialParams = Partial<QueryParams>;
 
 | Key | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
-| `fields` | `string[]` | `undefined` | 初始查询字段列表，同时作为表格初始字段顺序参考。 |
 | `filters` | `FilterCondition` | `undefined` | 基础过滤条件。该条件会作为基底，与 UI 过滤通过 `AND` 合并。 |
 | `orders` | `OrderCondition` | `undefined` | 初始排序规则。 |
 | `pageNumber` | `number` | `1` | 初始页码。 |
@@ -316,10 +391,14 @@ type initialParams = Partial<QueryParams>;
 <ModelTable
   modelName="UserAccount"
   initialParams={{
-    fields: ["username", "email", "status", "updatedTime"],
     orders: [["updatedTime", "DESC"]],
   }}
-/>
+>
+  <Field fieldName="username" />
+  <Field fieldName="email" />
+  <Field fieldName="status" />
+  <Field fieldName="updatedTime" />
+</ModelTable>
 ```
 
 ### 常见示例
@@ -328,14 +407,19 @@ type initialParams = Partial<QueryParams>;
 <ModelTable
   modelName="UserAccount"
   initialParams={{
-    fields: ["username", "email", "status", "locked", "updatedTime"],
     filters: [["status", "!=", "Deleted"], "AND", ["locked", "=", false]],
     orders: [["updatedTime", "DESC"]],
     pageNumber: 1,
     pageSize: 50,
     effectiveDate: "2026-03-01",
   }}
-/>
+>
+  <Field fieldName="username" />
+  <Field fieldName="email" />
+  <Field fieldName="status" />
+  <Field fieldName="locked" />
+  <Field fieldName="updatedTime" />
+</ModelTable>
 ```
 
 ### 进阶示例（`groupBy` / `aggFunctions` / `subQueries`）
@@ -344,7 +428,6 @@ type initialParams = Partial<QueryParams>;
 <ModelTable
   modelName="UserAccount"
   initialParams={{
-    fields: ["departmentId", "status"],
     filters: ["status", "=", "Active"],
     groupBy: ["departmentId"],
     aggFunctions: [["COUNT", "*", "count"]],
@@ -356,7 +439,10 @@ type initialParams = Partial<QueryParams>;
       },
     },
   }}
-/>
+>
+  <Field fieldName="departmentId" />
+  <Field fieldName="status" />
+</ModelTable>
 ```
 
 ### 过滤条件合并行为（重要）
@@ -401,16 +487,19 @@ onClick: ({ id, modelName, row }) => void
 
 ```tsx
 import { Action } from "@/components/common/Action";
+import { Field } from "@/components/fields";
 import { toast } from "sonner";
 
-<ModelTable modelName="UserSecurityPolicy">
+<ModelTable modelName="UserAccount">
+  <Field fieldName="username" />
+  <Field fieldName="status" />
   <Action
     type="custom"
-    labelName="Copy Policy ID"
+    labelName="Copy User ID"
     placement="more"
     onClick={({ id }) => {
       navigator.clipboard.writeText(String(id));
-      toast.success(`Policy ID "${id}" copied.`);
+      toast.success(`User ID "${id}" copied.`);
     }}
   />
 </ModelTable>
@@ -420,6 +509,7 @@ import { toast } from "sonner";
 
 ```tsx
 import { Action } from "@/components/common/Action";
+import { Field } from "@/components/fields";
 import { ActionDialog } from "@/components/views/dialogs";
 import { ModelTable } from "@/components/views/table/ModelTable";
 import { ExternalLink, Lock, Pencil, ShieldCheck } from "lucide-react";
@@ -438,6 +528,9 @@ function UnlockDialog() {
 }
 
 <ModelTable modelName="UserAccount">
+  <Field fieldName="username" />
+  <Field fieldName="email" />
+  <Field fieldName="status" />
   {/* custom + inline */}
   <Action
     type="custom"
@@ -500,8 +593,11 @@ function UnlockDialog() {
 
 ```tsx
 import { BulkAction } from "@/components/common/BulkAction";
+import { Field } from "@/components/fields";
 
 <ModelTable modelName="UserAccount">
+  <Field fieldName="username" />
+  <Field fieldName="status" />
   <BulkAction
     labelName="Lock Selected"
     operation="lockByIds"
@@ -515,6 +611,7 @@ import { BulkAction } from "@/components/common/BulkAction";
 ```tsx
 import { ActionDialog } from "@/components/views/dialogs";
 import { BulkAction } from "@/components/common/BulkAction";
+import { Field } from "@/components/fields";
 
 function BulkLockReasonDialog() {
   return (
@@ -530,6 +627,8 @@ function BulkLockReasonDialog() {
 }
 
 <ModelTable modelName="UserAccount">
+  <Field fieldName="username" />
+  <Field fieldName="status" />
   <BulkAction
     labelName="Lock Selected"
     operation="lockByIds"
@@ -558,7 +657,12 @@ function BulkLockReasonDialog() {
   modelName="UserAccount"
   bulkEditFields={["status", "email", "phoneNumber", "locked"]} // optional
   excludeFields={["email"]} // optional
-/>
+>
+  <Field fieldName="username" />
+  <Field fieldName="email" />
+  <Field fieldName="status" />
+  <Field fieldName="locked" />
+</ModelTable>
 ```
 
 若未提供 `bulkEditFields`，Bulk Edit 会使用所有可用元数据字段。

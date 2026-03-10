@@ -81,17 +81,17 @@ export default function EditUserAccountPage() {
 
 需要自定义变体时，可在子组件中使用 `useModelFormContext()`，直接重排 `FormHeader/FormToolbar/FormBody`。
 
-字段与 widget 的规范用法现统一维护在 `src/components/fields/README.md`。
-以下内容请以那份文档为准：
+字段与 widget 的规范用法现统一维护在 [字段与 widgets](./field) 中。
+以下内容请以该文档为准：
 
 - `Field` props 与元数据覆盖
 - `FieldType -> WidgetType` 兼容关系
 - widget 专属 `widgetProps`
 - 关联字段行为（`Reference`、`OneToMany`、`ManyToMany`）
 
-下面的快捷示例仅作为本地速查，fields README 才是事实来源。
+下面的快捷示例仅作为本地速查，该文档才是事实来源。
 
-默认推荐使用 `Field`（按 `fieldType` 自动分发渲染），只在需要时做元数据覆盖。
+默认推荐使用 `Field`（按 `fieldType` 自动分发渲染），并结合元数据覆盖与条件控制。
 
 `Field` 元数据覆盖示例：
 
@@ -106,6 +106,41 @@ export default function EditUserAccountPage() {
   widgetType="URL"
   filters='[["active","=",true]]'
   defaultValue="https://example.com"
+/>
+```
+
+`Field` 条件控制示例：
+
+```tsx
+<Field fieldName="status" readonly={true} />
+
+<Field fieldName="itemColor" hidden={["active", "=", false]} />
+
+<Field
+  fieldName="description"
+  readonly={[
+    ["status", "IN", ["approved", "archived"]],
+    "OR",
+    [["type", "=", "SYSTEM"], "AND", ["editable", "!=", true]],
+  ]}
+/>
+
+<Field
+  fieldName="itemName"
+  required={({ values, isEditing }) =>
+    !isEditing && values.active === true && values.itemCode !== "Temp"
+  }
+/>
+```
+
+`Field` 远程联动示例：
+
+```tsx
+<Field fieldName="itemCode" onChange={["itemName", "itemColor"]} />
+
+<Field
+  fieldName="itemCode"
+  onChange={{ update: ["itemName"], with: ["active"] }}
 />
 ```
 
@@ -335,25 +370,35 @@ export default function EditUserAccountPage() {
 
 - 仅在点击行后进入编辑态（页面进入时不会自动选中）
 - 编辑后的值会直接写入主表单的关联数组，并随父级 `Save/Create` 一起保存
-- 可编辑单元格限制为 `tableView.fields` 与关联模型可编辑字段的交集
-- 若省略 `tableView.fields`，表格仅回退显示 `id` 列
+- 可编辑单元格限制为声明在 `<RelationTableView><Field /></RelationTableView>` 中、且与关联模型可编辑字段相交的列
 - 仅在本地表格模式下支持内联编辑（`!isPaged` 或远程条件未满足）
+- 行级 `required` / `readonly` 条件会针对当前关联行，并以 `scope="relation-table"` 求值
+- 行级 `Field.onChange` 远程联动也运行在 `scope="relation-table"` 中，并且只会 patch 当前关联行
 
 启用方式：
 
 ```tsx
+const optionItemsTableView = (
+  <RelationTableView initialParams={{ orders: [["sequence", "ASC"]], pageSize: 10 }}>
+    <Field fieldName="sequence" />
+    <Field fieldName="itemCode" />
+    <Field fieldName="itemName" />
+    <Field fieldName="active" />
+  </RelationTableView>
+);
+
 // 启用表格单元格内联编辑（推荐用于本地关联编辑）
-<Field fieldName="optionItems" tableView={optionItemsInitialParams} />
+<Field fieldName="optionItems" tableView={optionItemsTableView} />
 
 // 关闭内联编辑，改用对话框编辑
 <Field
   fieldName="optionItems"
-  tableView={optionItemsInitialParams}
+  tableView={optionItemsTableView}
   formView={OptionItemsFormView}
 />
 
 // 分页关联表格（启用分页；可能切换为远程 searchPage 模式）
-<Field fieldName="optionItems" tableView={optionItemsInitialParams} isPaged />
+<Field fieldName="optionItems" tableView={optionItemsTableView} isPaged />
 ```
 
 提交 payload 结构：
@@ -377,13 +422,16 @@ export default function EditUserAccountPage() {
 OneToMany 视图绑定示例：
 
 ```tsx
-import { defineRelationTableView, Field } from "@/components/fields";
+import { Field, RelationTableView } from "@/components/fields";
 
-export const optionItemsInitialParams = defineRelationTableView({
-  fields: ["sequence", "itemCode", "itemName", "active"],
-  orders: [["sequence", "ASC"]],
-  pageSize: 10,
-});
+const optionItemsTableView = (
+  <RelationTableView initialParams={{ orders: [["sequence", "ASC"]], pageSize: 10 }}>
+    <Field fieldName="sequence" />
+    <Field fieldName="itemCode" />
+    <Field fieldName="itemName" readonly={[["active", "=", false]]} />
+    <Field fieldName="active" />
+  </RelationTableView>
+);
 
 function OptionItemsFormView() {
   return (
@@ -423,7 +471,7 @@ export default function SysOptionSetFormPage() {
 
         <FormSection>
           <Field fieldName="optionItems"
-            tableView={optionItemsInitialParams}
+            tableView={optionItemsTableView}
             formView={OptionItemsFormView}
           />
         </FormSection>
@@ -461,13 +509,17 @@ export default function SysOptionSetFormPage() {
 ManyToMany 视图绑定示例：
 
 ```tsx
-import { defineRelationTableView, Field } from "@/components/fields";
+import { Field, RelationTableView } from "@/components/fields";
 
-export const userRoleUserIdsInitialParams = defineRelationTableView({
-  fields: ["username", "nickname", "email", "mobile", "status"],
-  orders: [["username", "ASC"]],
-  pageSize: 10,
-});
+const userRoleUserIdsTableView = (
+  <RelationTableView initialParams={{ orders: [["username", "ASC"]], pageSize: 10 }}>
+    <Field fieldName="username" />
+    <Field fieldName="nickname" />
+    <Field fieldName="email" />
+    <Field fieldName="mobile" />
+    <Field fieldName="status" />
+  </RelationTableView>
+);
 
 function UserRoleUserIdsFormView() {
   return (
@@ -499,7 +551,7 @@ export default function UserRoleFormPage() {
         </FormSection>
         <FormSection>
           <Field fieldName="userIds"
-            tableView={userRoleUserIdsInitialParams}
+            tableView={userRoleUserIdsTableView}
             formView={UserRoleUserIdsFormView}
           />
         </FormSection>
@@ -511,7 +563,7 @@ export default function UserRoleFormPage() {
 
 说明：
 
-- `tableView` 控制关联表格的查询 / 列行为（`fields/orders/pageSize/...`）。
+- `tableView` 通过子级 `<Field />` 声明关联表格列，并通过 `initialParams` 配置非字段查询设置。
 - `isPaged`（仅 `OneToMany` / `ManyToMany` 字段）：
   - `false`（默认）：在 `getById` 中带上关联 `subQuery`；关联表格在 UI 中不分页，渲染所有本地行。
   - `true`：关联表格启用分页 UI；当 `recordId + relatedModel + scoped relation filter` 就绪时，通过 `relatedModel.searchPage` 加载数据（远程模式），否则本地分页。
@@ -553,6 +605,26 @@ export default function UserRoleFormPage() {
 | `children`  | `ReactNode`                                    | 是      | -       | 表单页面布局内容（`FormHeader/FormToolbar/FormBody`）。 |
 
 Schema 优先级：`schemaBuilder` > `zodSchema` > 元数据推导的基础 schema。
+
+运行时字段条件：
+
+- `Field.required`、`Field.readonly`、`Field.hidden` 支持 `boolean | FilterCondition | function`。
+- 条件会基于当前表单值求值。
+- `hidden` 字段不会渲染，并会抑制其校验错误。
+- `required={false}` 可以在运行时放宽元数据 `required`；`readonly={false}` 可以覆盖元数据只读。
+- `ModelForm`、`DialogForm` 和 `WizardDialog` 使用同一套运行时行为。
+
+`ModelForm` 中的远程 `Field.onChange`：
+
+- 请求路径为 `POST /<modelName>/onChange/<fieldName>`
+- 请求总会发送当前字段的 `value`；编辑模式还会发送 `id`
+- 省略 `with`：只发送 `id + value`
+- `with: ["a", "b"]`：只发送声明的依赖字段，并使用 submit/API 形态
+- `with: "all"`：发送当前表单的 submit 形态
+- 已注册的顶层 XToMany 字段会被序列化为关系 patch payload，而不是原始 UI 行数据
+- 响应中的 `values` 只 patch 返回的键；`null` 表示清空字段
+- 响应中的 `readonly` / `required` 会覆盖当前本地有效状态，直到重置、取消、重载或后续响应
+- 这套远程联动运行时已实现于 `ModelForm`；独立的 `DialogForm` / `WizardDialog` 默认不会自动提供
 
 ### FormHeader Props
 

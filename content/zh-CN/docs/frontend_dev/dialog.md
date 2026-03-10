@@ -2,6 +2,24 @@
 
 可复用的对话框视图层，适用于动作驱动表单、关联字段对话框和多步骤向导。
 
+当对话框内容里使用 `Field` 时，它支持与 `ModelForm` 相同的运行时条件 props：
+
+- `required`
+- `readonly`
+- `hidden`
+
+这些属性接受 `boolean | FilterCondition | ((ctx) => boolean)`，并且也会参与对话框侧的校验。
+
+`Field.onChange` 的远程联动在对话框中有一个区别：
+
+- 当前已实现于 `ModelForm`、`ModelTable` 内联行、`RelationTableView` 内联行
+- 对独立的 `ActionDialog` / `WizardDialog` / 通用对话框表单，并不会自动提供这套运行时能力
+
+## 相关文档
+- [字段与 widgets](./field)
+- [表单组件](./form)
+- [表格组件](./table)
+
 ## 导入
 
 ```tsx

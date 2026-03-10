@@ -4,9 +4,9 @@
 
 ## 相关文档
 
-- `src/components/views/form/README.md`：`ModelForm`、`FormBody`、`FormToolbar`、页面级壳层
-- `src/components/views/table/README.md`：`ModelTable` 和表格侧渲染器
-- `src/components/views/tree/README.md`：底层 `Tree`、`TreePanel`、`SelectTreePanel`
+- [表单组件](./form)：`ModelForm`、`FormBody`、`FormToolbar`、页面级壳层
+- [表格组件](./table)：`ModelTable` 和表格侧渲染器
+- [树组件](./tree)：底层 `Tree`、`TreePanel`、`SelectTreePanel`
 
 ## 导入
 
@@ -21,9 +21,12 @@ import { Field } from "@/components/fields";
 ```tsx
 import {
   Field,
-  defineRelationTableView,
+  RelationTableView,
+  type FieldCondition,
+  type FieldConditionContext,
+  type FieldOnChangeProp,
   type RelationFormView,
-  type RelationTableView,
+  type RelationTableViewProps,
 } from "@/components/fields";
 ```
 
@@ -48,7 +51,7 @@ import {
 
 ## Field Props
 
-`Field` 基于元数据驱动，并支持字段级覆盖。
+`Field` 基于元数据驱动，并支持字段级覆盖和运行时条件。
 
 | Prop | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
@@ -60,14 +63,176 @@ import {
 | `fullWidth` | `boolean` | 否 | 文本类字段和关联字段的布局提示。 |
 | `readOnly` | `boolean` | 否 | 强制只读模式。 |
 | `labelName` | `string` | 否 | 元数据标签覆盖。 |
-| `description` | `string` | 否 | 元数据描述覆盖。 |
-| `required` | `boolean` | 否 | 元数据必填覆盖。 |
-| `readonly` | `boolean` | 否 | 元数据只读覆盖。 |
+| `required` | `FieldCondition` | 否 | 动态必填控制。支持 `boolean`、`FilterCondition` 或函数。 |
+| `readonly` | `FieldCondition` | 否 | 动态只读控制。支持 `boolean`、`FilterCondition` 或函数。 |
+| `hidden` | `FieldCondition` | 否 | 动态可见性控制。隐藏字段不会渲染，且会抑制其校验。 |
 | `defaultValue` | `unknown` | 否 | 元数据默认值覆盖。 |
 | `filters` | `string` | 否 | 元数据过滤条件覆盖，主要用于关联字段。 |
-| `tableView` | `RelationTableView` | 否 | `OneToMany` / `ManyToMany` 表格配置。 |
+| `onChange` | `FieldOnChangeProp` | 否 | 远程字段联动。支持简写 `string[]` 或 `{ update?, with? }`。 |
+| `tableView` | `ReactElement<RelationTableViewProps>` | 否 | `OneToMany` / `ManyToMany` 表格配置。必须是一个 `<RelationTableView />` 元素。 |
 | `formView` | `RelationFormView` | 否 | 关联对话框 / 详情表单配置。 |
 | `isPaged` | `boolean` | 否 | 启用关联表格分页模式。 |
+
+`FieldCondition`：
+
+```ts
+type FieldCondition =
+  | boolean
+  | FilterCondition
+  | ((ctx: FieldConditionContext) => boolean);
+```
+
+`FieldConditionContext`：
+
+```ts
+interface FieldConditionContext {
+  fieldName: string;
+  metaField: MetaField;
+  values: Record<string, unknown>;
+  value: unknown;
+  scope: "form" | "model-table" | "relation-table";
+  rowIndex?: number;
+  rowId?: string;
+  isEditing: boolean;
+  recordId?: string;
+}
+```
+
+行为说明：
+
+- `boolean`：最简单也最直接。
+- `FilterCondition`：推荐用于常见业务规则的声明式写法。
+- `function`：复杂场景下的 escape hatch；可拿到当前表单值和编辑态上下文。
+- 非法的 `FilterCondition` 配置会发出开发态 warning，并解析为 `false`。
+- `hidden` 会同时抑制渲染和校验。
+- 在 `ModelTable` / `RelationTableView` 的内联编辑中，condition 的 `values` 是当前行对象，而不是整个表单对象。
+- 在表格声明中，`hidden` 只支持 `boolean`，并会隐藏整列。
+- `required={false}` 可以在运行时放宽元数据中的 `required`；`readonly={false}` 可以覆盖元数据只读。
+
+示例：
+
+```tsx
+<Field fieldName="status" readonly={true} />
+
+<Field fieldName="itemColor" hidden={["active", "=", false]} />
+
+<Field
+  fieldName="description"
+  readonly={[
+    ["status", "IN", ["approved", "archived"]],
+    "OR",
+    [["type", "=", "SYSTEM"], "AND", ["editable", "!=", true]],
+  ]}
+/>
+
+<Field
+  fieldName="itemName"
+  required={({ values, isEditing }) =>
+    !isEditing && values.active === true && values.itemCode !== "Temp"
+  }
+/>
+```
+
+## 远程 `Field.onChange`
+
+`Field` 通过顶层 `onChange` prop 支持远程联动：
+
+```ts
+type FieldOnChangeProp =
+  | string[]
+  | {
+      update?: string[];
+      with?: string[] | "all";
+    };
+```
+
+常见示例：
+
+```tsx
+<Field fieldName="itemCode" onChange={["itemName", "itemColor"]} />
+
+<Field
+  fieldName="itemCode"
+  onChange={{ update: ["itemName"], with: ["active"] }}
+/>
+
+<Field
+  fieldName="itemCode"
+  onChange={{ with: "all" }}
+/>
+```
+
+行为说明：
+
+- `onChange={["a", "b"]}` 是 `onChange={{ update: ["a", "b"] }}` 的简写。
+- 存在 `update`：只从响应 `values` 中提取这些字段。
+- 省略 `update`：会应用当前作用域内响应 `values` 里的所有键。
+- 省略 `with`：请求在编辑模式下只发送 `id`，再加当前字段的 `value`。
+- `with: ["a", "b"]`：请求会把这些字段以 submit/API 形态放进 `values`。
+- `with: "all"`：请求会把当前作用域值整体以 submit/API 形态放进 `values`。
+
+当前支持的作用域：
+
+- `ModelForm`
+- `ModelTable` 内联编辑的当前行
+- `RelationTableView` 内联编辑的当前行
+
+当前不覆盖的场景：
+
+- 独立的顶层 `OneToMany` / `ManyToMany` 容器交互不是 source trigger
+- 独立对话框表单目前不会自动提供这套运行时能力
+
+自动触发规则：
+
+- `blur`：`String`、`MultiString`、数值输入、`JSON`、`Filters`、`Orders`、`Code`、`Markdown`、`RichText` 等文本型 / 编辑器型字段
+- `change`：`Boolean`、`Date`、`DateTime`、`Time`、`Option`、`MultiOption`、`ManyToOne`、`OneToOne`、`File`、`MultiFile` 等提交式字段
+
+前端使用的后端契约：
+
+```http
+POST /<modelName>/onChange/<fieldName>
+```
+
+请求 payload：
+
+```json
+{
+  "id": "123",
+  "value": "ITEM-001",
+  "values": {
+    "active": true
+  }
+}
+```
+
+响应 payload：
+
+```json
+{
+  "values": {
+    "itemName": "Open",
+    "itemColor": "#22c55e"
+  },
+  "readonly": {
+    "itemName": true
+  },
+  "required": {
+    "itemColor": true
+  }
+}
+```
+
+响应规则：
+
+- `values` 只 patch 返回的键；缺失的键保持不变。
+- 返回 `null` 表示显式清空。
+- `readonly` / `required` 会独立于 `update` 生效。
+- 远端返回的 `readonly` / `required` 会覆盖元数据和本地条件，直到后续响应或作用域重置。
+
+作用域说明：
+
+- 在 `ModelForm` 中，`with: "all"` 使用当前表单的 submit 形态；已注册的顶层关联字段会使用关系 patch payload，而不是原始 UI 行数据。
+- 在 `ModelTable` / `RelationTableView` 的内联编辑中，`values` 和 `with: "all"` 只针对当前行，而不是整个表格或父表单。
 
 ## FieldType And WidgetType Matrix
 
@@ -344,12 +509,21 @@ Markdown 编辑器 + 预览 widget。
 渲染为关联表格，可配合内联编辑或对话框编辑。对外公开用法仍然通过 `Field`。
 
 ```tsx
+const optionItemsTableView = (
+  <RelationTableView initialParams={{ orders: [["sequence", "ASC"]], pageSize: 10 }}>
+    <Field fieldName="sequence" />
+    <Field fieldName="itemCode" />
+    <Field fieldName="itemName" />
+    <Field fieldName="active" />
+  </RelationTableView>
+);
+
 <Field fieldName="optionItems" tableView={optionItemsTableView} />
 ```
 
 常用 props：
 
-- `tableView`：关联表格列 / 排序 / page size
+- `tableView`：通过子级 `<Field />` 声明关联表格列，并通过 `initialParams` 传入非字段查询参数
 - `formView`：行创建 / 编辑的对话框表单
 - `isPaged`：启用分页 / 远程关联模式
 
@@ -368,6 +542,15 @@ Markdown 编辑器 + 预览 widget。
 渲染为关联表格 + 选择器对话框。
 
 ```tsx
+const userTableView = (
+  <RelationTableView initialParams={{ orders: [["username", "ASC"]], pageSize: 10 }}>
+    <Field fieldName="username" />
+    <Field fieldName="nickname" />
+    <Field fieldName="email" />
+    <Field fieldName="status" />
+  </RelationTableView>
+);
+
 <Field fieldName="userIds" tableView={userTableView} />
 ```
 
@@ -560,7 +743,14 @@ JSON 编辑器 widget props：
 
 <Field
   fieldName="optionItems"
-  tableView={optionItemsTableView}
+  tableView={
+    <RelationTableView initialParams={{ orders: [["sequence", "ASC"]], pageSize: 10 }}>
+      <Field fieldName="sequence" />
+      <Field fieldName="itemCode" />
+      <Field fieldName="itemName" />
+      <Field fieldName="active" />
+    </RelationTableView>
+  }
   formView={OptionItemsFormView}
   isPaged
 />

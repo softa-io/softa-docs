@@ -2,6 +2,24 @@
 
 Reusable dialog view layer for action-driven forms, relation field dialogs, and multi-step wizards.
 
+When dialog content uses `Field`, it supports the same runtime condition props as `ModelForm`:
+
+- `required`
+- `readonly`
+- `hidden`
+
+These accept `boolean | FilterCondition | ((ctx) => boolean)` and participate in dialog-side validation as well.
+
+`Field.onChange` remote linkage is different:
+
+- implemented today for `ModelForm`, `ModelTable` inline row, and `RelationTableView` inline row
+- not automatically provided for standalone `ActionDialog` / `WizardDialog` / generic dialog forms
+
+## Related Docs
+- [Fields and widgets](./field)
+- [Form components](./form)
+- [Table components](./table)
+
 ## Import
 
 ```tsx

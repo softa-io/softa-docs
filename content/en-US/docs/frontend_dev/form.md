@@ -81,7 +81,7 @@ Validation behavior:
 
 Need custom variations? Use `useModelFormContext()` in children and rearrange `FormHeader/FormToolbar/FormBody` directly.
 
-Canonical field and widget usage now lives in `src/components/fields/README.md`.
+Canonical field and widget usage now lives in `[fields](./fields)`.
 Use that document for:
 
 - `Field` props and metadata overrides
@@ -91,7 +91,7 @@ Use that document for:
 
 The quick examples below are kept as local shortcuts, but the fields README is the source of truth.
 
-Default recommendation is `Field` (metadata auto-dispatch by `fieldType`) with metadata overrides only.
+Default recommendation is `Field` (metadata auto-dispatch by `fieldType`) with metadata overrides and condition-based control.
 
 Example metadata overrides on `Field`:
 
@@ -106,6 +106,41 @@ Example metadata overrides on `Field`:
   widgetType="URL"
   filters='[["active","=",true]]'
   defaultValue="https://example.com"
+/>
+```
+
+Example conditional field control:
+
+```tsx
+<Field fieldName="status" readonly={true} />
+
+<Field fieldName="itemColor" hidden={["active", "=", false]} />
+
+<Field
+  fieldName="description"
+  readonly={[
+    ["status", "IN", ["approved", "archived"]],
+    "OR",
+    [["type", "=", "SYSTEM"], "AND", ["editable", "!=", true]],
+  ]}
+/>
+
+<Field
+  fieldName="itemName"
+  required={({ values, isEditing }) =>
+    !isEditing && values.active === true && values.itemCode !== "Temp"
+  }
+/>
+```
+
+Example remote field linkage:
+
+```tsx
+<Field fieldName="itemCode" onChange={["itemName", "itemColor"]} />
+
+<Field
+  fieldName="itemCode"
+  onChange={{ update: ["itemName"], with: ["active"] }}
 />
 ```
 
@@ -335,25 +370,35 @@ Inline edit behavior (`OneToMany`, without `formView`):
 
 - row enters edit mode only after row click (no auto-select on page enter)
 - edited value is written directly to main form relation array and saved with parent `Save/Create`
-- editable cells are limited to `tableView.fields` intersected with editable related-model fields
-- if `tableView.fields` is omitted, table falls back to `id` column only
+- editable cells are limited to declared `<RelationTableView><Field /></RelationTableView>` columns intersected with editable related-model fields
 - inline edit is available only in local table mode (`!isPaged` or remote conditions not met)
+- row-level `required` / `readonly` conditions evaluate against the current relation row with `scope="relation-table"`
+- row-level `Field.onChange` remote linkage also runs in `scope="relation-table"` and only patches the current relation row
 
 Enable patterns:
 
 ```tsx
+const optionItemsTableView = (
+  <RelationTableView initialParams={{ orders: [["sequence", "ASC"]], pageSize: 10 }}>
+    <Field fieldName="sequence" />
+    <Field fieldName="itemCode" />
+    <Field fieldName="itemName" />
+    <Field fieldName="active" />
+  </RelationTableView>
+);
+
 // Enable table-cell inline edit (recommended for local relation editing)
-<Field fieldName="optionItems" tableView={optionItemsInitialParams} />
+<Field fieldName="optionItems" tableView={optionItemsTableView} />
 
 // Disable inline edit and use dialog editing
 <Field
   fieldName="optionItems"
-  tableView={optionItemsInitialParams}
+  tableView={optionItemsTableView}
   formView={OptionItemsFormView}
 />
 
 // Paged relation table (pagination enabled; may switch to remote searchPage mode)
-<Field fieldName="optionItems" tableView={optionItemsInitialParams} isPaged />
+<Field fieldName="optionItems" tableView={optionItemsTableView} isPaged />
 ```
 
 Submit payload shape:
@@ -377,13 +422,16 @@ Update mode:
 OneToMany view binding example:
 
 ```tsx
-import { defineRelationTableView, Field } from "@/components/fields";
+import { Field, RelationTableView } from "@/components/fields";
 
-export const optionItemsInitialParams = defineRelationTableView({
-  fields: ["sequence", "itemCode", "itemName", "active"],
-  orders: [["sequence", "ASC"]],
-  pageSize: 10,
-});
+const optionItemsTableView = (
+  <RelationTableView initialParams={{ orders: [["sequence", "ASC"]], pageSize: 10 }}>
+    <Field fieldName="sequence" />
+    <Field fieldName="itemCode" />
+    <Field fieldName="itemName" readonly={[["active", "=", false]]} />
+    <Field fieldName="active" />
+  </RelationTableView>
+);
 
 function OptionItemsFormView() {
   return (
@@ -423,7 +471,7 @@ export default function SysOptionSetFormPage() {
 
         <FormSection>
           <Field fieldName="optionItems"
-            tableView={optionItemsInitialParams}
+            tableView={optionItemsTableView}
             formView={OptionItemsFormView}
           />
         </FormSection>
@@ -461,13 +509,17 @@ Update mode:
 ManyToMany view binding example:
 
 ```tsx
-import { defineRelationTableView, Field } from "@/components/fields";
+import { Field, RelationTableView } from "@/components/fields";
 
-export const userRoleUserIdsInitialParams = defineRelationTableView({
-  fields: ["username", "nickname", "email", "mobile", "status"],
-  orders: [["username", "ASC"]],
-  pageSize: 10,
-});
+const userRoleUserIdsTableView = (
+  <RelationTableView initialParams={{ orders: [["username", "ASC"]], pageSize: 10 }}>
+    <Field fieldName="username" />
+    <Field fieldName="nickname" />
+    <Field fieldName="email" />
+    <Field fieldName="mobile" />
+    <Field fieldName="status" />
+  </RelationTableView>
+);
 
 function UserRoleUserIdsFormView() {
   return (
@@ -499,7 +551,7 @@ export default function UserRoleFormPage() {
         </FormSection>
         <FormSection>
           <Field fieldName="userIds"
-            tableView={userRoleUserIdsInitialParams}
+            tableView={userRoleUserIdsTableView}
             formView={UserRoleUserIdsFormView}
           />
         </FormSection>
@@ -511,7 +563,7 @@ export default function UserRoleFormPage() {
 
 Notes:
 
-- `tableView` controls relation-table query/columns behavior (`fields/orders/pageSize/...`).
+- `tableView` controls relation-table columns through child `<Field />` declarations and non-field query settings through `initialParams`.
 - `isPaged` (OneToMany/ManyToMany fields only):
   - `false` (default): include relation `subQuery` in `getById`; relation table does not paginate in UI and renders all local rows.
   - `true`: relation table enables pagination UI; when `recordId + relatedModel + scoped relation filter` are ready, data is loaded by `relatedModel.searchPage` (remote mode), otherwise paginated locally.
@@ -553,6 +605,26 @@ Recommended default layout:
 | `children`  | `ReactNode`                                    | Yes      | -       | Form page layout content (`FormHeader/FormToolbar/FormBody`). |
 
 Schema precedence: `schemaBuilder` > `zodSchema` > metadata-derived base schema.
+
+Runtime field conditions:
+
+- `Field.required`, `Field.readonly`, `Field.hidden` support `boolean | FilterCondition | function`.
+- Conditions are evaluated against current form values.
+- `hidden` fields are not rendered and their validation errors are suppressed.
+- `required={false}` can relax metadata `required` at runtime; `readonly={false}` can override metadata readonly.
+- The same runtime behavior is used by `ModelForm`, `DialogForm`, and `WizardDialog`.
+
+Remote `Field.onChange` in `ModelForm`:
+
+- request path is `POST /<modelName>/onChange/<fieldName>`
+- request always sends current field `value`; edit mode also sends `id`
+- `with` omitted: only `id + value`
+- `with: ["a", "b"]`: sends only declared dependent fields in submit/API shape
+- `with: "all"`: sends current form submit shape
+- top-level registered XToMany fields are serialized as relation patch payloads, not raw UI rows
+- response `values` patch only returned keys; `null` clears a field
+- response `readonly` / `required` override local effective state until reset, cancel, reload, or a later response
+- this remote linkage runtime is implemented for `ModelForm`; it is not automatically available in standalone `DialogForm` / `WizardDialog`
 
 ### FormHeader Props
 

@@ -11,6 +11,7 @@ Composable data table view with:
 
 - [Dialog components](./dialog)
 - [Form components](./form)
+- [Fields and widgets](./field)
 
 ## Quick Start
 
@@ -19,27 +20,21 @@ import {
   UserAccountUnlockActionDialog,
 } from "@/app/user/user-account/components/user-account-unlock-action-dialog";
 import { Action } from "@/components/common/Action";
+import { Field } from "@/components/fields";
 import { ModelTable } from "@/components/views/table/ModelTable";
-import type { QueryParams } from "@/types/params/QueryParams";
 
 export default function UserAccountPage() {
-  const initialParams: Partial<QueryParams> = {
-    fields: [
-      "username",
-      "nickname",
-      "email",
-      "mobile",
-      "status",
-      "createdTime",
-    ],
-    orders: [["createdTime", "DESC"]],
-  };
-
   return (
     <ModelTable
       modelName="UserAccount"
-      initialParams={initialParams}
+      initialParams={{ orders: [["createdTime", "DESC"]] }}
     >
+      <Field fieldName="username" />
+      <Field fieldName="nickname" />
+      <Field fieldName="email" />
+      <Field fieldName="mobile" />
+      <Field fieldName="status" />
+      <Field fieldName="createdTime" />
       <Action
         labelName="Lock Account"
         operation="lockAccount"
@@ -68,6 +63,37 @@ Most pages do not need explicit generic parameters. `ModelTable` defaults row ty
 type ModelTableRowData = { id: string };
 ```
 
+## Column Declaration
+
+`ModelTable` is JSX-first:
+
+- columns come from ordered `<Field />` children
+- top-level query `fields` are generated automatically from those declarations
+- `initialParams` only carries non-column query params such as `filters`, `orders`, `pageSize`, `groupBy`
+- `children` can mix `<Field />`, `<Action />`, and `<BulkAction />`
+- at least one visible `<Field />` declaration is required
+
+Example:
+
+```tsx
+<ModelTable
+  modelName="SysOptionSet"
+  initialParams={{ orders: [["optionSetCode", "ASC"]], pageSize: 50 }}
+>
+  <Field fieldName="optionSetCode" readonly />
+  <Field fieldName="name" />
+  <Field fieldName="description" />
+  <Field fieldName="active" widgetType="CheckBox" />
+</ModelTable>
+```
+
+Table declaration notes:
+
+- `Field` order is the rendered column order
+- `widgetType`, `labelName`, `filters`, `defaultValue`, `onChange`, and static `required` / `readonly` overrides are reused by both read cells and inline editors
+- `hidden` only supports `boolean` in table declarations; `hidden={true}` removes the whole column
+- conditional `required` / `readonly` are supported in inline edit, but conditional `hidden` is not
+
 ## Inline Edit
 
 `ModelTable` supports optional row-level inline editing.
@@ -77,9 +103,27 @@ type ModelTableRowData = { id: string };
   modelName="TenantOptionItem"
   inlineEdit
   initialParams={{
-    fields: ["sequence", "itemCode", "itemName", "active"],
     orders: [["sequence", "ASC"]],
   }}
+>
+  <Field fieldName="sequence" readonly />
+  <Field fieldName="itemCode" required />
+  <Field
+    fieldName="itemName"
+    readonly={[["active", "=", false]]}
+  />
+  <Field fieldName="active" />
+</ModelTable>
+```
+
+Condition function example:
+
+```tsx
+<Field
+  fieldName="itemName"
+  required={({ values, scope, rowId }) =>
+    scope === "model-table" && Boolean(rowId) && values.active === true
+  }
 />
 ```
 
@@ -94,7 +138,30 @@ Behavior:
 - `Save` submits only changed editable fields for that row via update API
 - `Cancel` restores the row from the latest loaded server snapshot
 - switching to another row while current row is dirty asks for discard confirmation
-- only metadata-editable fields become inline editors; unsupported/readonly columns stay read-only
+- `required` / `readonly` support `boolean`, `FilterCondition`, and `(ctx) => boolean`
+- inline-edit conditions are evaluated against the current row object with `scope="model-table"`, plus `rowIndex` and `rowId`
+- only metadata-editable and not effectively readonly columns become inline editors; unsupported columns stay read-only
+
+### Remote `Field.onChange`
+
+Inline edit also supports remote field linkage on declared columns:
+
+```tsx
+<ModelTable modelName="SysOptionSet" inlineEdit>
+  <Field fieldName="optionSetCode" onChange={["name", "description"]} />
+  <Field fieldName="name" />
+  <Field fieldName="description" />
+</ModelTable>
+```
+
+Behavior in `ModelTable` inline edit:
+
+- scope is the current editing row only
+- request path is `POST /<modelName>/onChange/<fieldName>`
+- `with: "all"` serializes the current row, not the whole table
+- response `values` patch only the current row
+- response `readonly` / `required` apply only to the current row and override local effective state
+- remote rule state is cleared when the row is saved, cancelled, reloaded, or when editing switches to another row
 
 ## Developer Types
 
@@ -174,12 +241,18 @@ const sideTree: SideTreeConfig = {
 <ModelTable
   modelName="SysField"
   initialParams={{
-    fields: ["modelName", "fieldName", "labelName", "fieldType"],
     orders: [["modelName", "ASC"]],
   }}
   sideTree={sideTree}
-/>
+>
+  <Field fieldName="modelName" />
+  <Field fieldName="fieldName" />
+  <Field fieldName="labelName" />
+  <Field fieldName="fieldType" />
+</ModelTable>
 ```
+
+`sideTree` only changes filter behavior and layout. Column declaration still comes from `<Field />` children.
 
 `SideTreeConfig` type:
 
@@ -260,9 +333,9 @@ Toolbar active state area can show and clear:
 | --- | --- | --- | --- | --- |
 | `modelName` | `string` | Yes | - | Used to fetch metadata API. |
 | `inlineEdit` | `boolean` | No | `false` | Enable row-click inline edit mode. When enabled, active-row editable cells render `Field` components instead of navigating to detail. |
-| `initialParams` | `Partial<QueryParams>` | No | - | Initial fields/order/filter/page settings. |
+| `initialParams` | `QueryParamsWithoutFields` | No | - | Initial non-column query settings such as `filters`, `orders`, `pageSize`, `groupBy`. |
 | `queryOptions` | `UseQueryOptions` (partial) | No | - | Optional React Query options for table page query. |
-| `children` | `ReactNode` | No | - | Table actions using `<Action />` (row-level) and `<BulkAction />` (selection-level). |
+| `children` | `ReactNode` | No | - | Ordered `<Field />` declarations plus optional `<Action />` and `<BulkAction />`. At least one visible `<Field />` is required at runtime. |
 | `toolbarActionsComponent` | `ReactNode \| ComponentType<{ table }>` | No | - | Custom toolbar actions. |
 | `tableProps` | `Omit<TableProps, "children">` | No | - | Props forwarded to underlying table component. |
 | `className` | `string` | No | - | Outer container className. |
@@ -285,8 +358,11 @@ Toolbar active state area can show and clear:
 `initialParams` is the initial server query state for `ModelTable` and follows:
 
 ```ts
-type initialParams = Partial<QueryParams>;
+type initialParams = QueryParamsWithoutFields;
 ```
+
+`ModelTable` does not accept top-level `initialParams.fields`.
+The table query field list always comes from visible `<Field />` children in declaration order.
 
 Query bootstrap defaults:
 
@@ -298,7 +374,6 @@ Query bootstrap defaults:
 
 | Key | Type | Default | Notes |
 | --- | --- | --- | --- |
-| `fields` | `string[]` | `undefined` | Initial query field list and initial table field order reference. |
 | `filters` | `FilterCondition` | `undefined` | Base filter condition. This is treated as the base and merged with UI filters using `AND`. |
 | `orders` | `OrderCondition` | `undefined` | Initial sort order. |
 | `pageNumber` | `number` | `1` | Initial page number. |
@@ -316,10 +391,14 @@ Query bootstrap defaults:
 <ModelTable
   modelName="UserAccount"
   initialParams={{
-    fields: ["username", "email", "status", "updatedTime"],
     orders: [["updatedTime", "DESC"]],
   }}
-/>
+>
+  <Field fieldName="username" />
+  <Field fieldName="email" />
+  <Field fieldName="status" />
+  <Field fieldName="updatedTime" />
+</ModelTable>
 ```
 
 ### Common Example
@@ -328,14 +407,19 @@ Query bootstrap defaults:
 <ModelTable
   modelName="UserAccount"
   initialParams={{
-    fields: ["username", "email", "status", "locked", "updatedTime"],
     filters: [["status", "!=", "Deleted"], "AND", ["locked", "=", false]],
     orders: [["updatedTime", "DESC"]],
     pageNumber: 1,
     pageSize: 50,
     effectiveDate: "2026-03-01",
   }}
-/>
+>
+  <Field fieldName="username" />
+  <Field fieldName="email" />
+  <Field fieldName="status" />
+  <Field fieldName="locked" />
+  <Field fieldName="updatedTime" />
+</ModelTable>
 ```
 
 ### Advanced Example (`groupBy` / `aggFunctions` / `subQueries`)
@@ -344,7 +428,6 @@ Query bootstrap defaults:
 <ModelTable
   modelName="UserAccount"
   initialParams={{
-    fields: ["departmentId", "status"],
     filters: ["status", "=", "Active"],
     groupBy: ["departmentId"],
     aggFunctions: [["COUNT", "*", "count"]],
@@ -356,7 +439,10 @@ Query bootstrap defaults:
       },
     },
   }}
-/>
+>
+  <Field fieldName="departmentId" />
+  <Field fieldName="status" />
+</ModelTable>
 ```
 
 ### Filter Merge Behavior (Important)
@@ -401,16 +487,19 @@ onClick: ({ id, modelName, row }) => void
 
 ```tsx
 import { Action } from "@/components/common/Action";
+import { Field } from "@/components/fields";
 import { toast } from "sonner";
 
-<ModelTable modelName="UserSecurityPolicy">
+<ModelTable modelName="UserAccount">
+  <Field fieldName="username" />
+  <Field fieldName="status" />
   <Action
     type="custom"
-    labelName="Copy Policy ID"
+    labelName="Copy User ID"
     placement="more"
     onClick={({ id }) => {
       navigator.clipboard.writeText(String(id));
-      toast.success(`Policy ID "${id}" copied.`);
+      toast.success(`User ID "${id}" copied.`);
     }}
   />
 </ModelTable>
@@ -420,6 +509,7 @@ import { toast } from "sonner";
 
 ```tsx
 import { Action } from "@/components/common/Action";
+import { Field } from "@/components/fields";
 import { ActionDialog } from "@/components/views/dialogs";
 import { ModelTable } from "@/components/views/table/ModelTable";
 import { ExternalLink, Lock, Pencil, ShieldCheck } from "lucide-react";
@@ -438,6 +528,9 @@ function UnlockDialog() {
 }
 
 <ModelTable modelName="UserAccount">
+  <Field fieldName="username" />
+  <Field fieldName="email" />
+  <Field fieldName="status" />
   {/* custom + inline */}
   <Action
     type="custom"
@@ -500,8 +593,11 @@ Bulk actions (toolbar selection actions):
 
 ```tsx
 import { BulkAction } from "@/components/common/BulkAction";
+import { Field } from "@/components/fields";
 
 <ModelTable modelName="UserAccount">
+  <Field fieldName="username" />
+  <Field fieldName="status" />
   <BulkAction
     labelName="Lock Selected"
     operation="lockByIds"
@@ -515,6 +611,7 @@ import { BulkAction } from "@/components/common/BulkAction";
 ```tsx
 import { ActionDialog } from "@/components/views/dialogs";
 import { BulkAction } from "@/components/common/BulkAction";
+import { Field } from "@/components/fields";
 
 function BulkLockReasonDialog() {
   return (
@@ -530,6 +627,8 @@ function BulkLockReasonDialog() {
 }
 
 <ModelTable modelName="UserAccount">
+  <Field fieldName="username" />
+  <Field fieldName="status" />
   <BulkAction
     labelName="Lock Selected"
     operation="lockByIds"
@@ -558,7 +657,12 @@ Built-in Bulk Edit action:
   modelName="UserAccount"
   bulkEditFields={["status", "email", "phoneNumber", "locked"]} // optional
   excludeFields={["email"]} // optional
-/>
+>
+  <Field fieldName="username" />
+  <Field fieldName="email" />
+  <Field fieldName="status" />
+  <Field fieldName="locked" />
+</ModelTable>
 ```
 
 If `bulkEditFields` is not provided, Bulk Edit uses all available metadata fields.

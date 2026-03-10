@@ -3,10 +3,9 @@
 Metadata-driven field system used by `ModelForm`, relation dialogs, and inline editors.
 
 ## Related Docs
-
-- `src/components/views/form/README.md`: `ModelForm`, `FormBody`, `FormToolbar`, page-level shell
-- `src/components/views/table/README.md`: `ModelTable` and table-side renderers
-- `src/components/views/tree/README.md`: low-level `Tree`, `TreePanel`, `SelectTreePanel`
+- [Form components](./form): `ModelForm`, `FormBody`, `FormToolbar`, page-level shell
+- [Table components](./table): `ModelTable` and table-side renderers
+- [Tree components](./tree): low-level `Tree`, `TreePanel`, `SelectTreePanel`
 
 ## Import
 
@@ -21,9 +20,12 @@ Other public exports:
 ```tsx
 import {
   Field,
-  defineRelationTableView,
+  RelationTableView,
+  type FieldCondition,
+  type FieldConditionContext,
+  type FieldOnChangeProp,
   type RelationFormView,
-  type RelationTableView,
+  type RelationTableViewProps,
 } from "@/components/fields";
 ```
 
@@ -48,7 +50,7 @@ Prefer direct use of `StringField`, `ReferenceField`, `JsonField`, `FieldDispatc
 
 ## Field Props
 
-`Field` is metadata-driven and supports field-level overrides.
+`Field` is metadata-driven and supports field-level overrides and runtime conditions.
 
 | Prop | Type | Required | Notes |
 | --- | --- | --- | --- |
@@ -60,14 +62,176 @@ Prefer direct use of `StringField`, `ReferenceField`, `JsonField`, `FieldDispatc
 | `fullWidth` | `boolean` | No | Layout hint for text-like and relation fields. |
 | `readOnly` | `boolean` | No | Force read-only mode. |
 | `labelName` | `string` | No | Metadata label override. |
-| `description` | `string` | No | Metadata description override. |
-| `required` | `boolean` | No | Metadata required override. |
-| `readonly` | `boolean` | No | Metadata readonly override. |
+| `required` | `FieldCondition` | No | Dynamic required control. Supports `boolean`, `FilterCondition`, or function. |
+| `readonly` | `FieldCondition` | No | Dynamic readonly control. Supports `boolean`, `FilterCondition`, or function. |
+| `hidden` | `FieldCondition` | No | Dynamic visibility control. Hidden fields are not rendered and their validation is suppressed. |
 | `defaultValue` | `unknown` | No | Metadata default value override. |
 | `filters` | `string` | No | Metadata filter override, mainly for relation fields. |
-| `tableView` | `RelationTableView` | No | OneToMany / ManyToMany table config. |
+| `onChange` | `FieldOnChangeProp` | No | Remote field linkage. Supports shorthand `string[]` or `{ update?, with? }`. |
+| `tableView` | `ReactElement<RelationTableViewProps>` | No | OneToMany / ManyToMany table config. Must be a `<RelationTableView />` element. |
 | `formView` | `RelationFormView` | No | Relation dialog/detail form config. |
 | `isPaged` | `boolean` | No | Enables relation-table pagination mode. |
+
+`FieldCondition`:
+
+```ts
+type FieldCondition =
+  | boolean
+  | FilterCondition
+  | ((ctx: FieldConditionContext) => boolean);
+```
+
+`FieldConditionContext`:
+
+```ts
+interface FieldConditionContext {
+  fieldName: string;
+  metaField: MetaField;
+  values: Record<string, unknown>;
+  value: unknown;
+  scope: "form" | "model-table" | "relation-table";
+  rowIndex?: number;
+  rowId?: string;
+  isEditing: boolean;
+  recordId?: string;
+}
+```
+
+Behavior notes:
+
+- `boolean`: simplest and most direct.
+- `FilterCondition`: recommended declarative form for common business rules.
+- `function`: escape hatch for advanced cases; receives current form values and edit-mode context.
+- invalid `FilterCondition` configs emit a dev warning and resolve to `false`.
+- `hidden` suppresses both rendering and validation.
+- in `ModelTable` / `RelationTableView` inline edit, condition `values` is the current row object, not the whole form object.
+- in table declarations, `hidden` only supports `boolean` and hides the whole column.
+- `required={false}` can relax metadata `required`; `readonly={false}` can override metadata readonly.
+
+Examples:
+
+```tsx
+<Field fieldName="status" readonly={true} />
+
+<Field fieldName="itemColor" hidden={["active", "=", false]} />
+
+<Field
+  fieldName="description"
+  readonly={[
+    ["status", "IN", ["approved", "archived"]],
+    "OR",
+    [["type", "=", "SYSTEM"], "AND", ["editable", "!=", true]],
+  ]}
+/>
+
+<Field
+  fieldName="itemName"
+  required={({ values, isEditing }) =>
+    !isEditing && values.active === true && values.itemCode !== "Temp"
+  }
+/>
+```
+
+## Remote `Field.onChange`
+
+`Field` supports remote linkage through a top-level `onChange` prop:
+
+```ts
+type FieldOnChangeProp =
+  | string[]
+  | {
+      update?: string[];
+      with?: string[] | "all";
+    };
+```
+
+Common examples:
+
+```tsx
+<Field fieldName="itemCode" onChange={["itemName", "itemColor"]} />
+
+<Field
+  fieldName="itemCode"
+  onChange={{ update: ["itemName"], with: ["active"] }}
+/>
+
+<Field
+  fieldName="itemCode"
+  onChange={{ with: "all" }}
+/>
+```
+
+Behavior:
+
+- `onChange={["a", "b"]}` is shorthand for `onChange={{ update: ["a", "b"] }}`.
+- `update` present: only those fields are extracted from response `values`.
+- `update` omitted: all response `values` keys within current scope are applied.
+- `with` omitted: request only sends `id` in edit mode plus current field `value`.
+- `with: ["a", "b"]`: request adds `values` with those fields in submit/API shape.
+- `with: "all"`: request adds current scope values in submit/API shape.
+
+Current supported scopes:
+
+- `ModelForm`
+- `ModelTable` inline edit current row
+- `RelationTableView` inline edit current row
+
+Current non-goals:
+
+- standalone top-level `OneToMany` / `ManyToMany` container interactions are not source triggers
+- standalone dialog forms do not automatically provide this runtime yet
+
+Auto trigger rules:
+
+- `blur`: text-like and editor-like fields such as `String`, `MultiString`, numeric inputs, `JSON`, `Filters`, `Orders`, `Code`, `Markdown`, `RichText`
+- `change`: commit-style fields such as `Boolean`, `Date`, `DateTime`, `Time`, `Option`, `MultiOption`, `ManyToOne`, `OneToOne`, `File`, `MultiFile`
+
+Backend contract used by frontend:
+
+```http
+POST /<modelName>/onChange/<fieldName>
+```
+
+Request payload:
+
+```json
+{
+  "id": "123",
+  "value": "ITEM-001",
+  "values": {
+    "active": true
+  }
+}
+```
+
+Response payload:
+
+```json
+{
+  "values": {
+    "itemName": "Open",
+    "itemColor": "#22c55e"
+  },
+  "readonly": {
+    "itemName": true
+  },
+  "required": {
+    "itemColor": true
+  }
+}
+```
+
+Response rules:
+
+- `values` only patches returned keys; missing keys are left unchanged.
+- returned `null` means explicit clear.
+- `readonly` / `required` are applied independently of `update`.
+- remote `readonly` / `required` override metadata and local conditions until a later response or scope reset.
+
+Scope notes:
+
+- in `ModelForm`, `with: "all"` uses current form submit shape; registered top-level relation fields use relation patch payloads instead of raw UI rows.
+- in `ModelTable` / `RelationTableView` inline edit, `values` and `with: "all"` are the current row only, not the whole table or parent form.
 
 ## FieldType And WidgetType Matrix
 
@@ -344,12 +508,21 @@ Use `SelectTree` for hierarchical selection:
 Rendered as relation table with inline or dialog editing. Public usage is still through `Field`.
 
 ```tsx
+const optionItemsTableView = (
+  <RelationTableView initialParams={{ orders: [["sequence", "ASC"]], pageSize: 10 }}>
+    <Field fieldName="sequence" />
+    <Field fieldName="itemCode" />
+    <Field fieldName="itemName" />
+    <Field fieldName="active" />
+  </RelationTableView>
+);
+
 <Field fieldName="optionItems" tableView={optionItemsTableView} />
 ```
 
 Common props:
 
-- `tableView`: relation table columns / sorting / page size
+- `tableView`: relation table columns via `<Field />` children, plus non-field query params via `initialParams`
 - `formView`: dialog form for row create/edit
 - `isPaged`: enable pagination / remote relation mode
 
@@ -368,6 +541,15 @@ Default submit behavior is incremental patch map:
 Rendered as relation table + picker dialog.
 
 ```tsx
+const userTableView = (
+  <RelationTableView initialParams={{ orders: [["username", "ASC"]], pageSize: 10 }}>
+    <Field fieldName="username" />
+    <Field fieldName="nickname" />
+    <Field fieldName="email" />
+    <Field fieldName="status" />
+  </RelationTableView>
+);
+
 <Field fieldName="userIds" tableView={userTableView} />
 ```
 
@@ -560,7 +742,14 @@ General guidance:
 
 <Field
   fieldName="optionItems"
-  tableView={optionItemsTableView}
+  tableView={
+    <RelationTableView initialParams={{ orders: [["sequence", "ASC"]], pageSize: 10 }}>
+      <Field fieldName="sequence" />
+      <Field fieldName="itemCode" />
+      <Field fieldName="itemName" />
+      <Field fieldName="active" />
+    </RelationTableView>
+  }
   formView={OptionItemsFormView}
   isPaged
 />
