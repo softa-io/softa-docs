@@ -1,11 +1,19 @@
 # File Starter
 
 File Starter provides three core capabilities for developers:
-- Data import
-- Data export
-- Document export (Word/PDF)
+- [Data import](./import)
+- [Data export](./export)
+- [Document export (Word/PDF)](./document)
 
 This document focuses on developer usage and API-level examples.
+
+## Code Structure
+The Excel module is organized by responsibility:
+
+- `excel/export/strategy`: export strategy selection and concrete export implementations
+- `excel/export/support`: shared export support components such as data fetch, template resolve, writer, upload, and custom export hooks
+- `excel/imports`: import pipeline, handler factory, failure collection, persistence, and custom import hook
+- `excel/style`: shared Excel style handlers
 
 ## Dependency
 ```xml

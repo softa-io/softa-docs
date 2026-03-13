@@ -109,9 +109,23 @@ Example metadata overrides on `Field`:
 />
 ```
 
+`Field.defaultValue` is a create-time field override. Prefer it for static page-specific defaults; keep dialog/page `defaultValues` for dynamic prefills such as route params or parent-context values.
+
+When you do pass container-level `defaultValues`, use field UI values directly:
+
+- `File`: `FileInfo | null`
+- `MultiFile`: `FileInfo[]`
+- `JSON` / `DTO`: structured object/array values
+- `Filters`: `FilterCondition`
+- `Orders`: structured order tuples/arrays
+
+Detailed field value contracts are documented in `src/components/fields/README.md`.
+
 Example conditional field control:
 
 ```tsx
+import { dependsOn, Field } from "@/components/fields";
+
 <Field fieldName="status" readonly={true} />
 
 <Field fieldName="itemColor" hidden={["active", "=", false]} />
@@ -127,9 +141,9 @@ Example conditional field control:
 
 <Field
   fieldName="itemName"
-  required={({ values, isEditing }) =>
+  required={dependsOn(["active", "itemCode"], ({ values, isEditing }) =>
     !isEditing && values.active === true && values.itemCode !== "Temp"
-  }
+  )}
 />
 ```
 
@@ -223,6 +237,11 @@ Examples of using `widgetType` to drive renderer behavior:
 
 Use `placeholder` for field-level input placeholder text.
 Use `widgetProps` only for widget-specific configuration.
+
+Scope note:
+
+- `widgetProps` applies to `ModelForm` widgets and table inline editors because those paths render `Field` directly
+- `ModelTable` / `RelationTableView` read-mode cells intentionally do not consume `widgetProps`; table image/file cells use the shared compact renderer described in `src/components/views/table/README.md`
 
 Current supported examples:
 
@@ -642,8 +661,10 @@ Schema precedence: `schemaBuilder` > `zodSchema` > metadata-derived base schema.
 
 Runtime field conditions:
 
-- `Field.required`, `Field.readonly`, `Field.hidden` support `boolean | FilterCondition | function`.
+- `Field.required`, `Field.readonly`, `Field.hidden` support `boolean | FilterCondition | dependsOn(...)`.
 - Conditions are evaluated against current form values.
+- `FilterCondition` automatically tracks both operand fields and local `#{fieldName}` references.
+- Function conditions must be wrapped with `dependsOn([...], evaluator)`; bare function conditions are not supported.
 - `hidden` fields are not rendered and their validation errors are suppressed.
 - `required={false}` can relax metadata `required` at runtime; `readonly={false}` can override metadata readonly.
 - The same runtime behavior is used by `ModelForm`, `DialogForm`, and `WizardDialog`.
@@ -682,8 +703,8 @@ Remote `Field.onChange` in `ModelForm`:
 | ------------------- | ------------------------- | -------- | ------- | --------------------------------------------------------------------------------------------- |
 | `children`          | `ReactNode`               | No       | -       | Custom actions. Recommended: `<Action type=\"...\" />`.                                       |
 | `enableWorkflow`    | `boolean`                 | No       | `false` | Toggle workflow action group in toolbar left area. Only shown in edit mode and not read-only.|
-| `enableDuplicate`   | `boolean`                 | No       | `true` | Built-in duplicate action; shown only when edit mode has record id.         |
-| `enableDelete`      | `boolean`                 | No       | `true` | Built-in delete action; shown only when edit mode has record id.            |
+| `enableDuplicate`   | `boolean`                 | No       | `true` | Built-in duplicate action. In create state it stays visible but defaults to disabled; route read mode can still use it. |
+| `enableDelete`      | `boolean`                 | No       | `true` | Built-in delete action. In create state it stays visible but defaults to disabled; route read mode can still use it. |
 | `duplicatePlacement`| `"toolbar" \| "more"`     | No       | `"more"` | Placement of built-in Duplicate action.                                     |
 | `deletePlacement`   | `"toolbar" \| "more"`     | No       | `"more"` | Placement of built-in Delete action.                                        |
 | `moreActionsLabel`  | `string`                  | No       | `"More Actions"` | Label for More Actions trigger.                                   |
@@ -696,7 +717,15 @@ Use a single `Action` component with discriminated `type`.
 `Action` supports both static values and context-driven values via:
 
 ```ts
-type ActionValue<T> = T | ((context: { id: string | null; modelName?: string; row?: Record<string, unknown> }) => T);
+type ActionValue<T> = T | ((context: {
+  id: string | null;
+  modelName?: string;
+  scope: "form" | "model-table";
+  mode: "create" | "edit" | "read";
+  isDirty: boolean;
+  values?: Record<string, unknown>;
+  row?: Record<string, unknown>;
+}) => T);
 ```
 
 | Prop             | Type                                    | Required | Default | Notes                                                                 |
@@ -709,8 +738,8 @@ type ActionValue<T> = T | ((context: { id: string | null; modelName?: string; ro
 | `errorMessage`   | `ActionValue<string>`                   | No       | -       | Error toast message for `default` and `dialog` actions.               |
 | `icon`           | `ComponentType<{ className?: string }>` | No       | -       | Action icon.                                                          |
 | `destructive`    | `boolean`                               | No       | `false` | Destructive styling.                                                  |
-| `disabled`       | `ActionValue<boolean>`                  | No       | `false` | Disabled state.                                                       |
-| `visible`        | `ActionValue<boolean>`                  | No       | `true` | Visibility control.                                                   |
+| `disabled`       | `boolean \| FilterCondition \| dependsOn(...)` | No | `false` | Disabled state. Use `boolean` for static UI state, `FilterCondition` for declarative value checks, and `dependsOn([...], evaluator)` for explicit function logic. |
+| `visible`        | `boolean \| FilterCondition \| dependsOn(...)` | No | `true` | Visibility control. Same condition model as `disabled`. |
 
 Behavior-specific props:
 
@@ -719,7 +748,14 @@ Behavior-specific props:
 | `type` omitted or `type="default"` | `operation` | - | Calls `POST /{modelName}/{operation}` with current record `id` in query params and optional `payload` in body. `payload` supports `ActionValue<Record<string, unknown>>`. |
 | `type="dialog"` | `operation`, `component` | - | `component={MyDialogComponent}`. Open/close, operation, success/error messaging are injected from `Action`. |
 | `type="link"`   | `href`                  | `target="_self"` | `href` supports `string` or `({ id, modelName }) => string`. |
-| `type="custom"` | `onClick`               | - | Use for pure UI/local behaviors. Signature: `onClick({ id, modelName, row }) => void`. |
+| `type="custom"` | `onClick`               | - | Use for pure UI/local behaviors. Signature: `onClick({ id, modelName, scope, mode, isDirty, values, row }) => void`. |
+
+Action condition notes:
+
+- `disabled` and `visible` share the same runtime condition model as `Field`: `boolean`, `FilterCondition`, `dependsOn([...], evaluator)`
+- `FilterCondition` is evaluated against current form values and automatically tracks `#{fieldName}` references
+- bare function conditions are not supported; wrap function logic with `dependsOn([...], evaluator)`
+- if there is no field dependency, prefer plain `boolean`
 
 Action type examples:
 
@@ -773,6 +809,12 @@ Action type examples:
 `FormSection` is a local UI action area and does not execute model API actions directly.
 For API actions (`default` / `dialog`), place actions in `FormToolbar`.
 
+Form toolbar business actions also follow these rules:
+
+- edit mode with unsaved changes: clicking business actions asks whether to discard changes before continuing
+- create mode: built-in `Duplicate` / `Delete` remain visible but disabled
+- built-in `Duplicate` still uses backend `copyById`; exclusion of `BaseModel.reversedFields` is handled by backend duplicate semantics
+
 ### FormToolbar Action Examples
 
 Minimal example:
@@ -812,7 +854,6 @@ function UnlockDialog() {
           labelName: "Reason",
         },
       ]}
-      defaultValues={{ reason: "" }}
     />
   );
 }

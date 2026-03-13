@@ -57,7 +57,7 @@ import {
 | --- | --- | --- | --- |
 | `fieldName` | `string` | 是 | 当前模型中的元数据字段名。 |
 | `widgetType` | `WidgetType` | 否 | 可选的 widget 覆盖，必须与元数据 `fieldType` 兼容。 |
-| `widgetProps` | `Record<string, unknown>` | 否 | 仅用于 widget 专属配置，由各 widget 内部解析。 |
+| `widgetProps` | `Record<string, unknown>` | 否 | 仅用于 widget 专属配置，由各 widget 内部解析。会作用于表单 widget 和内联编辑器，但不会作用于表格只读单元格。 |
 | `placeholder` | `string` | 否 | 字段级输入占位文案。优先使用它，而不是 `widgetProps.placeholder`。 |
 | `hideLabel` | `boolean` | 否 | 隐藏整个标签区块。 |
 | `fullWidth` | `boolean` | 否 | 文本类字段和关联字段的布局提示。 |
@@ -66,7 +66,7 @@ import {
 | `required` | `FieldCondition` | 否 | 动态必填控制。支持 `boolean`、`FilterCondition` 或函数。 |
 | `readonly` | `FieldCondition` | 否 | 动态只读控制。支持 `boolean`、`FilterCondition` 或函数。 |
 | `hidden` | `FieldCondition` | 否 | 动态可见性控制。隐藏字段不会渲染，且会抑制其校验。 |
-| `defaultValue` | `unknown` | 否 | 元数据默认值覆盖。 |
+| `defaultValue` | `unknown` | 否 | 仅用于创建态的默认值覆盖。它会写入初始表单值，优先级高于 `metaField.defaultValue` 和对话框/页面级 `defaultValues`。 |
 | `filters` | `string \| FilterCondition` | 否 | 关联过滤条件覆盖。`Field.filters` 会覆盖 `metaField.filters`。支持 JSON 字符串形式的元数据过滤条件，以及声明式 `#{fieldName}` 引用。 |
 | `onChange` | `FieldOnChangeProp` | 否 | 远程字段联动。支持简写 `string[]` 或 `{ update?, with? }`。 |
 | `tableView` | `ReactElement<RelationTableViewProps>` | 否 | `OneToMany` / `ManyToMany` 表格配置。必须是一个 `<RelationTableView />` 元素。 |
@@ -102,16 +102,22 @@ interface FieldConditionContext {
 
 - `boolean`：最简单也最直接。
 - `FilterCondition`：推荐用于常见业务规则的声明式写法。
-- `function`：复杂场景下的 escape hatch；可拿到当前表单值和编辑态上下文。
+- `dependsOn([...], evaluator)`：带明确字段订阅的函数式条件写法。
 - 非法的 `FilterCondition` 配置会发出开发态 warning，并解析为 `false`。
+- 不支持裸函数条件；函数逻辑请包在 `dependsOn([...], evaluator)` 中。
+- `Action.disabled` 和 `Action.visible` 在表单/表格工具栏中也使用同一套条件模型。
 - `hidden` 会同时抑制渲染和校验。
 - 在 `ModelTable` / `RelationTableView` 的内联编辑中，condition 的 `values` 是当前行对象，而不是整个表单对象。
 - 在表格声明中，`hidden` 只支持 `boolean`，并会隐藏整列。
+- `widgetProps` 不会透传给 `ModelTable` / `RelationTableView` 的只读单元格渲染器。
+- `defaultValue` 适合静态字段级创建默认值。路由参数、父行值、非渲染字段等运行时预填请使用对话框/页面级 `defaultValues`。
 - `required={false}` 可以在运行时放宽元数据中的 `required`；`readonly={false}` 可以覆盖元数据只读。
 
 示例：
 
 ```tsx
+import { dependsOn, Field } from "@/components/fields";
+
 <Field fieldName="status" readonly={true} />
 
 <Field fieldName="itemColor" hidden={["active", "=", false]} />
@@ -127,9 +133,9 @@ interface FieldConditionContext {
 
 <Field
   fieldName="itemName"
-  required={({ values, isEditing }) =>
+  required={dependsOn(["active", "itemCode"], ({ values, isEditing }) =>
     !isEditing && values.active === true && values.itemCode !== "Temp"
-  }
+  )}
 />
 ```
 
@@ -287,6 +293,34 @@ POST /<modelName>/onChange/<fieldName>
 
 - 在 `ModelForm` 中，`with: "all"` 使用当前表单的 submit 形态；已注册的顶层关联字段会使用关系 patch payload，而不是原始 UI 行数据。
 - 在 `ModelTable` / `RelationTableView` 的内联编辑中，`values` 和 `with: "all"` 只针对当前行，而不是整个表格或父表单。
+
+## 级联字段
+
+`MetaField.cascadedField` 支持在编辑作用域中做隐式自动回填，不需要源字段显式声明 `Field.onChange`。
+
+示例：
+
+```ts
+deptId.cascadedField = "employeeId.departmentId";
+companyId.cascadedField = "employeeId.department.companyId";
+```
+
+行为说明：
+
+- 支持 `ModelForm`、`ModelTable` 内联编辑和 `RelationTableView` 内联编辑
+- 源字段必须是 `ManyToOne` 或 `OneToOne`，并且定义了 `relatedModel`
+- 当源字段变化时，前端会请求一次 `/<relatedModel>/getById`，并从响应中读取所有依赖的级联路径
+- 多个目标字段依赖同一个源字段时，会在同一次查询里一起解析
+- 如果源字段同时声明了 `Field.onChange`，两套效果会并行执行
+- 如果两套效果写入同一个目标字段，`cascadedField` 的结果优先
+- 清空源字段时，会直接清空所有依赖的级联目标，不会调用 `getById`
+- 非法的级联元数据会被忽略，并在开发态给出 warning
+
+语法说明：
+
+- 格式为 `<sourceField>.<path>`
+- `<sourceField>` 必须是当前作用域中的同级字段
+- `<path>` 从源模型的 `getById` 响应中读取，支持嵌套路径
 
 ## FieldType And WidgetType Matrix
 
@@ -655,11 +689,28 @@ const userTableView = (
 - `ManyToMany` 选择器对话框会将 `RelationTableView.initialParams.filters`、有效字段过滤条件、内部 relation-scope 过滤条件、搜索过滤条件和列过滤条件统一以 `AND` 合并
 - 未解析出的 `#{fieldName}` 依赖会暂停远程 picker / 关联表格查询，直到源值出现
 
+### 运行时值契约
+
+`Field.defaultValue`、容器级 `defaultValues`、`form.getValues()` 和 `useWatch()` 使用的都是字段 UI 值，而不是原始 API payload。
+
+- `File`：UI 值为 `FileInfo | null`；提交值为 `fileId | null`
+- `MultiFile`：UI 值为 `FileInfo[]`；提交值为 `fileId[] | null`
+- `JSON` / `DTO`：已提交值保持为结构化对象或数组（或 `null`）
+- `Filters`：已提交值保持为 `FilterCondition | null`
+- `Orders`：已提交值保持为结构化排序元组或数组（或 `null`）
+- 后端 payload 和元数据默认值仍可能以字符串形式到达；字段运行时会在加载时将它们归一化为上述 UI 形态
+- 传页面/对话框级 `defaultValues` 时，请直接使用这些 UI 形态，不要提前把值序列化成字符串
+
 ### 文件字段
 
 #### `File`
 
 默认行为是通用文件上传。
+
+运行时值契约：
+
+- 表单/UI 值为 `FileInfo | null`
+- 提交时会自动提取 `fileId`
 
 ```tsx
 <Field fieldName="attachment" />
@@ -682,9 +733,21 @@ const userTableView = (
 />
 ```
 
+表格只读行为：
+
+- `ModelTable` 和 `RelationTableView` 会直接读取 `FileInfo.url` 做预览或链接渲染
+- `widgetType="Image"` 会渲染紧凑缩略图单元格，点击后打开图片预览对话框
+- 普通 `File` 会渲染为可下载的文件名链接
+- 表格只读单元格不会消费 `display="avatar"` 之类的 `widgetProps`，始终使用紧凑表格样式
+
 #### `MultiFile`
 
 默认行为是通用多文件上传。
+
+运行时值契约：
+
+- 表单/UI 值为 `FileInfo[]`
+- 提交时会自动提取 `fileId[]`
 
 ```tsx
 <Field fieldName="attachments" />
@@ -695,6 +758,13 @@ const userTableView = (
 ```tsx
 <Field fieldName="photos" widgetType="MultiImage" />
 ```
+
+表格只读行为：
+
+- `ModelTable` 和 `RelationTableView` 期望值为 `FileInfo[]`
+- `widgetType="MultiImage"` 会渲染紧凑缩略图摘要和 `+N`，点击后打开图库预览对话框
+- 普通 `MultiFile` 会渲染第一项文件名链接并附带 `+N`
+- 只读表格行会保持单行/不换行；只有处于激活态的内联编辑行才会因为文件 widget 而增高
 
 `Image` widget props：
 
@@ -728,6 +798,12 @@ const userTableView = (
 
 默认行为是基于 CodeMirror 的 JSON 编辑器。
 
+运行时值契约：
+
+- 已提交的表单值保持为结构化对象或数组（或 `null`）
+- 编辑器聚焦时会维护一份临时文本草稿，但在失焦/提交时会把结构化数据写回表单
+- 自定义 `defaultValues`、`getValues()` 和自定义 payload 构造都应把这类字段视为结构化数据，而不是 JSON 字符串
+
 ```tsx
 <Field fieldName="config" />
 <Field fieldName="payload" />
@@ -756,6 +832,11 @@ JSON 编辑器 widget props：
 
 默认始终使用过滤条件构建器。
 
+运行时值契约：
+
+- 已提交值保持为 `FilterCondition | null`
+- 在 `defaultValue` / `defaultValues` 中优先直接传 `FilterCondition`；字符串输入只会在加载时被归一化
+
 ```tsx
 <Field fieldName="filters" />
 ```
@@ -770,6 +851,11 @@ JSON 编辑器 widget props：
 #### `Orders`
 
 默认始终使用排序构建器。
+
+运行时值契约：
+
+- 已提交值保持为结构化排序元组或数组（或 `null`）
+- 在 `defaultValue` / `defaultValues` 中优先直接传结构化排序值；字符串输入只会在加载时被归一化
 
 ```tsx
 <Field fieldName="orders" />

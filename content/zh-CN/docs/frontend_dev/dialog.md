@@ -103,12 +103,12 @@ function OptionItemsDialogView() {
 | `rowId` | `IdType \| null` | 否 | 运行时 / form 上下文 id | 单记录目标 id。 |
 | `ids` | `IdType[] \| null` | 否 | 运行时批量 ids | 非空时为批量模式。 |
 | `payload` | `Record<string, unknown>` | 否 | `{}` | 提交前与表单值合并。 |
-| `defaultValues` | `Record<string, unknown>` | 否 | `{}` | 表单初始值。 |
+| `defaultValues` | `Record<string, unknown>` | 否 | `{}` | 面向动作表单的运行时/上下文预填值，使用字段 UI 形态。文件字段传 `FileInfo` / `FileInfo[]`，`JSON` / `DTO` / `Filters` / `Orders` 传结构化对象或数组。静态默认值优先用 `Field.defaultValue` 或 `metaField.defaultValue`。 |
 | `metaModel` | `MetaModel` | 否 | - | 显式指定元数据模型。 |
 | `abstractModelName` | `string` | 否 | `"DialogForm"` | 用于从字段构建抽象元数据。 |
 | `abstractModelLabelName` | `string` | 否 | `title` 或 `abstractModelName` | 抽象元数据模型展示名。 |
 | `abstractFields` | `AbstractMetaField[]` | 否 | - | 非实体对话框表单的字段元数据。 |
-| `buildPayload` | `(context) => payload` | 否 | - | API 调用前转换合并后的 payload。 |
+| `buildPayload` | `(context) => payload` | 否 | - | API 调用前转换合并后的 payload。`context.payload` 在调用前已经过字段 codec 和关系 patch 处理，处于 submit/API 形态。 |
 | `description` | `ReactNode` | 否 | - | 对话框描述。 |
 | `confirmLabel` | `string` | 否 | `"Confirm"` | 确认按钮文案。 |
 | `cancelLabel` | `string` | 否 | `"Cancel"` | 取消按钮文案。 |
@@ -141,7 +141,6 @@ export function UserAccountUnlockActionDialog() {
           labelName: "Reason (Optional)",
         },
       ]}
-      defaultValues={{ reason: "" }}
       buildPayload={({ payload }) => {
         const reason =
           typeof payload.reason === "string" ? payload.reason.trim() : "";
@@ -191,7 +190,7 @@ export function UserAccountUnlockActionDialog() {
 | `abstractModelLabelName` | `string` | 否 | `title` 或 `abstractModelName` | 抽象元数据模型展示名。 |
 | `abstractFields` | `AbstractMetaField[]` | 否 | - | 非实体向导表单的字段元数据。 |
 | `zodSchema` | `ZodTypeAny` | 否 | - | 可选 schema 覆盖。 |
-| `defaultValues` | `DefaultValues` | 否 | `{}` | 初始表单值。 |
+| `defaultValues` | `DefaultValues` | 否 | `{}` | 面向对话框表单的运行时/上下文预填值，使用字段 UI 形态。文件字段传 `FileInfo` / `FileInfo[]`，`JSON` / `DTO` / `Filters` / `Orders` 传结构化对象或数组。静态创建默认值优先用 `Field.defaultValue` 或 `metaField.defaultValue`。 |
 | `recordId` | `string \| null` | 否 | - | 透传给字段属性解析器。 |
 | `readOnly` | `boolean` | 否 | `false` | 强制只读模式。 |
 | `cancelLabel` | `string` | 否 | `"Cancel"` | 取消按钮文案。 |
@@ -263,8 +262,3 @@ import { WizardDialog } from "@/components/views/dialogs";
   }}
 />
 ```
-
-## 相关
-
-- [表单页面用法](./form)
-- [表格操作用法](./table)

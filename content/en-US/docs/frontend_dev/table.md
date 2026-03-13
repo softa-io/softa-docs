@@ -90,11 +90,36 @@ Example:
 Table declaration notes:
 
 - `Field` order is the rendered column order
-- `widgetType`, `labelName`, `filters`, `defaultValue`, `onChange`, and static `required` / `readonly` overrides are reused by both read cells and inline editors
+- `widgetType`, `labelName`, `filters`, `onChange`, and static `required` / `readonly` overrides are reused by both read cells and inline editors
+- `defaultValue` is create-only; in table flows it is used for relation row creation and inline editors, not for read-mode cells
+- inline-edit field values use the same UI value contracts as forms; for example `File -> FileInfo | null`, `MultiFile -> FileInfo[]`, and `JSON` / `DTO` / `Filters` / `Orders` stay structured
+- table read cells intentionally do not consume `widgetProps`; v1 uses a unified compact table renderer instead of form-style widget variants
 - for relation columns (`ManyToOne` / `OneToOne`) in inline edit, `filters` may use `#{fieldName}` and resolves against the current editing row before the relation query is sent
 - backend env tokens such as `TODAY`, `NOW`, `USER_ID`, `USER_COMP_ID` are passed through unchanged; use `@{literal}` when backend should treat a token-like string as a literal
 - `hidden` only supports `boolean` in table declarations; `hidden={true}` removes the whole column
 - conditional `required` / `readonly` are supported in inline edit, but conditional `hidden` is not
+
+Detailed field value contracts are documented in `src/components/fields/README.md`.
+
+## File And Image Columns
+
+Table-side file rendering is driven by API values, not by form widget state:
+
+- `File` expects `FileInfo`
+- `MultiFile` expects `FileInfo[]`
+- image preview uses `FileInfo.url`
+- file link label falls back as `fileName -> fileId -> "-"`
+
+Read-mode behavior:
+
+- `File` + `widgetType="Image"` renders a compact thumbnail only; clicking it opens an image preview dialog
+- `MultiFile` + `widgetType="MultiImage"` renders a compact thumbnail summary with `+N`; clicking it opens a gallery-style preview dialog
+- plain `File` renders a downloadable filename link to `FileInfo.url`
+- plain `MultiFile` renders the first filename link plus `+N`
+- if an image item has no `url`, the cell renders a compact placeholder box instead of a broken image
+- read-mode cells remain single-line / no-wrap; table rows are not globally expanded for multi-file content
+
+These same compact read renderers are also used by relation tables (`RelationTableView`) in read mode.
 
 ## Inline Edit
 
@@ -122,14 +147,16 @@ Table declaration notes:
 </ModelTable>
 ```
 
-Condition function example:
+`dependsOn()` example:
 
 ```tsx
+import { dependsOn, Field } from "@/components/fields";
+
 <Field
   fieldName="itemName"
-  required={({ values, scope, rowId }) =>
+  required={dependsOn(["active"], ({ values, scope, rowId }) =>
     scope === "model-table" && Boolean(rowId) && values.active === true
-  }
+  )}
 />
 ```
 
@@ -144,11 +171,13 @@ Behavior:
 - `Save` submits only changed editable fields for that row via update API
 - `Cancel` restores the row from the latest loaded server snapshot
 - switching to another row while current row is dirty asks for discard confirmation
-- `required` / `readonly` support `boolean`, `FilterCondition`, and `(ctx) => boolean`
+- `required` / `readonly` support `boolean`, `FilterCondition`, and `dependsOn([...], evaluator)`
 - inline-edit conditions are evaluated against the current row object with `scope="model-table"`, plus `rowIndex` and `rowId`
 - relation-field filters using `#{fieldName}` are also evaluated against the current row object
 - if a relation-field filter dependency is missing, that row's relation query stays disabled instead of loading unfiltered options
 - only metadata-editable and not effectively readonly columns become inline editors; unsupported columns stay read-only
+- `File`, `MultiFile`, `Image`, and `MultiImage` participate in inline edit and reuse the normal `Field` upload widgets inside the active row
+- active edit rows may grow vertically for file/image widgets; non-active rows remain fixed-height
 
 ### Remote `Field.onChange`
 
@@ -349,8 +378,8 @@ Toolbar active state area can show and clear:
 | `className` | `string` | No | - | Outer container className. |
 | `enableBulkDelete` | `boolean` | No | `true` | Enable built-in bulk delete entry. |
 | `enableCreate` | `boolean` | No | `true` | Enable built-in create button. |
-| `enableImport` | `boolean` | No | `true` | Enable import entry in More menu. |
-| `enableExport` | `boolean` | No | `true` | Enable export entry in More menu. |
+| `enableImport` | `boolean` | No | `true` | Enable built-in import dialog entry in More menu. |
+| `enableExport` | `boolean` | No | `true` | Enable built-in export dialog entry in More menu. |
 | `bulkEditFields` | `string[]` | No | - | Optional bulk-edit allowlist. If omitted, built-in Bulk Edit uses all metadata fields. |
 | `excludeFields` | `string[]` | No | - | Optional bulk-edit denylist. Always excluded from built-in Bulk Edit (in addition to reserved fields). |
 | `tabs` | `ModelTableTab[]` | No | - | Optional tab filters at header level. |
@@ -360,6 +389,74 @@ Toolbar active state area can show and clear:
 | `sideTreeWidth` | `number` | No | `280` | Initial side tree width. |
 | `sideTreeMinWidth` | `number` | No | `220` | Side tree min width. |
 | `sideTreeMaxWidth` | `number` | No | `560` | Side tree max width. |
+
+## Built-in Import / Export
+
+`ModelTable` ships with built-in import and export dialogs under the toolbar `More` menu.
+There is no separate page-level config object today; the dialogs derive behavior from the current `modelName`, table query state, selected rows, current page rows, and metadata.
+
+### Import
+
+- gated by `enableImport`
+- dialog tabs:
+  - `By Template`
+  - `Dynamic Import`
+  - `My Import History`
+- template import:
+  - loads templates by `modelName`
+  - supports template download
+  - submits uploaded files through the configured template
+- dynamic import:
+  - parses the uploaded `.xlsx` workbook in the browser
+  - auto-maps workbook headers to model fields using metadata
+  - lets the user adjust mappings before submit
+- history tab:
+  - loads `ImportHistory` for the current model
+  - renders rows through the shared relation-table field renderer
+  - file columns such as original/failed files rely on `FileInfo.url` for download links
+
+### Export
+
+- gated by `enableExport`
+- dialog tabs:
+  - `By Template`
+  - `Dynamic Export`
+  - `My Export History`
+- template export:
+  - loads export templates by `modelName`
+  - submits the current export scope as `ExportParams`
+- dynamic export:
+  - builds candidate fields from current model metadata
+  - defaults selected fields to the currently visible table columns
+  - lets the user change fields, file name, and sheet name
+  - generates `.xlsx` workbooks for front-end initiated exports
+- history tab:
+  - loads `ExportHistory` for the current model
+  - renders exported file links using the same `FileInfo.url` read behavior as normal table file cells
+
+### Export Scope Rules
+
+Built-in export supports three scopes:
+
+- `Selected Rows`
+- `Current Page`
+- `All Filtered Data`
+
+Behavior notes:
+
+- `Selected Rows` uses the current toolbar bulk selection ids
+- `Current Page` uses the current page id snapshot, not `pageNumber/pageSize` replay
+- `All Filtered Data` reuses current `filters/orders/groupBy/aggFunctions/effectiveDate`
+- front-end export is limited to `100000` records for a single request; over-limit scopes are disabled instead of truncated
+
+### Read Renderer Reuse
+
+History tabs intentionally reuse the existing table/relation-table field renderers.
+This means file/history rows follow the same runtime contract as normal table read cells:
+
+- `File` expects `FileInfo`
+- `MultiFile` expects `FileInfo[]`
+- download/preview links come directly from `FileInfo.url`
 
 ## `initialParams` Guide
 
@@ -482,15 +579,24 @@ Row actions support the same `Action` capabilities as form toolbar:
 
 - `type="default" | "dialog" | "link" | "custom"`
 - `placement="inline" | "more"`
-- dynamic props via `ActionValue<T>` (`T` or `(context) => T`) for `disabled`, `visible`, `confirmMessage`, `successMessage`, `errorMessage`, `payload`
+- dynamic props via `ActionValue<T>` (`T` or `(context) => T`) for `confirmMessage`, `successMessage`, `errorMessage`, `payload`
+- `disabled` and `visible` support `boolean`, `FilterCondition`, and `dependsOn([...], evaluator)`
 - In table context:
   - `inline`: shown directly in the last column
   - `more`: shown in last-column More Actions dropdown
+  - active inline-edit rows resolve action context from the current draft row values
+  - clicking a row action while the active row is dirty asks whether to discard the draft before continuing
+
+Action condition notes:
+
+- `FilterCondition` is evaluated against current row values and supports `#{fieldName}` references
+- bare function conditions are not supported; wrap function logic with `dependsOn([...], evaluator)`
+- if there is no row-field dependency, prefer plain `boolean`
 
 Action callbacks in table receive row execution context:
 
 ```ts
-onClick: ({ id, modelName, row }) => void
+onClick: ({ id, modelName, scope, mode, isDirty, values, row }) => void
 ```
 
 ### Row Action: Minimal Example
@@ -532,7 +638,6 @@ function UnlockDialog() {
       abstractFields={[
         { fieldName: "reason", fieldType: "Text", labelName: "Reason" },
       ]}
-      defaultValues={{ reason: "" }}
     />
   );
 }
@@ -631,7 +736,6 @@ function BulkLockReasonDialog() {
       abstractFields={[
         { fieldName: "reason", fieldType: "Text", labelName: "Reason" },
       ]}
-      defaultValues={{ reason: "" }}
     />
   );
 }

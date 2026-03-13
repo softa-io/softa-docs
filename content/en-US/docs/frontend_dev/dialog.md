@@ -103,12 +103,12 @@ Features:
 | `rowId` | `IdType \| null` | No | Runtime/form context id | Single-record target id. |
 | `ids` | `IdType[] \| null` | No | Runtime bulk ids | Bulk mode when non-empty. |
 | `payload` | `Record<string, unknown>` | No | `{}` | Merged with form values before submit. |
-| `defaultValues` | `Record<string, unknown>` | No | `{}` | Initial form values. |
+| `defaultValues` | `Record<string, unknown>` | No | `{}` | Runtime/contextual prefills for action forms in field UI shape. Use `FileInfo` / `FileInfo[]` for file fields and structured objects/arrays for `JSON` / `DTO` / `Filters` / `Orders`. Prefer `Field.defaultValue` or `metaField.defaultValue` for static defaults. |
 | `metaModel` | `MetaModel` | No | - | Use explicit metadata model. |
 | `abstractModelName` | `string` | No | `"DialogForm"` | Used when building abstract metadata from fields. |
 | `abstractModelLabelName` | `string` | No | `title` or `abstractModelName` | Display name for abstract metadata model. |
 | `abstractFields` | `AbstractMetaField[]` | No | - | Field metadata for non-entity dialog forms. |
-| `buildPayload` | `(context) => payload` | No | - | Transform merged payload before API call. |
+| `buildPayload` | `(context) => payload` | No | - | Transform merged payload before API call. `context.payload` is already in submit/API shape after field codecs and relation patches are applied. |
 | `description` | `ReactNode` | No | - | Dialog description. |
 | `confirmLabel` | `string` | No | `"Confirm"` | Confirm button label. |
 | `cancelLabel` | `string` | No | `"Cancel"` | Cancel button label. |
@@ -141,7 +141,6 @@ export function UserAccountUnlockActionDialog() {
           labelName: "Reason (Optional)",
         },
       ]}
-      defaultValues={{ reason: "" }}
       buildPayload={({ payload }) => {
         const reason =
           typeof payload.reason === "string" ? payload.reason.trim() : "";
@@ -191,7 +190,7 @@ Step-by-step dialog with shared form state across steps.
 | `abstractModelLabelName` | `string` | No | `title` or `abstractModelName` | Display name for abstract metadata model. |
 | `abstractFields` | `AbstractMetaField[]` | No | - | Field metadata for non-entity wizard forms. |
 | `zodSchema` | `ZodTypeAny` | No | - | Optional schema override. |
-| `defaultValues` | `DefaultValues` | No | `{}` | Initial form values. |
+| `defaultValues` | `DefaultValues` | No | `{}` | Runtime/contextual prefills for the dialog form in field UI shape. Use `FileInfo` / `FileInfo[]` for file fields and structured objects/arrays for `JSON` / `DTO` / `Filters` / `Orders`. Prefer `Field.defaultValue` or `metaField.defaultValue` for static create defaults. |
 | `recordId` | `string \| null` | No | - | Passed to field props resolver. |
 | `readOnly` | `boolean` | No | `false` | Force read-only mode. |
 | `cancelLabel` | `string` | No | `"Cancel"` | Cancel button label. |
@@ -263,8 +262,3 @@ import { WizardDialog } from "@/components/views/dialogs";
   }}
 />
 ```
-
-## Related
-
-- [Form page usage](./form)
-- [Table action usage](./table)

@@ -88,27 +88,35 @@ curl -X POST http://localhost:8080/import/importByTemplate \
 
 - `POST /import/dynamicImport`
 
-该接口接收 `multipart/form-data` 请求，主体字段使用 `ImportWizard` 对象。
+该接口接收 `multipart/form-data` 请求，包含：
+
+- `file`：上传的 Excel 文件
+- `wizard`：`ImportWizard` 的 JSON 载荷
 
 关键字段：
 
 - `modelName`：要导入的模型名
-- `file`：Excel 文件
 - `importRule`：`CreateOrUpdate` / `OnlyCreate` / `OnlyUpdate`
 - `uniqueConstraints`：逗号分隔的唯一约束字段列表
-- `importFieldStr`：表头到字段映射的 JSON 字符串
+- `importFieldDTOList`：表头到字段的映射列表
 - `ignoreEmpty`、`skipException`、`customHandler`、`syncImport`
 
 示例：
 
 ```bash
 curl -X POST http://localhost:8080/import/dynamicImport \
-  -F modelName=Product \
-  -F importRule=CreateOrUpdate \
-  -F uniqueConstraints=productCode \
-  -F importFieldStr='[{"header":"Product Code","fieldName":"productCode","required":true},{"header":"Product Name","fieldName":"productName","required":true},{"header":"Price","fieldName":"price"}]' \
-  -F syncImport=true \
-  -F file=@/path/to/import.xlsx
+  -F file=@/path/to/import.xlsx \
+  -F 'wizard={
+    "modelName":"Product",
+    "importRule":"CreateOrUpdate",
+    "uniqueConstraints":"productCode",
+    "importFieldDTOList":[
+      {"header":"Product Code","fieldName":"productCode","required":true},
+      {"header":"Product Name","fieldName":"productName","required":true},
+      {"header":"Price","fieldName":"price"}
+    ],
+    "syncImport":true
+  };type=application/json'
 ```
 
 ## 三、导入结果与失败行
@@ -122,6 +130,8 @@ curl -X POST http://localhost:8080/import/dynamicImport \
 你可以实现 `CustomImportHandler` 接口，并在 `ImportTemplate.customHandler` 或 `ImportWizard.customHandler` 中通过 Bean 名引用：
 
 ```java
+import io.softa.starter.file.excel.imports.CustomImportHandler;
+
 @Component("productImportHandler")
 public class ProductImportHandler implements CustomImportHandler {
     @Override
@@ -130,3 +140,9 @@ public class ProductImportHandler implements CustomImportHandler {
     }
 }
 ```
+
+约定：
+
+- 可以原地修改每一行的值。
+- 可以通过写入 `Failed Reason` 标记某一行为失败。
+- 不要新增、删除、重排或替换行对象。

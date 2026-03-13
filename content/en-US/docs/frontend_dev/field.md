@@ -56,7 +56,7 @@ Prefer direct use of `StringField`, `ReferenceField`, `JsonField`, `FieldDispatc
 | --- | --- | --- | --- |
 | `fieldName` | `string` | Yes | Metadata field key in current model. |
 | `widgetType` | `WidgetType` | No | Optional widget override. Must be compatible with metadata `fieldType`. |
-| `widgetProps` | `Record<string, unknown>` | No | Widget-specific config only. Parsed inside each widget. |
+| `widgetProps` | `Record<string, unknown>` | No | Widget-specific config only. Parsed inside each widget. Form widgets and inline editors use it; table read cells do not. |
 | `placeholder` | `string` | No | Field-level input placeholder. Prefer this over `widgetProps.placeholder`. |
 | `hideLabel` | `boolean` | No | Hides the whole label block. |
 | `fullWidth` | `boolean` | No | Layout hint for text-like and relation fields. |
@@ -65,7 +65,7 @@ Prefer direct use of `StringField`, `ReferenceField`, `JsonField`, `FieldDispatc
 | `required` | `FieldCondition` | No | Dynamic required control. Supports `boolean`, `FilterCondition`, or function. |
 | `readonly` | `FieldCondition` | No | Dynamic readonly control. Supports `boolean`, `FilterCondition`, or function. |
 | `hidden` | `FieldCondition` | No | Dynamic visibility control. Hidden fields are not rendered and their validation is suppressed. |
-| `defaultValue` | `unknown` | No | Metadata default value override. |
+| `defaultValue` | `unknown` | No | Create-only default override. Writes the initial form value and has higher priority than `metaField.defaultValue` and dialog/page `defaultValues`. |
 | `filters` | `string \| FilterCondition` | No | Relation filter override. `Field.filters` overrides `metaField.filters`. Supports JSON-string metadata filters and declarative `#{fieldName}` references. |
 | `onChange` | `FieldOnChangeProp` | No | Remote field linkage. Supports shorthand `string[]` or `{ update?, with? }`. |
 | `tableView` | `ReactElement<RelationTableViewProps>` | No | OneToMany / ManyToMany table config. Must be a `<RelationTableView />` element. |
@@ -101,16 +101,22 @@ Behavior notes:
 
 - `boolean`: simplest and most direct.
 - `FilterCondition`: recommended declarative form for common business rules.
-- `function`: escape hatch for advanced cases; receives current form values and edit-mode context.
+- `dependsOn([...], evaluator)`: explicit function-based condition with precise field subscriptions.
 - invalid `FilterCondition` configs emit a dev warning and resolve to `false`.
+- bare function conditions are not supported; wrap them with `dependsOn([...], evaluator)`.
+- the same condition model is also used by `Action.disabled` and `Action.visible` in form and table toolbars.
 - `hidden` suppresses both rendering and validation.
 - in `ModelTable` / `RelationTableView` inline edit, condition `values` is the current row object, not the whole form object.
 - in table declarations, `hidden` only supports `boolean` and hides the whole column.
+- `widgetProps` is not propagated into `ModelTable` / `RelationTableView` read-mode cell renderers.
+- `defaultValue` is intended for static field-level create defaults. Use dialog/page `defaultValues` only for runtime/contextual prefills such as route params, parent row values, or non-rendered fields.
 - `required={false}` can relax metadata `required`; `readonly={false}` can override metadata readonly.
 
 Examples:
 
 ```tsx
+import { dependsOn, Field } from "@/components/fields";
+
 <Field fieldName="status" readonly={true} />
 
 <Field fieldName="itemColor" hidden={["active", "=", false]} />
@@ -126,9 +132,9 @@ Examples:
 
 <Field
   fieldName="itemName"
-  required={({ values, isEditing }) =>
+  required={dependsOn(["active", "itemCode"], ({ values, isEditing }) =>
     !isEditing && values.active === true && values.itemCode !== "Temp"
-  }
+  )}
 />
 ```
 
@@ -286,6 +292,34 @@ Scope notes:
 
 - in `ModelForm`, `with: "all"` uses current form submit shape; registered top-level relation fields use relation patch payloads instead of raw UI rows.
 - in `ModelTable` / `RelationTableView` inline edit, `values` and `with: "all"` are the current row only, not the whole table or parent form.
+
+## Cascaded Fields
+
+`MetaField.cascadedField` enables implicit auto-fill in edit scopes without requiring the source field to declare `Field.onChange`.
+
+Example:
+
+```ts
+deptId.cascadedField = "employeeId.departmentId";
+companyId.cascadedField = "employeeId.department.companyId";
+```
+
+Behavior:
+
+- supported in `ModelForm`, `ModelTable` inline edit, and `RelationTableView` inline edit
+- source field must be `ManyToOne` or `OneToOne` and define `relatedModel`
+- when the source field changes, frontend requests `/<relatedModel>/getById` once and reads all dependent cascade paths from that response
+- multiple targets depending on the same source are resolved in one lookup
+- if the source field also declares `Field.onChange`, both effects run in parallel
+- if both effects write the same target field, `cascadedField` wins
+- clearing the source field clears all dependent cascaded targets without calling `getById`
+- invalid cascade metadata is ignored with a dev warning
+
+Syntax notes:
+
+- format is `<sourceField>.<path>`
+- `<sourceField>` must be a field in the same current scope
+- `<path>` is read from the source model `getById` response and may be nested
 
 ## FieldType And WidgetType Matrix
 
@@ -654,11 +688,28 @@ Remote query notes:
 - `ManyToMany` picker dialog merges `RelationTableView.initialParams.filters`, the effective field filter, internal relation-scoped filters, search filter, and column filters using `AND`
 - unresolved `#{fieldName}` dependencies pause remote picker / relation-table queries until the source value exists
 
+### Runtime Value Contracts
+
+`Field.defaultValue`, container `defaultValues`, `form.getValues()`, and `useWatch()` all work with field UI values, not raw API payload values.
+
+- `File`: UI value is `FileInfo | null`; submit value is `fileId | null`
+- `MultiFile`: UI value is `FileInfo[]`; submit value is `fileId[] | null`
+- `JSON` / `DTO`: committed values stay structured object/array data (or `null`)
+- `Filters`: committed value stays `FilterCondition | null`
+- `Orders`: committed value stays structured order tuples/arrays (or `null`)
+- backend payloads and metadata defaults may still arrive as strings; the field runtime normalizes them into these UI shapes on load
+- when you pass page/dialog `defaultValues`, use the UI shapes above directly instead of pre-stringifying values
+
 ### File Fields
 
 #### `File`
 
 Default behavior is generic file upload.
+
+Runtime value contract:
+
+- form/UI value is `FileInfo | null`
+- submit automatically extracts `fileId`
 
 ```tsx
 <Field fieldName="attachment" />
@@ -681,9 +732,21 @@ Use `Image` for image preview/upload mode:
 />
 ```
 
+Table read behavior:
+
+- `ModelTable` and `RelationTableView` read `FileInfo.url` directly for preview/link rendering
+- `widgetType="Image"` uses a compact thumbnail-only table cell and opens a preview dialog on click
+- plain `File` uses a downloadable filename link
+- table read cells intentionally ignore `widgetProps` such as `display="avatar"` and always use the compact table style
+
 #### `MultiFile`
 
 Default behavior is generic multi-file upload.
+
+Runtime value contract:
+
+- form/UI value is `FileInfo[]`
+- submit automatically extracts `fileId[]`
 
 ```tsx
 <Field fieldName="attachments" />
@@ -694,6 +757,13 @@ Use `MultiImage` for gallery upload mode:
 ```tsx
 <Field fieldName="photos" widgetType="MultiImage" />
 ```
+
+Table read behavior:
+
+- `ModelTable` and `RelationTableView` expect `FileInfo[]`
+- `widgetType="MultiImage"` uses a compact thumbnail summary plus `+N` and opens a gallery preview dialog on click
+- plain `MultiFile` uses the first filename link plus `+N`
+- read-mode table rows stay single-line / no-wrap; only active inline edit rows may expand for file widgets
 
 `Image` widget props:
 
@@ -727,6 +797,12 @@ Use `MultiImage` for gallery upload mode:
 
 Default behavior is CodeMirror-based JSON editor.
 
+Runtime value contract:
+
+- committed form value stays a structured object/array (or `null`)
+- the editor keeps a temporary text draft while focused, but blur/commit writes structured data back into the form
+- custom `defaultValues`, `getValues()`, and custom payload builders should treat these fields as structured data, not JSON strings
+
 ```tsx
 <Field fieldName="config" />
 <Field fieldName="payload" />
@@ -755,6 +831,11 @@ JSON editor widget props:
 
 Always uses the filter builder by default.
 
+Runtime value contract:
+
+- committed form value stays `FilterCondition | null`
+- prefer passing `FilterCondition` directly in `defaultValue` / `defaultValues`; string input is only normalized on load
+
 ```tsx
 <Field fieldName="filters" />
 ```
@@ -769,6 +850,11 @@ Always uses the filter builder by default.
 #### `Orders`
 
 Always uses the order builder by default.
+
+Runtime value contract:
+
+- committed form value stays structured order tuples/arrays (or `null`)
+- prefer passing structured order values directly in `defaultValue` / `defaultValues`; string input is only normalized on load
 
 ```tsx
 <Field fieldName="orders" />

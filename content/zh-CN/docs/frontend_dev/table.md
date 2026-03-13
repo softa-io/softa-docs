@@ -90,11 +90,36 @@ type ModelTableRowData = { id: string };
 表格声明说明：
 
 - `Field` 的顺序就是渲染列顺序
-- `widgetType`、`labelName`、`filters`、`defaultValue`、`onChange`，以及静态 `required` / `readonly` 覆盖，会同时复用于只读单元格和内联编辑器
+- `widgetType`、`labelName`、`filters`、`onChange`，以及静态 `required` / `readonly` 覆盖，会同时复用于只读单元格和内联编辑器
+- `defaultValue` 只用于创建态；在表格场景中，它只作用于关联行创建和内联编辑器，不作用于只读单元格
+- 内联编辑字段值与表单使用同一套 UI 值契约，例如 `File -> FileInfo | null`、`MultiFile -> FileInfo[]`，`JSON` / `DTO` / `Filters` / `Orders` 都保持结构化数据
+- 表格只读单元格不会消费 `widgetProps`；v1 统一使用紧凑型表格渲染器，而不是表单式 widget 变体
 - 对于内联编辑中的关联列（`ManyToOne` / `OneToOne`），`filters` 可以使用 `#{fieldName}`，并会在发送关联查询前基于当前编辑行解析
 - 后端环境 token，例如 `TODAY`、`NOW`、`USER_ID`、`USER_COMP_ID`，会原样透传；若后端需要把一个看起来像 token 的字符串视为字面量，可使用 `@{literal}`
 - 在表格声明里，`hidden` 只支持 `boolean`；`hidden={true}` 会移除整列
 - 条件式 `required` / `readonly` 支持内联编辑，但条件式 `hidden` 不支持
+
+更完整的字段值契约见 `src/components/fields/README.md`。
+
+## 文件与图片列
+
+表格侧的文件渲染基于 API 返回值，而不是表单 widget 状态：
+
+- `File` 期望值为 `FileInfo`
+- `MultiFile` 期望值为 `FileInfo[]`
+- 图片预览使用 `FileInfo.url`
+- 文件链接文案按 `fileName -> fileId -> "-"` 回退
+
+只读行为：
+
+- `File` + `widgetType="Image"` 会渲染紧凑缩略图，点击后打开图片预览对话框
+- `MultiFile` + `widgetType="MultiImage"` 会渲染紧凑缩略图摘要和 `+N`，点击后打开图库预览对话框
+- 普通 `File` 会渲染为指向 `FileInfo.url` 的可下载文件名链接
+- 普通 `MultiFile` 会渲染第一项文件名链接并附带 `+N`
+- 如果图片项没有 `url`，单元格会渲染紧凑占位框，而不是显示破图
+- 只读单元格始终保持单行/不换行；表格行不会因为多文件内容而整体展开
+
+这些紧凑型只读渲染器在关联表格（`RelationTableView`）的只读模式下也会复用
 
 ## Inline Edit
 
@@ -122,14 +147,16 @@ type ModelTableRowData = { id: string };
 </ModelTable>
 ```
 
-条件函数示例：
+`dependsOn()` 示例：
 
 ```tsx
+import { dependsOn, Field } from "@/components/fields";
+
 <Field
   fieldName="itemName"
-  required={({ values, scope, rowId }) =>
+  required={dependsOn(["active"], ({ values, scope, rowId }) =>
     scope === "model-table" && Boolean(rowId) && values.active === true
-  }
+  )}
 />
 ```
 
@@ -144,11 +171,13 @@ type ModelTableRowData = { id: string };
 - `Save` 仅通过更新 API 提交该行发生变化的可编辑字段
 - `Cancel` 会用最近一次加载的服务端快照恢复该行
 - 当当前行处于脏状态时，切换到另一行会提示确认是否丢弃更改
-- `required` / `readonly` 支持 `boolean`、`FilterCondition` 和 `(ctx) => boolean`
+- `required` / `readonly` 支持 `boolean`、`FilterCondition` 和 `dependsOn([...], evaluator)`
 - 内联编辑条件会基于当前行对象求值，`scope="model-table"`，并附带 `rowIndex` 与 `rowId`
 - 使用 `#{fieldName}` 的关联字段过滤条件也会基于当前行对象求值
 - 如果某个关联字段过滤条件依赖缺失，则该行的关联查询会保持禁用，而不是加载未过滤选项
 - 只有元数据可编辑且当前不处于有效只读状态的列才会成为内联编辑器；不支持的列仍保持只读
+- `File`、`MultiFile`、`Image`、`MultiImage` 支持内联编辑，并会在激活行中复用普通 `Field` 上传 widget
+- 激活的编辑行可能因文件/图片 widget 而增高；未激活行保持固定高度
 
 ### 远程 `Field.onChange`
 
@@ -349,8 +378,8 @@ const sideTree: SideTreeConfig = {
 | `className` | `string` | 否 | - | 外层容器 className。 |
 | `enableBulkDelete` | `boolean` | 否 | `true` | 启用内置批量删除。 |
 | `enableCreate` | `boolean` | 否 | `true` | 启用内置创建按钮。 |
-| `enableImport` | `boolean` | 否 | `true` | 启用 More 菜单中的导入项。 |
-| `enableExport` | `boolean` | 否 | `true` | 启用 More 菜单中的导出项。 |
+| `enableImport` | `boolean` | 否 | `true` | 启用 More 菜单中的内置导入对话框入口。 |
+| `enableExport` | `boolean` | 否 | `true` | 启用 More 菜单中的内置导出对话框入口。 |
 | `bulkEditFields` | `string[]` | 否 | - | 可选批量编辑白名单。未提供时内置批量编辑使用所有元数据字段。 |
 | `excludeFields` | `string[]` | 否 | - | 可选批量编辑黑名单。除保留字段外，这些字段也会被内置批量编辑排除。 |
 | `tabs` | `ModelTableTab[]` | 否 | - | 表头级可选 Tab 过滤。 |
@@ -360,6 +389,74 @@ const sideTree: SideTreeConfig = {
 | `sideTreeWidth` | `number` | 否 | `280` | 侧树初始宽度。 |
 | `sideTreeMinWidth` | `number` | 否 | `220` | 侧树最小宽度。 |
 | `sideTreeMaxWidth` | `number` | 否 | `560` | 侧树最大宽度。 |
+
+## 内置导入 / 导出
+
+`ModelTable` 在工具栏 `More` 菜单下内置了导入和导出对话框。
+当前没有额外的页面级配置对象；这些对话框会根据当前 `modelName`、表格查询状态、选中行、当前页数据和元数据自动推导行为。
+
+### 导入
+
+- 由 `enableImport` 控制
+- 对话框标签页：
+  - `By Template`
+  - `Dynamic Import`
+  - `My Import History`
+- 模板导入：
+  - 按 `modelName` 加载模板
+  - 支持下载模板
+  - 按配置模板提交上传文件
+- 动态导入：
+  - 在浏览器中解析上传的 `.xlsx` 工作簿
+  - 基于元数据自动将工作簿表头映射到模型字段
+  - 允许用户在提交前调整映射关系
+- 历史记录标签页：
+  - 加载当前模型的 `ImportHistory`
+  - 使用共享的关联表格字段渲染器渲染记录行
+  - 原始文件、失败文件等文件列依赖 `FileInfo.url` 生成下载链接
+
+### 导出
+
+- 由 `enableExport` 控制
+- 对话框标签页：
+  - `By Template`
+  - `Dynamic Export`
+  - `My Export History`
+- 模板导出：
+  - 按 `modelName` 加载导出模板
+  - 将当前导出范围作为 `ExportParams` 提交
+- 动态导出：
+  - 基于当前模型元数据生成候选字段
+  - 默认选中当前表格里可见的列
+  - 允许用户修改字段、文件名和 sheet 名
+  - 生成前端发起的 `.xlsx` 工作簿
+- 历史记录标签页：
+  - 加载当前模型的 `ExportHistory`
+  - 使用与普通表格文件列相同的 `FileInfo.url` 只读渲染行为展示导出文件链接
+
+### 导出范围规则
+
+内置导出支持三种范围：
+
+- `Selected Rows`
+- `Current Page`
+- `All Filtered Data`
+
+行为说明：
+
+- `Selected Rows` 使用当前工具栏批量选择的 id
+- `Current Page` 使用当前页 id 快照，而不是回放 `pageNumber/pageSize`
+- `All Filtered Data` 会复用当前的 `filters/orders/groupBy/aggFunctions/effectiveDate`
+- 前端单次导出请求最多支持 `100000` 条记录；超过限制的范围会直接禁用，而不是截断导出
+
+### 只读渲染器复用
+
+历史记录标签页会刻意复用现有的表格/关联表格字段渲染器。
+这意味着文件/历史行遵循与普通表格只读单元格相同的运行时契约：
+
+- `File` 期望值为 `FileInfo`
+- `MultiFile` 期望值为 `FileInfo[]`
+- 下载/预览链接直接取自 `FileInfo.url`
 
 ## `initialParams` 指南
 
@@ -482,15 +579,24 @@ type initialParams = QueryParamsWithoutFields;
 
 - `type="default" | "dialog" | "link" | "custom"`
 - `placement="inline" | "more"`
-- 通过 `ActionValue<T>`（`T` 或 `(context) => T`）支持动态参数：`disabled`、`visible`、`confirmMessage`、`successMessage`、`errorMessage`、`payload`
+- 通过 `ActionValue<T>`（`T` 或 `(context) => T`）支持动态参数：`confirmMessage`、`successMessage`、`errorMessage`、`payload`
+- `disabled` 和 `visible` 支持 `boolean`、`FilterCondition` 和 `dependsOn([...], evaluator)`
 - 在表格场景中：
   - `inline`：直接显示在最后一列
   - `more`：显示在最后一列的 More Actions 下拉菜单
+  - 激活中的内联编辑行会基于当前草稿行值解析 Action 上下文
+  - 当激活行处于脏状态时，点击行操作会先询问是否丢弃草稿再继续
+
+Action 条件说明：
+
+- `FilterCondition` 会基于当前行值求值，并支持 `#{fieldName}` 引用
+- 不支持裸函数条件；函数逻辑请包在 `dependsOn([...], evaluator)` 中
+- 如果没有行字段依赖，优先使用普通 `boolean`
 
 表格中的 Action 回调会收到行执行上下文：
 
 ```ts
-onClick: ({ id, modelName, row }) => void
+onClick: ({ id, modelName, scope, mode, isDirty, values, row }) => void
 ```
 
 ### 行操作：最小示例
@@ -532,7 +638,6 @@ function UnlockDialog() {
       abstractFields={[
         { fieldName: "reason", fieldType: "Text", labelName: "Reason" },
       ]}
-      defaultValues={{ reason: "" }}
     />
   );
 }
@@ -631,7 +736,6 @@ function BulkLockReasonDialog() {
       abstractFields={[
         { fieldName: "reason", fieldType: "Text", labelName: "Reason" },
       ]}
-      defaultValues={{ reason: "" }}
     />
   );
 }

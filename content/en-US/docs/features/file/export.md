@@ -1,4 +1,3 @@
-
 ## Data Export
 File Starter supports three export modes:
 - Export by template fields
@@ -110,6 +109,8 @@ You can register a Spring bean implementing `CustomExportHandler` and reference 
 `ExportTemplate.customHandler`.
 
 ```java
+import io.softa.starter.file.excel.export.support.CustomExportHandler;
+
 @Component("productExportHandler")
 public class ProductExportHandler implements CustomExportHandler {
     @Override
@@ -118,3 +119,7 @@ public class ProductExportHandler implements CustomExportHandler {
     }
 }
 ```
+
+Contract:
+- You may update row values in place.
+- You should not replace row map objects.

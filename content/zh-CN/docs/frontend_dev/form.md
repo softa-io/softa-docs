@@ -109,9 +109,23 @@ export default function EditUserAccountPage() {
 />
 ```
 
+`Field.defaultValue` 是创建态的字段级覆盖。静态页面默认值优先用它；对话框或页面级 `defaultValues` 更适合路由参数、父级上下文值这类动态预填。
+
+当你传容器级 `defaultValues` 时，请直接使用字段的 UI 值形态：
+
+- `File`：`FileInfo | null`
+- `MultiFile`：`FileInfo[]`
+- `JSON` / `DTO`：结构化对象或数组
+- `Filters`：`FilterCondition`
+- `Orders`：结构化的排序元组或数组
+
+更完整的字段值契约见 `src/components/fields/README.md`。
+
 `Field` 条件控制示例：
 
 ```tsx
+import { dependsOn, Field } from "@/components/fields";
+
 <Field fieldName="status" readonly={true} />
 
 <Field fieldName="itemColor" hidden={["active", "=", false]} />
@@ -127,9 +141,9 @@ export default function EditUserAccountPage() {
 
 <Field
   fieldName="itemName"
-  required={({ values, isEditing }) =>
+  required={dependsOn(["active", "itemCode"], ({ values, isEditing }) =>
     !isEditing && values.active === true && values.itemCode !== "Temp"
-  }
+  )}
 />
 ```
 
@@ -223,6 +237,11 @@ export default function EditUserAccountPage() {
 
 字段级输入占位文案请使用 `placeholder`。
 `widgetProps` 只用于 widget 专属配置。
+
+作用域说明：
+
+- `widgetProps` 会作用于 `ModelForm` widget 和表格内联编辑器，因为这两条路径都是直接渲染 `Field`
+- `ModelTable` / `RelationTableView` 的只读单元格不会消费 `widgetProps`；表格中的图片/文件列会使用 `src/components/views/table/README.md` 中说明的共享紧凑渲染器
 
 当前支持的示例：
 
@@ -642,8 +661,10 @@ Schema 优先级：`schemaBuilder` > `zodSchema` > 元数据推导的基础 sche
 
 运行时字段条件：
 
-- `Field.required`、`Field.readonly`、`Field.hidden` 支持 `boolean | FilterCondition | function`。
+- `Field.required`、`Field.readonly`、`Field.hidden` 支持 `boolean | FilterCondition | dependsOn(...)`。
 - 条件会基于当前表单值求值。
+- `FilterCondition` 会自动追踪左右操作数字段和本地 `#{fieldName}` 引用。
+- 函数条件必须包在 `dependsOn([...], evaluator)` 里；不支持裸函数。
 - `hidden` 字段不会渲染，并会抑制其校验错误。
 - `required={false}` 可以在运行时放宽元数据 `required`；`readonly={false}` 可以覆盖元数据只读。
 - `ModelForm`、`DialogForm` 和 `WizardDialog` 使用同一套运行时行为。
@@ -682,8 +703,8 @@ Schema 优先级：`schemaBuilder` > `zodSchema` > 元数据推导的基础 sche
 | ------------------- | ------------------------- | -------- | ------- | --------------------------------------------------------------------------------------------- |
 | `children`          | `ReactNode`               | 否       | -       | 自定义操作。推荐：`<Action type="..." />`。                                       |
 | `enableWorkflow`    | `boolean`                 | 否       | `false` | 是否启用工具栏左侧工作流操作组。仅在编辑模式且非只读时显示。|
-| `enableDuplicate`   | `boolean`                 | 否       | `true` | 内置复制操作；仅编辑模式且有记录 id 时显示。         |
-| `enableDelete`      | `boolean`                 | 否       | `true` | 内置删除操作；仅编辑模式且有记录 id 时显示。            |
+| `enableDuplicate`   | `boolean`                 | 否       | `true` | 内置复制操作。创建态下仍会显示，但默认禁用；路由只读模式也可使用。 |
+| `enableDelete`      | `boolean`                 | 否       | `true` | 内置删除操作。创建态下仍会显示，但默认禁用；路由只读模式也可使用。 |
 | `duplicatePlacement`| `"toolbar" \| "more"`     | 否       | `"more"` | 内置 Duplicate 的展示位置。                                     |
 | `deletePlacement`   | `"toolbar" \| "more"`     | 否       | `"more"` | 内置 Delete 的展示位置。                                        |
 | `moreActionsLabel`  | `string`                  | 否       | `"More Actions"` | More Actions 触发器文案。                                   |
@@ -696,7 +717,15 @@ Schema 优先级：`schemaBuilder` > `zodSchema` > 元数据推导的基础 sche
 `Action` 通过以下方式同时支持静态值与上下文动态值：
 
 ```ts
-type ActionValue<T> = T | ((context: { id: string | null; modelName?: string; row?: Record<string, unknown> }) => T);
+type ActionValue<T> = T | ((context: {
+  id: string | null;
+  modelName?: string;
+  scope: "form" | "model-table";
+  mode: "create" | "edit" | "read";
+  isDirty: boolean;
+  values?: Record<string, unknown>;
+  row?: Record<string, unknown>;
+}) => T);
 ```
 
 | Prop             | 类型                                    | 必填 | 默认值 | 说明                                                                 |
@@ -709,8 +738,8 @@ type ActionValue<T> = T | ((context: { id: string | null; modelName?: string; ro
 | `errorMessage`   | `ActionValue<string>`                   | 否       | -       | `default`/`dialog` 失败提示文案。               |
 | `icon`           | `ComponentType<{ className?: string }>` | 否       | -       | 操作图标。                                                          |
 | `destructive`    | `boolean`                               | 否       | `false` | 破坏性样式。                                                  |
-| `disabled`       | `ActionValue<boolean>`                  | 否       | `false` | 禁用状态。                                                       |
-| `visible`        | `ActionValue<boolean>`                  | 否       | `true` | 可见性控制。                                                   |
+| `disabled`       | `boolean \| FilterCondition \| dependsOn(...)` | 否 | `false` | 禁用状态。静态状态用 `boolean`，声明式值判断用 `FilterCondition`，显式函数逻辑用 `dependsOn([...], evaluator)`。 |
+| `visible`        | `boolean \| FilterCondition \| dependsOn(...)` | 否 | `true` | 可见性控制。与 `disabled` 使用相同条件模型。 |
 
 行为专属 props：
 
@@ -719,7 +748,14 @@ type ActionValue<T> = T | ((context: { id: string | null; modelName?: string; ro
 | 省略 `type` 或 `type="default"` | `operation` | - | 调用 `POST /{modelName}/{operation}`，当前记录 `id` 放 query params，可选 `payload` 放 body。`payload` 支持 `ActionValue<Record<string, unknown>>`。 |
 | `type="dialog"` | `operation`, `component` | - | `component={MyDialogComponent}`。弹窗开关、operation、成功/失败提示由 `Action` 注入。 |
 | `type="link"`   | `href`                  | `target="_self"` | `href` 支持 `string` 或 `({ id, modelName }) => string`。 |
-| `type="custom"` | `onClick`               | - | 纯 UI/本地行为。签名：`onClick({ id, modelName, row }) => void`。 |
+| `type="custom"` | `onClick`               | - | 纯 UI/本地行为。签名：`onClick({ id, modelName, scope, mode, isDirty, values, row }) => void`。 |
+
+Action 条件说明：
+
+- `disabled` 和 `visible` 与 `Field` 共用同一套运行时条件模型：`boolean`、`FilterCondition`、`dependsOn([...], evaluator)`
+- `FilterCondition` 会基于当前表单值求值，并自动追踪 `#{fieldName}` 引用
+- 不支持裸函数条件；函数逻辑请包在 `dependsOn([...], evaluator)` 里
+- 如果没有字段依赖，优先使用普通 `boolean`
 
 Action 类型示例：
 
@@ -773,6 +809,12 @@ Action 类型示例：
 `FormSection` 是局部 UI 操作区，不直接执行模型 API 操作。
 对于 API 操作（`default` / `dialog`），请将 Action 放在 `FormToolbar`。
 
+表单工具栏里的业务操作还遵循这些规则：
+
+- 编辑态且存在未保存修改时，点击业务操作会先询问是否丢弃修改再继续
+- 创建态下，内置 `Duplicate` / `Delete` 会保留显示但默认禁用
+- 内置 `Duplicate` 仍然调用后端 `copyById`；`BaseModel.reversedFields` 的排除由后端复制语义处理
+
 ### FormToolbar Action 示例
 
 最小示例：
@@ -812,7 +854,6 @@ function UnlockDialog() {
           labelName: "Reason",
         },
       ]}
-      defaultValues={{ reason: "" }}
     />
   );
 }

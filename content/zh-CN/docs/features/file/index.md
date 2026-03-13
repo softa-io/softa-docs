@@ -2,11 +2,20 @@
 
 File Starter 为开发者提供三大核心能力：
 
-- 数据导入
-- 数据导出
-- 文档导出（Word / PDF）
+- [数据导入](./import)
+- [数据导出](./export)
+- [文档导出（Word / PDF）](./document)
 
 本文主要从开发视角介绍能力边界和 API 使用方式，并作为导入/导出/文档导出三篇子文档的总览。
+
+## 代码结构
+
+Excel 模块按职责拆分如下：
+
+- `excel/export/strategy`：导出策略选择与具体导出实现
+- `excel/export/support`：导出共享支撑组件，例如数据获取、模板解析、写出、上传和自定义导出钩子
+- `excel/imports`：导入流水线、处理器工厂、失败收集、持久化和自定义导入钩子
+- `excel/style`：共享的 Excel 样式处理器
 
 ## 依赖
 
@@ -56,4 +65,3 @@ oss:
 - 多租户场景：`tenantId/modelName/TSID/fileName`
 
 其中 `TSID` 为全局唯一 ID，用于避免文件名冲突。
-

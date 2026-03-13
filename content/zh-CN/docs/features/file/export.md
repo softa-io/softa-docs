@@ -124,6 +124,8 @@ JSON
 你可以实现 `CustomExportHandler` 接口，并在 `ExportTemplate.customHandler` 中通过 Bean 名引用：
 
 ```java
+import io.softa.starter.file.excel.export.support.CustomExportHandler;
+
 @Component("productExportHandler")
 public class ProductExportHandler implements CustomExportHandler {
     @Override
@@ -132,3 +134,8 @@ public class ProductExportHandler implements CustomExportHandler {
     }
 }
 ```
+
+约定：
+
+- 可以原地修改每一行的值。
+- 不要替换行对应的 `Map` 对象本身。

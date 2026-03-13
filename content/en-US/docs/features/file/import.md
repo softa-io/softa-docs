@@ -1,4 +1,3 @@
-
 ## Data Import
 File Starter supports two import modes:
 - Import by configured template (ImportTemplate + ImportTemplateField)
@@ -75,25 +74,32 @@ curl -X POST http://localhost:8080/import/importByTemplate \
 Endpoint:
 - `POST /import/dynamicImport`
 
-This endpoint accepts a `multipart/form-data` payload with `ImportWizard` fields.
+This endpoint accepts a `multipart/form-data` payload with:
+- `file`: uploaded Excel file
+- `wizard`: JSON payload for `ImportWizard`
 
 Key fields:
 - `modelName`
-- `file`
 - `importRule`: `CreateOrUpdate` | `OnlyCreate` | `OnlyUpdate`
 - `uniqueConstraints`: comma-separated field names
-- `importFieldStr`: JSON string of header-to-field mappings
+- `importFieldDTOList`: header-to-field mappings
 - `ignoreEmpty`, `skipException`, `customHandler`, `syncImport`
 
 Example:
 ```bash
 curl -X POST http://localhost:8080/import/dynamicImport \
-  -F modelName=Product \
-  -F importRule=CreateOrUpdate \
-  -F uniqueConstraints=productCode \
-  -F importFieldStr='[{"header":"Product Code","fieldName":"productCode","required":true},{"header":"Product Name","fieldName":"productName","required":true},{"header":"Price","fieldName":"price"}]' \
-  -F syncImport=true \
-  -F file=@/path/to/import.xlsx
+  -F file=@/path/to/import.xlsx \
+  -F 'wizard={
+    "modelName":"Product",
+    "importRule":"CreateOrUpdate",
+    "uniqueConstraints":"productCode",
+    "importFieldDTOList":[
+      {"header":"Product Code","fieldName":"productCode","required":true},
+      {"header":"Product Name","fieldName":"productName","required":true},
+      {"header":"Price","fieldName":"price"}
+    ],
+    "syncImport":true
+  };type=application/json'
 ```
 
 ### 3. Import Result and Failed Rows
@@ -106,6 +112,8 @@ You can register a Spring bean implementing `CustomImportHandler` and reference 
 `ImportTemplate.customHandler` or `ImportWizard.customHandler`.
 
 ```java
+import io.softa.starter.file.excel.imports.CustomImportHandler;
+
 @Component("productImportHandler")
 public class ProductImportHandler implements CustomImportHandler {
     @Override
@@ -114,3 +122,8 @@ public class ProductImportHandler implements CustomImportHandler {
     }
 }
 ```
+
+Contract:
+- You may update row values in place.
+- You may mark a row failed by writing `Failed Reason`.
+- Do not add, remove, reorder, or replace row objects.
