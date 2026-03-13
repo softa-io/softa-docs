@@ -121,6 +121,27 @@ Read-mode behavior:
 
 These same compact read renderers are also used by relation tables (`RelationTableView`) in read mode.
 
+## XToMany Read Cells
+
+`OneToMany` and `ManyToMany` table cells use a compact tag-list renderer in read mode.
+
+Read-mode behavior:
+
+- values are treated as relation-like arrays, typically `ModelReference[]`
+- each item renders as a compact tag using `displayName`, then `id` as fallback
+- if no item can produce a label, the cell falls back to a count summary such as `3 items`
+- this applies to both `ModelTable` and `RelationTableView` read cells
+- `widgetType="TagList"` does not change the read cell renderer; it only enables the searchable multi-select editor for `ManyToMany` in forms and inline edit
+
+Example:
+
+```tsx
+<ModelTable modelName="UserRole">
+  <Field fieldName="name" />
+  <Field fieldName="userIds" widgetType="TagList" />
+</ModelTable>
+```
+
 ## Inline Edit
 
 `ModelTable` supports optional row-level inline editing.
@@ -177,6 +198,8 @@ Behavior:
 - if a relation-field filter dependency is missing, that row's relation query stays disabled instead of loading unfiltered options
 - only metadata-editable and not effectively readonly columns become inline editors; unsupported columns stay read-only
 - `File`, `MultiFile`, `Image`, and `MultiImage` participate in inline edit and reuse the normal `Field` upload widgets inside the active row
+- `OneToMany` stays read-only in table inline edit
+- `ManyToMany` participates in table inline edit only when `widgetType="TagList"`; otherwise it stays read-only
 - active edit rows may grow vertically for file/image widgets; non-active rows remain fixed-height
 
 ### Remote `Field.onChange`

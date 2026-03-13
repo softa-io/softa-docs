@@ -121,6 +121,27 @@ type ModelTableRowData = { id: string };
 
 这些紧凑型只读渲染器在关联表格（`RelationTableView`）的只读模式下也会复用
 
+## XToMany 只读单元格
+
+`OneToMany` 和 `ManyToMany` 在表格只读模式下会使用紧凑标签列表渲染器。
+
+只读行为：
+
+- 值会被视为关系数组，典型形态为 `ModelReference[]`
+- 每一项优先用 `displayName` 渲染标签，没有时回退到 `id`
+- 如果没有任何一项能生成标签文案，单元格会回退为类似 `3 items` 的数量摘要
+- 这一行为同时适用于 `ModelTable` 和 `RelationTableView` 的只读单元格
+- `widgetType="TagList"` 不会改变只读单元格渲染器；它只会为表单和内联编辑中的 `ManyToMany` 启用可搜索多选编辑器
+
+示例：
+
+```tsx
+<ModelTable modelName="UserRole">
+  <Field fieldName="name" />
+  <Field fieldName="userIds" widgetType="TagList" />
+</ModelTable>
+```
+
 ## Inline Edit
 
 `ModelTable` 支持可选的行级内联编辑。
@@ -177,6 +198,8 @@ import { dependsOn, Field } from "@/components/fields";
 - 如果某个关联字段过滤条件依赖缺失，则该行的关联查询会保持禁用，而不是加载未过滤选项
 - 只有元数据可编辑且当前不处于有效只读状态的列才会成为内联编辑器；不支持的列仍保持只读
 - `File`、`MultiFile`、`Image`、`MultiImage` 支持内联编辑，并会在激活行中复用普通 `Field` 上传 widget
+- `OneToMany` 在表格内联编辑中保持只读
+- `ManyToMany` 只有在 `widgetType="TagList"` 时才支持表格内联编辑；否则保持只读
 - 激活的编辑行可能因文件/图片 widget 而增高；未激活行保持固定高度
 
 ### 远程 `Field.onChange`

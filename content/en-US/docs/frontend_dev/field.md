@@ -341,7 +341,7 @@ Current supported combinations:
 | `MultiOption` | checkbox group | `CheckBox` |
 | `ManyToOne` | reference select | `SelectTree` |
 | `OneToOne` | reference select | `SelectTree` |
-| `ManyToMany` | relation table + picker dialog | - |
+| `ManyToMany` | relation table + picker dialog | `SelectTree`, `TagList` |
 | `OneToMany` | relation table | - |
 | `File` | file upload | `Image` |
 | `MultiFile` | multi-file upload | `MultiImage` |
@@ -653,7 +653,7 @@ Default submit behavior is incremental patch map:
 
 #### `ManyToMany`
 
-Rendered as relation table + picker dialog.
+Rendered as relation table + picker dialog by default.
 
 ```tsx
 const userTableView = (
@@ -674,6 +674,26 @@ const userTableView = (
 <Field fieldName="userIds" tableView={userTableView} />
 ```
 
+`widgetType="TagList"` switches `ManyToMany` to a searchable multi-select dropdown with tags rendered below the trigger. The field UI value is `ModelReference[]`, while top-level `ModelForm` submit still uses the normal incremental patch map.
+
+Typical form usage:
+
+```tsx
+<Field
+  fieldName="userIds"
+  widgetType="TagList"
+  tableView={userTableView}
+/>
+```
+
+`TagList` behavior:
+
+- searchable dropdown with multi-select interactions
+- selected values are rendered as tags below the trigger
+- trigger text stays compact and only shows selection count
+- field layout follows the surrounding `FormSection` columns by default; pass `fullWidth` explicitly when you want it to span the whole row
+- top-level `ModelForm` `getById` only adds the field name to `fields`; it does not add a relation `subQuery`
+
 Default submit behavior is incremental patch map:
 
 ```json
@@ -687,6 +707,7 @@ Remote query notes:
 
 - `ManyToMany` picker dialog merges `RelationTableView.initialParams.filters`, the effective field filter, internal relation-scoped filters, search filter, and column filters using `AND`
 - unresolved `#{fieldName}` dependencies pause remote picker / relation-table queries until the source value exists
+- `ModelTable` / `RelationTableView` read-mode cells render both `OneToMany` and `ManyToMany` as compact tag lists using `displayName -> id` fallback instead of JSON strings
 
 ### Runtime Value Contracts
 

@@ -342,7 +342,7 @@ companyId.cascadedField = "employeeId.department.companyId";
 | `MultiOption` | 复选框组 | `CheckBox` |
 | `ManyToOne` | 关联选择器 | `SelectTree` |
 | `OneToOne` | 关联选择器 | `SelectTree` |
-| `ManyToMany` | 关联表格 + 选择器对话框 | - |
+| `ManyToMany` | 关联表格 + 选择器对话框 | `SelectTree`, `TagList` |
 | `OneToMany` | 关联表格 | - |
 | `File` | 文件上传 | `Image` |
 | `MultiFile` | 多文件上传 | `MultiImage` |
@@ -654,7 +654,7 @@ const optionItemsTableView = (
 
 #### `ManyToMany`
 
-渲染为关联表格 + 选择器对话框。
+默认渲染为关联表格 + 选择器对话框。
 
 ```tsx
 const userTableView = (
@@ -675,6 +675,26 @@ const userTableView = (
 <Field fieldName="userIds" tableView={userTableView} />
 ```
 
+`widgetType="TagList"` 会把 `ManyToMany` 切换为带搜索能力的多选下拉模式，并在触发器下方渲染标签列表。字段 UI 值是 `ModelReference[]`，但顶层 `ModelForm` 提交仍然使用常规的增量 patch map。
+
+典型表单用法：
+
+```tsx
+<Field
+  fieldName="userIds"
+  widgetType="TagList"
+  tableView={userTableView}
+/>
+```
+
+`TagList` 行为：
+
+- 带搜索能力的多选下拉交互
+- 已选值会在触发器下方渲染为标签
+- 触发器文案保持紧凑，只显示已选数量
+- 字段布局默认跟随当前 `FormSection` 的列布局；如果希望横跨整行，请显式传 `fullWidth`
+- 顶层 `ModelForm` 的 `getById` 只会把字段名加入 `fields`，不会额外添加关系 `subQuery`
+
 默认提交行为是增量 patch map：
 
 ```json
@@ -688,6 +708,7 @@ const userTableView = (
 
 - `ManyToMany` 选择器对话框会将 `RelationTableView.initialParams.filters`、有效字段过滤条件、内部 relation-scope 过滤条件、搜索过滤条件和列过滤条件统一以 `AND` 合并
 - 未解析出的 `#{fieldName}` 依赖会暂停远程 picker / 关联表格查询，直到源值出现
+- `ModelTable` / `RelationTableView` 的只读单元格会把 `OneToMany` 和 `ManyToMany` 都渲染为紧凑标签列表，标签文本按 `displayName -> id` 回退，而不是显示 JSON 字符串
 
 ### 运行时值契约
 
