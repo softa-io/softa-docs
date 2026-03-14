@@ -81,7 +81,7 @@ Validation behavior:
 
 Need custom variations? Use `useModelFormContext()` in children and rearrange `FormHeader/FormToolbar/FormBody` directly.
 
-Canonical field and widget usage now lives in [fields](./fields).
+Canonical field and widget usage now lives in [Fields & Widgets](./field).
 Use that document for:
 
 - `Field` props and metadata overrides

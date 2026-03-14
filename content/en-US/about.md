@@ -33,10 +33,10 @@ Softa reduces repeated plumbing and helps you keep consistency across UI, APIs, 
 
 ## Get involved
 
-- **Start here**: [Quick Start](/docs/start/quickStart)
-- **Learn the architecture**: [Architecture](/docs/arch)
-- **See what’s included**: [Features](/docs/features)
-- **Contribute**: [Contribution guide](/docs/contribution)
+- **Start here**: [Quick Start](./docs/start/quickStart)
+- **Learn the architecture**: [Architecture](./docs/arch)
+- **See what’s included**: [Features](./docs/features)
+- **Contribute**: [Contribution guide](./docs/contribution)
 - **Source code**: `https://github.com/softa-io/softa`
 
 ## Thanks

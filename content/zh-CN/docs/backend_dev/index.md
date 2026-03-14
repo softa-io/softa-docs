@@ -5,7 +5,7 @@
 ## 主题
 
 - [创建新应用](./newApp)
-- [数据查询](./query/concept)
+- [API 操作](./api/concept)
 - [多语言翻译](./i18n)
 - [多数据源](./datasource)
 - [多数据库](./database)

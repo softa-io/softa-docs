@@ -39,7 +39,7 @@ Permission configuration metadata refers to the structured information used in e
 
 By configuring permission metadata, permission strategies can be flexibly adjusted to meet different business needs and achieve complex fine-grained permission control, such as controlling data access at the row and column levels based on different attribute conditions. This is particularly important in medium to large enterprise systems, enhancing the system's security, flexibility, and maintainability.
 
-For more details, refer to [Permission Control](security/access).
+For more details, refer to [Permission Control](./features/security/access).
 
 (4) Import/Export Metadata
 

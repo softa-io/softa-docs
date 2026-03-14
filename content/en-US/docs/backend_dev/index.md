@@ -5,7 +5,7 @@ Deep dives and advanced topics for building real-world apps on Softa.
 ## Topics
 
 - [Create New App](./newApp)
-- [Data Query](./query/concept)
+- [API Operation](./api/concept)
 - [Multi-language](./i18n)
 - [Multi-datasource](./datasource)
 - [Multi-database](./database)
