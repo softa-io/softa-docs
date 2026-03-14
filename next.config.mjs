@@ -1,4 +1,7 @@
 import nextra from 'nextra'
+import remarkSourceRelativeDocLinks from './plugins/remark-source-relative-doc-links.mjs'
+
+const contentDirBasePath = '/'
 
 const withNextra = nextra({
   latex: false,
@@ -6,8 +9,14 @@ const withNextra = nextra({
     codeblocks: false
   },
   defaultShowCopyCode: true,
+  mdxOptions: {
+    remarkPlugins: [
+      // Resolve doc links relative to the source markdown file, not the rendered URL.
+      [remarkSourceRelativeDocLinks, { contentDir: 'content', contentDirBasePath }]
+    ]
+  },
   // Using `content/` directory convention.
-  contentDirBasePath: '/'
+  contentDirBasePath
 })
 
 export default withNextra({
