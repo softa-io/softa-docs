@@ -2,6 +2,7 @@ import nextra from 'nextra'
 import remarkSourceRelativeDocLinks from './plugins/remark-source-relative-doc-links.mjs'
 
 const contentDirBasePath = '/'
+const isProductionBuild = process.env.NODE_ENV === 'production'
 
 const withNextra = nextra({
   latex: false,
@@ -21,7 +22,10 @@ const withNextra = nextra({
 
 export default withNextra({
   reactStrictMode: true,
-  output: 'export',
+  // Keep static export for production builds, but let `next dev` use normal
+  // routing so catch-all docs routes can fall through to 404 without the
+  // export-mode "missing param in generateStaticParams" runtime error.
+  output: isProductionBuild ? 'export' : undefined,
   trailingSlash: true,
   images: {
     unoptimized: true,

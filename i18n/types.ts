@@ -37,11 +37,20 @@ export type NotFoundMessages = {
   title: string
 }
 
+export type SiteNavMessages = {
+  aboutLabel: string
+  docsLabel: string
+  githubAria: string
+  openApiHref: string
+  openApiLabel: string
+}
+
 export type AppMessages = {
   docs: DocsMessages
   localeSwitch: LocaleSwitchMessages
   notFound: NotFoundMessages
   redirect: RedirectMessages
+  siteNav: SiteNavMessages
 }
 
 export type HomeQuickLink =

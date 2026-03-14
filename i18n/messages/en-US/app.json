@@ -33,5 +33,12 @@
     "chooseLanguage": "Please choose a language:",
     "jsRequired": "JavaScript is required for automatic locale routing on static hosting.",
     "redirecting": "Redirecting…"
+  },
+  "siteNav": {
+    "aboutLabel": "About",
+    "docsLabel": "Docs",
+    "githubAria": "GitHub repository",
+    "openApiHref": "https://api.softa.io",
+    "openApiLabel": "OpenAPI"
   }
 }

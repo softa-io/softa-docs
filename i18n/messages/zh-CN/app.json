@@ -33,5 +33,12 @@
     "chooseLanguage": "请选择语言：",
     "jsRequired": "静态托管场景下，自动语言路由需要启用 JavaScript。",
     "redirecting": "正在跳转…"
+  },
+  "siteNav": {
+    "aboutLabel": "关于",
+    "docsLabel": "文档",
+    "githubAria": "GitHub 仓库",
+    "openApiHref": "https://api-cn.softa.io",
+    "openApiLabel": "OpenAPI"
   }
 }
