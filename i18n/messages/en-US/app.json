@@ -1,0 +1,37 @@
+{
+  "docs": {
+    "backToTop": "Back to top",
+    "dark": "Dark",
+    "editPage": "Edit this page on GitHub →",
+    "feedback": "Question? Give us feedback →",
+    "lastUpdated": "Last updated on",
+    "light": "Light",
+    "searchEmptyResult": "No results found.",
+    "searchError": "Failed to load search index.",
+    "searchLoading": "Loading…",
+    "searchPlaceholder": "Search docs…",
+    "system": "System",
+    "tocTitle": "On this page"
+  },
+  "localeSwitch": {
+    "buttonAria": "Language",
+    "menuAria": "Language menu"
+  },
+  "notFound": {
+    "aboutLabel": "About Softa",
+    "backendLabel": "Backend Development",
+    "badge": "404",
+    "description": "The page may have moved, the link may be outdated, or the URL may be incorrect.",
+    "docsLabel": "Docs overview",
+    "frontendLabel": "Frontend Development",
+    "hint": "Try search, return to the docs home, or continue from a familiar section.",
+    "primaryLabel": "Go to docs home",
+    "secondaryLabel": "Back to site home",
+    "title": "Page not found"
+  },
+  "redirect": {
+    "chooseLanguage": "Please choose a language:",
+    "jsRequired": "JavaScript is required for automatic locale routing on static hosting.",
+    "redirecting": "Redirecting…"
+  }
+}

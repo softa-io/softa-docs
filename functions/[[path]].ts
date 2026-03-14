@@ -14,7 +14,7 @@ import {
   detectPreferredLocaleFromHeaders,
   ensureTrailingSlash,
   readPreferredLocaleFromCookie
-} from '../app/_utils/locales'
+} from '../i18n/routing'
 
 export async function onRequest(context: any) {
   const request: Request = context.request

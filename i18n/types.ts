@@ -1,3 +1,49 @@
+export type DocsMessages = {
+  backToTop: string
+  dark: string
+  editPage: string
+  feedback: string
+  lastUpdated: string
+  light: string
+  searchEmptyResult: string
+  searchError: string
+  searchLoading: string
+  searchPlaceholder: string
+  system: string
+  tocTitle: string
+}
+
+export type LocaleSwitchMessages = {
+  buttonAria: string
+  menuAria: string
+}
+
+export type RedirectMessages = {
+  chooseLanguage: string
+  jsRequired: string
+  redirecting: string
+}
+
+export type NotFoundMessages = {
+  aboutLabel: string
+  backendLabel: string
+  badge: string
+  description: string
+  docsLabel: string
+  frontendLabel: string
+  hint: string
+  primaryLabel: string
+  secondaryLabel: string
+  title: string
+}
+
+export type AppMessages = {
+  docs: DocsMessages
+  localeSwitch: LocaleSwitchMessages
+  notFound: NotFoundMessages
+  redirect: RedirectMessages
+}
+
 export type HomeQuickLink =
   | { title: string; href: string }
   | { title: string; href: string; external: true }
@@ -17,13 +63,18 @@ export type HomePill = {
   label: string
 }
 
+export type HomeFlowPair = {
+  from: string
+  to: string
+}
+
 export type HomeFeature = {
   icon: string
   title: string
   desc: string
 }
 
-export type HomeDictionary = {
+export type HomeMessages = {
   hero: {
     badge: string
     h1: string
@@ -37,31 +88,27 @@ export type HomeDictionary = {
     previewEyebrow: string
     previewTitle: string
     previewDesc: string
+    diagramRows: HomeFlowPair[]
   }
-
   features: {
     title: string
     subtitle: string
     items: HomeFeature[]
   }
-
   workflow: {
     title: string
     subtitle: string
     steps: HomeCard[]
   }
-
   values: {
     title: string
     subtitle: string
     items: HomeCard[]
   }
-
   principles: {
     title: string
     items: HomeIconCard[]
   }
-
   closing: {
     title: string
     desc: string
@@ -70,4 +117,9 @@ export type HomeDictionary = {
     linksTitle: string
     links: HomeQuickLink[]
   }
+}
+
+export type MessagesByNamespace = {
+  app: AppMessages
+  home: HomeMessages
 }

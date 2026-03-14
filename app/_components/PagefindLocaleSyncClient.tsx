@@ -2,7 +2,7 @@
 
 import { usePathname } from 'next/navigation'
 import { useEffect, useRef } from 'react'
-import { DEFAULT_LOCALE, normalizeLocale } from '../_utils/locales'
+import { getLocaleFromPathname } from '../../i18n/routing'
 
 declare global {
   interface Window {
@@ -11,11 +11,6 @@ declare global {
       options?: (opts: unknown) => Promise<void> | void
     }
   }
-}
-
-function getLocaleFromPathname(pathname: string) {
-  const seg = pathname.split('/')[1] || ''
-  return normalizeLocale(seg) ?? DEFAULT_LOCALE
 }
 
 /**
@@ -51,4 +46,3 @@ export function PagefindLocaleSyncClient() {
 
   return null
 }
-

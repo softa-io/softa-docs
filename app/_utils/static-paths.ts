@@ -2,7 +2,7 @@ import 'server-only'
 
 import { readdir } from 'node:fs/promises'
 import { join, relative, sep } from 'node:path'
-import { SUPPORTED_LOCALES } from './locales'
+import { SUPPORTED_LOCALES } from '../../i18n/config'
 
 function isMarkdownFile(name: string) {
   return name.endsWith('.md') || name.endsWith('.mdx')

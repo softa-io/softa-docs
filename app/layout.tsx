@@ -5,6 +5,7 @@ import 'nextra-theme-docs/style.css'
 import '../style.css'
 import { HtmlLangSyncScript } from './_components/HtmlLangSyncScript'
 import { PagefindLocaleSyncClient } from './_components/PagefindLocaleSyncClient'
+import { DEFAULT_LOCALE } from '../i18n/config'
 
 export const metadata: Metadata = {
   title: {
@@ -31,7 +32,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   // Root layout is required by Next.js and is the only place
   // we can import global CSS when using the App Router.
   return (
-    <html lang="en-US" dir="ltr" suppressHydrationWarning>
+    <html lang={DEFAULT_LOCALE} dir="ltr" suppressHydrationWarning>
       <body>
         <HtmlLangSyncScript />
         <PagefindLocaleSyncClient />

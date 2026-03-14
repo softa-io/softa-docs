@@ -3,37 +3,25 @@
 import { Globe } from 'lucide-react'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { DEFAULT_LOCALE, normalizeLocale, SUPPORTED_LOCALES, type Locale } from '../_utils/locales'
+import { getAppMessages } from '../../i18n/get-messages'
+import {
+  getLocaleFromPathname,
+  LOCALE_LABELS,
+  switchLocalePath,
+  SUPPORTED_LOCALES,
+  type Locale
+} from '../../i18n/routing'
 
 function persistLocale(locale: Locale) {
   const maxAge = 60 * 60 * 24 * 365
   document.cookie = `SOFTA_LOCALE=${encodeURIComponent(locale)}; Path=/; Max-Age=${maxAge}; SameSite=Lax`
 }
 
-function getCurrentLocale(pathname: string): Locale {
-  const seg = pathname.split('/')[1] || ''
-  return normalizeLocale(seg) ?? DEFAULT_LOCALE
-}
-
-function switchLocalePath(pathname: string, nextLocale: Locale) {
-  const parts = pathname.split('/')
-  const current = parts[1] || ''
-  const currentLocale = normalizeLocale(current)
-
-  if (currentLocale) parts[1] = nextLocale
-  else parts.splice(1, 0, nextLocale)
-
-  return parts.join('/') || `/${nextLocale}`
-}
-
-function localeLabel(locale: Locale) {
-  return locale === 'en-US' ? 'English' : '简体中文'
-}
-
 export function LocaleSwitchClient() {
   const router = useRouter()
   const pathname = usePathname() || '/'
-  const current = getCurrentLocale(pathname)
+  const current = getLocaleFromPathname(pathname)
+  const messages = getAppMessages(current)
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement | null>(null)
 
@@ -47,7 +35,7 @@ export function LocaleSwitchClient() {
     () =>
       SUPPORTED_LOCALES.map(l => ({
         locale: l,
-        label: localeLabel(l)
+        label: LOCALE_LABELS[l]
       })),
     []
   )
@@ -67,7 +55,7 @@ export function LocaleSwitchClient() {
     <div ref={rootRef} style={{ position: 'relative', display: 'inline-flex' }}>
       <button
         type="button"
-        aria-label="Language"
+        aria-label={messages.localeSwitch.buttonAria}
         aria-haspopup="menu"
         aria-expanded={open ? 'true' : 'false'}
         onClick={() => setOpen(v => !v)}
@@ -93,13 +81,13 @@ export function LocaleSwitchClient() {
         }}
       >
         <Globe size={16} aria-hidden="true" />
-        <span>{localeLabel(current)}</span>
+        <span>{LOCALE_LABELS[current]}</span>
       </button>
 
       {open ? (
         <div
           role="menu"
-          aria-label="Language menu"
+          aria-label={messages.localeSwitch.menuAria}
           style={{
             position: 'absolute',
             top: 36,

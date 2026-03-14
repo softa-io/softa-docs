@@ -7,10 +7,10 @@ import {
 import { Search } from 'nextra/components'
 import { getPageMap } from 'nextra/page-map'
 import { cache, type ReactNode } from 'react'
+import { getAppMessages } from '../../i18n/get-messages'
+import { DEFAULT_LOCALE, normalizeLocale } from '../../i18n/routing'
 import { LocaleSwitchClient } from '../_components/LocaleSwitchClient'
 import { NavbarActiveFix } from '../_components/NavbarActiveFix'
-import { getDictionary, getDirection } from '../_dictionaries/get-dictionary'
-import { DEFAULT_LOCALE, normalizeLocale } from '../_utils/locales'
 
 type LayoutProps = Readonly<{
   children: ReactNode
@@ -26,8 +26,8 @@ export default async function DocsLayout({ children, params }: LayoutProps) {
   const locale = normalizeLocale(mdxPath?.[0]) ?? DEFAULT_LOCALE
   const isLocaleHome = mdxPath.length <= 1
 
-  const direction = getDirection(locale)
-  const dictionary = await getDictionary(locale)
+  const direction = 'ltr' as const
+  const messages = getAppMessages(locale)
   const pageMap = await getPageMapByRoute(`/${locale}`)
 
   // Avoid a visible "flash" where "Home" briefly appears active/bold on subroutes.
@@ -78,30 +78,30 @@ export default async function DocsLayout({ children, params }: LayoutProps) {
         copyPageButton={false}
         darkMode={true}
         docsRepositoryBase="https://github.com/softa-io/softa-docs"
-        editLink={dictionary.editPage}
-        feedback={{ content: dictionary.feedback }}
+        editLink={messages.docs.editPage}
+        feedback={{ content: messages.docs.feedback }}
         footer={footer}
         lastUpdated={
-          <LastUpdated locale={locale}>{dictionary.lastUpdated}</LastUpdated>
+          <LastUpdated locale={locale}>{messages.docs.lastUpdated}</LastUpdated>
         }
         navbar={navbar}
         pageMap={pageMap}
         search={
           <Search
-            emptyResult={dictionary.searchEmptyResult}
-            errorText={dictionary.searchError}
-            loading={dictionary.searchLoading}
-            placeholder={dictionary.searchPlaceholder}
+            emptyResult={messages.docs.searchEmptyResult}
+            errorText={messages.docs.searchError}
+            loading={messages.docs.searchLoading}
+            placeholder={messages.docs.searchPlaceholder}
           />
         }
         themeSwitch={{
-          dark: dictionary.dark,
-          light: dictionary.light,
-          system: dictionary.system
+          dark: messages.docs.dark,
+          light: messages.docs.light,
+          system: messages.docs.system
         }}
         toc={{
-          backToTop: dictionary.backToTop,
-          title: dictionary.tocTitle
+          backToTop: messages.docs.backToTop,
+          title: messages.docs.tocTitle
         }}
       >
         {children}

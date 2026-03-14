@@ -1,4 +1,10 @@
-import { DEFAULT_LOCALE, ensureTrailingSlash, LOCALE_LABELS, SUPPORTED_LOCALES } from '../_utils/locales'
+import { getAppMessages } from '../../i18n/get-messages'
+import {
+  DEFAULT_LOCALE,
+  ensureTrailingSlash,
+  LOCALE_LABELS,
+  SUPPORTED_LOCALES
+} from '../../i18n/routing'
 
 function escapeJsStringLiteral(value: string) {
   return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
@@ -7,6 +13,7 @@ function escapeJsStringLiteral(value: string) {
 export function LocaleRedirectScript({ originalPathname }: { originalPathname: string }) {
   const path = originalPathname || '/'
   const normalizedPath = ensureTrailingSlash(path)
+  const messages = getAppMessages(DEFAULT_LOCALE).redirect
   const pathLiteral = escapeJsStringLiteral(normalizedPath)
   const defaultLocaleLiteral = escapeJsStringLiteral(DEFAULT_LOCALE)
   const supportedLiteral = escapeJsStringLiteral(JSON.stringify(SUPPORTED_LOCALES))
@@ -61,12 +68,9 @@ export function LocaleRedirectScript({ originalPathname }: { originalPathname: s
 
   return (
     <main style={{ padding: 24 }}>
-      <p>Redirecting…</p>
+      <p>{messages.redirecting}</p>
       <noscript>
-        <p>
-          JavaScript is required for automatic locale routing on static hosting. Please choose a
-          language:
-        </p>
+        <p>{`${messages.jsRequired} ${messages.chooseLanguage}`}</p>
         <ul>
           {SUPPORTED_LOCALES.map((l) => (
             <li key={l}>

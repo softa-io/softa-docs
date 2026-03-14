@@ -20,7 +20,11 @@
     ],
     "previewEyebrow": "Product preview",
     "previewTitle": "From metadata to UI & APIs",
-    "previewDesc": "Model once, ship consistent UI, API, and automation—with guardrails for security and evolution."
+    "previewDesc": "Model once, ship consistent UI, API, and automation—with guardrails for security and evolution.",
+    "diagramRows": [
+      { "from": "Metadata", "to": "UI / API" },
+      { "from": "Flow / AI", "to": "Governance" }
+    ]
   },
   "features": {
     "title": "Powerful capabilities, built for real systems",

@@ -20,7 +20,11 @@
     ],
     "previewEyebrow": "能力预览",
     "previewTitle": "从元数据到 UI 与 API",
-    "previewDesc": "一次建模，统一生成 UI、API 与自动化，并以安全与演进治理作为底层护栏。"
+    "previewDesc": "一次建模，统一生成 UI、API 与自动化，并以安全与演进治理作为底层护栏。",
+    "diagramRows": [
+      { "from": "元数据", "to": "UI / API" },
+      { "from": "流程 / AI", "to": "治理" }
+    ]
   },
   "features": {
     "title": "强大能力，为真实系统而生",

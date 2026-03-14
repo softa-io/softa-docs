@@ -1,4 +1,5 @@
 import Script from 'next/script'
+import { DEFAULT_LOCALE, SUPPORTED_LOCALES } from '../../i18n/config'
 
 /**
  * Pagefind (and some other libs) pick language by reading <html lang="..."> at runtime.
@@ -6,6 +7,9 @@ import Script from 'next/script'
  * as early as possible based on the first path segment.
  */
 export function HtmlLangSyncScript() {
+  const supportedLiteral = JSON.stringify(SUPPORTED_LOCALES)
+  const defaultLocaleLiteral = DEFAULT_LOCALE
+
   return (
     <Script id="softa-html-lang-sync" strategy="beforeInteractive">
       {`
@@ -13,16 +17,26 @@ export function HtmlLangSyncScript() {
   try {
     var path = (location && location.pathname) ? location.pathname : "/";
     var first = path.replace(/^\\/+/, "").split("/")[0] || "";
+    var supported = ${supportedLiteral};
+    var defaultLocale = "${defaultLocaleLiteral}";
 
     var locale = null;
-    if (first === "en-US" || first === "zh-CN") {
-      locale = first;
-    } else {
-      var base = String(first).toLowerCase().split("-")[0];
-      if (base === "en") locale = "en-US";
-      if (base === "zh") locale = "zh-CN";
+    for (var i = 0; i < supported.length; i++) {
+      if (String(supported[i]).toLowerCase() === String(first).toLowerCase()) {
+        locale = supported[i];
+        break;
+      }
     }
-    if (!locale) locale = "en-US";
+    if (!locale) {
+      var base = String(first).toLowerCase().split("-")[0];
+      for (var j = 0; j < supported.length; j++) {
+        if (String(supported[j]).toLowerCase().split("-")[0] === base) {
+          locale = supported[j];
+          break;
+        }
+      }
+    }
+    if (!locale) locale = defaultLocale;
 
     document.documentElement.setAttribute("lang", locale);
     document.documentElement.setAttribute("dir", "ltr");
@@ -33,4 +47,3 @@ export function HtmlLangSyncScript() {
     </Script>
   )
 }
-

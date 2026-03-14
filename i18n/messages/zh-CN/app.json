@@ -1,0 +1,37 @@
+{
+  "docs": {
+    "backToTop": "回到顶部",
+    "dark": "深色",
+    "editPage": "在 GitHub 上编辑此页 →",
+    "feedback": "有问题？给我们反馈 →",
+    "lastUpdated": "最后更新于",
+    "light": "浅色",
+    "searchEmptyResult": "未找到结果。",
+    "searchError": "搜索索引加载失败。",
+    "searchLoading": "加载中…",
+    "searchPlaceholder": "搜索文档…",
+    "system": "跟随系统",
+    "tocTitle": "本页内容"
+  },
+  "localeSwitch": {
+    "buttonAria": "语言",
+    "menuAria": "语言菜单"
+  },
+  "notFound": {
+    "aboutLabel": "关于 Softa",
+    "backendLabel": "后端开发",
+    "badge": "404",
+    "description": "这个页面可能已被移动、链接已经过期，或者当前地址写错了。",
+    "docsLabel": "文档概览",
+    "frontendLabel": "前端开发",
+    "hint": "可以先搜索文档，回到文档首页，或从常用章节重新进入。",
+    "primaryLabel": "返回文档首页",
+    "secondaryLabel": "返回站点首页",
+    "title": "页面不存在"
+  },
+  "redirect": {
+    "chooseLanguage": "请选择语言：",
+    "jsRequired": "静态托管场景下，自动语言路由需要启用 JavaScript。",
+    "redirecting": "正在跳转…"
+  }
+}

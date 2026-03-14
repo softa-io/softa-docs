@@ -1,9 +1,13 @@
 'use client'
 
 import Link from 'next/link'
+import { getHomeMessages } from '../i18n/get-messages'
+import {
+  getLocaleRootPath,
+  prefixPathWithLocale,
+  type Locale
+} from '../i18n/routing'
 import styles from './Home.module.css'
-import { getHomeDictionary } from './i18n/home'
-import { toLocalePath, type Lang } from './i18n/lang'
 
 function Icon({ name }: { name: string }) {
   const common = { width: 18, height: 18, viewBox: '0 0 24 24', fill: 'none' as const }
@@ -85,12 +89,11 @@ function Icon({ name }: { name: string }) {
   }
 }
 
-export default function Home({ lang }: { lang: Lang }) {
-  const localePath = toLocalePath(lang)
-  const copy = getHomeDictionary(lang)
+export default function Home({ locale }: { locale: Locale }) {
+  const localePath = getLocaleRootPath(locale)
+  const copy = getHomeMessages(locale)
   const hero = copy.hero
-  const prefixHref = (href: string) =>
-    href.startsWith('http://') || href.startsWith('https://') ? href : `${localePath}${href}`
+  const prefixHref = (href: string) => prefixPathWithLocale(href, locale)
 
   return (
     <div className={styles.page}>
@@ -167,16 +170,13 @@ export default function Home({ lang }: { lang: Lang }) {
                 </div>
 
                 <div className={styles.bentoCardAccent} aria-hidden="true">
-                  <div className={styles.diagramRow}>
-                    <div className={styles.diagramNode}>Metadata</div>
-                    <div className={styles.diagramArrow} />
-                    <div className={styles.diagramNode}>UI / API</div>
-                  </div>
-                  <div className={styles.diagramRow}>
-                    <div className={styles.diagramNode}>Flow / AI</div>
-                    <div className={styles.diagramArrow} />
-                    <div className={styles.diagramNode}>Governance</div>
-                  </div>
+                  {hero.diagramRows.map(row => (
+                    <div key={`${row.from}-${row.to}`} className={styles.diagramRow}>
+                      <div className={styles.diagramNode}>{row.from}</div>
+                      <div className={styles.diagramArrow} />
+                      <div className={styles.diagramNode}>{row.to}</div>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>

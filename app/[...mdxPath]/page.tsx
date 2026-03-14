@@ -1,8 +1,8 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { importPage } from 'nextra/pages'
+import { normalizeLocale } from '../../i18n/routing'
 import { useMDXComponents as getMDXComponents } from '../../mdx-components'
-import { normalizeLocale } from '../_utils/locales'
 import { getAllMdxStaticParams } from '../_utils/static-paths'
 
 export const dynamicParams = false

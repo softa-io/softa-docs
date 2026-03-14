@@ -2,7 +2,7 @@
 
 import { usePathname } from 'next/navigation'
 import { useEffect } from 'react'
-import type { Locale } from '../_utils/locales'
+import type { Locale } from '../../i18n/config'
 
 type Props = {
   locale: Locale
@@ -42,4 +42,3 @@ export function NavbarActiveFix({ locale }: Props) {
 
   return null
 }
-
