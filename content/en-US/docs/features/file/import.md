@@ -1,7 +1,20 @@
-## Data Import
-File Starter supports two import modes:
-- Import by configured template (ImportTemplate + ImportTemplateField)
-- Dynamic mapping import (no template, mapping provided in request)
+
+## Import
+Dialog tabs:
+- `By Template`
+  - Import by configured template (ImportTemplate + ImportTemplateField)
+  - supports template download
+  - submits uploaded files through the configured template
+
+- `Dynamic Import`
+  - Dynamic mapping import (no template, mapping provided in request)
+  - parses the uploaded `.xlsx` workbook in the browser
+  - auto-maps workbook headers to model fields using metadata
+  - lets the user adjust mappings before submit
+
+- `My Import History`
+  - Loads import history of current user for the current model.
+  - The original/failed files can be download by click the links.
 
 ### ImportTemplate Configuration Table
 | Field | Type | Default | Description |

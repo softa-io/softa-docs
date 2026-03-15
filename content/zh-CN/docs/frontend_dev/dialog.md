@@ -1,64 +1,56 @@
-# Dialog 视图
+# 对话框视图
 
-可复用的对话框视图层，适用于动作驱动表单、关联字段对话框和多步骤向导。
+用于动作驱动表单和关联字段对话框的可复用对话框视图层。
 
-当对话框内容里使用 `Field` 时，它支持与 `ModelForm` 相同的运行时条件 props：
+当对话框内容使用 `Field` 时，它支持与 `ModelForm` 相同的运行时条件 props：
 
 - `required`
 - `readonly`
 - `hidden`
 
-这些属性接受 `boolean | FilterCondition | ((ctx) => boolean)`，并且也会参与对话框侧的校验。
+这些属性接受 `boolean | FilterCondition | dependsOn(...)`，并同样参与对话框侧校验。
 
-对话框内容里的关联字段 `filters` 与 `ModelForm` 遵循同一套规则：
+对话框内容中的关联字段 `filters` 与 `ModelForm` 遵循相同规则：
 
-- `#{fieldName}` 会在发送关联查询之前，先从当前对话框表单值中解析
+- `#{fieldName}` 会在发送关联查询前，从当前对话框表单值中解析
 - 后端环境 token，例如 `TODAY`、`NOW`、`USER_ID`、`USER_COMP_ID`，会原样透传
-- `@{literal}` 也会原样透传，便于后端将其视为强制字面量
+- `@{literal}` 也会原样透传，以便后端把它视为强制字面量
 
-`Field.onChange` 的远程联动在对话框中有一个区别：
+`Field.onChange` 的远程联动有所不同：
 
-- 当前已实现于 `ModelForm`、`ModelTable` 内联行、`RelationTableView` 内联行
-- 对独立的 `ActionDialog` / `WizardDialog` / 通用对话框表单，并不会自动提供这套运行时能力
-
-## 相关文档
-- [字段与 widgets](./field)
-- [表单组件](./form)
-- [表格组件](./table)
+- 当前已实现于 `ModelForm`、基于对话框的编辑器（`ActionDialog`、`ModelDialog`）、`ModelTable` 内联行以及 `RelationTable` 内联行
+- 当前远程联动契约请查看 [Fields](./fields/index)、[ModelForm](./form) 和 [ModelTable](./table)
 
 ## 导入
 
 ```tsx
-import { ActionDialog, ModelDialog, WizardDialog } from "@/components/views/dialogs";
+import { ActionDialog, ModelDialog } from "@/components/views/dialogs";
 ```
 
 ## 组件选择
 
-| 组件 | 适用场景 | 提交行为 |
-| --- | --- | --- |
-| `ActionDialog` | 执行 `/{modelName}/{operation}`，可带可选表单字段 | 内置动作 API 调用（`invokeAction` 或 `invokeBulkAction`） |
-| `ModelDialog` | 在关联字段 `formView` 中定义对话框布局，搭配 `FormHeader/FormToolbar/FormBody` 使用 | 关联运行时注入上下文 + 内置本地草稿提交 |
-| `WizardDialog` | 多步骤流程（模型相关或非模型） | 自定义 `onSubmit` |
+| 组件          | 适用场景 | 提交行为 |
+| ------------- | -------- | -------- |
+| `ActionDialog` | 执行 `/{modelName}/{operation}`，可带可选的轻量表单输入 | 内置调用动作 API（`invokeAction` 或 `invokeBulkAction`） |
+| `ModelDialog` | 在关联字段 `formView` 中定义对话框布局，搭配 `FormHeader/FormToolbar/FormBody` 使用 | 运行时注入关联上下文 + 内置本地草稿提交 |
 
-## 仅使用公开 API
+## 公开 API
 
-只使用 `@/components/views/dialogs` 的导出：
+推荐在业务代码中从 `@/components/views/dialogs` 使用这些导出：
 
 - `ActionDialog`
 - `ModelDialog`
-- `WizardDialog`
 
-`components/views/dialogs/components/*` 下的文件属于内部构件。
+`components/views/dialogs/components/*` 下的文件都是内部构件，不应在业务代码中直接导入。
 
 ## ModelDialog
 
-`ModelDialog` 是 `OneToMany` / `ManyToMany` `formView` 的关联运行时对话框包装器。
+`ModelDialog` 是定义关联 `formView` 内容的最轻量方式。
 
-- 不需要 `modelName` prop
-- `open`、`mode`、`rowId`、`defaultValues`、`onSubmit` 由关联字段运行时注入
-- 适合复用页面式对话框布局（`FormHeader/FormToolbar/FormBody`）
-- 在 `ManyToMany` 行详情中，运行时会强制只读模式（禁用 `Confirm`，仅查看）
-- 若要自定义关联行编辑器，请在字段级 `formView` 中配置 `ModelDialog`
+- 公开接口只有 `title` 和 `children`
+- 不需要传 `modelName`
+- 打开状态、模式、行 id、默认值与提交行为都由关联运行时注入
+- 适合复用页面式对话框布局（`FormHeader/FormBody`）
 
 ### ModelDialog 示例
 
@@ -82,45 +74,24 @@ function OptionItemsDialogView() {
 
 ## ActionDialog
 
-适用于 `lockAccount`、`unlockAccount`、`submitApproval` 等操作对话框。
+最适合用于 `lockAccount`、`unlockAccount`、`submitApproval` 这类操作对话框。
 
 特性：
 
-- 单记录操作（`params` 中带 `id`）
-- 批量操作（`ids` 合并到 payload body）
-- 通过 `abstractFields` 或完整 `metaModel` 生成元数据字段
-- 用于 `<Action type="dialog" />` / `<BulkAction type="dialog" />` 时支持运行时注入
+- 支持单记录动作（参数中带 `id`）
+- 支持批量动作（`ids` 会合并到 payload body）
+- 当通过 `<Action type="dialog" />` / `<BulkAction type="dialog" />` 使用时，会自动注入运行时
+- 通过子级 `<Field />` 声明 payload 字段
+- `Field.fieldName` 是必填；`fieldType` 默认是 `"String"`，`labelName` 默认回退为 `fieldName`
+- 显式传入的 `Field` props 优先；如果缺少元数据，则会在能解析到时回退到绑定的 `metaField`
 
 ### ActionDialog Props
 
 | Prop | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
 | `title` | `ReactNode` | 是 | - | 对话框标题。 |
-| `open` | `boolean` | 否 | 运行时上下文或 `false` | 可由 `Action` / `BulkAction` 运行时注入。 |
-| `onOpenChange` | `(open: boolean) => void` | 否 | 运行时上下文 | 若不存在运行时 provider，则必填。 |
-| `operation` | `string` | 否 | 运行时上下文 | 若不存在运行时 provider，则必填。 |
-| `modelName` | `string` | 否 | 运行时 / form / table 上下文 | 省略时从周边上下文自动解析。 |
-| `rowId` | `IdType \| null` | 否 | 运行时 / form 上下文 id | 单记录目标 id。 |
-| `ids` | `IdType[] \| null` | 否 | 运行时批量 ids | 非空时为批量模式。 |
-| `payload` | `Record<string, unknown>` | 否 | `{}` | 提交前与表单值合并。 |
-| `defaultValues` | `Record<string, unknown>` | 否 | `{}` | 面向动作表单的运行时/上下文预填值，使用字段 UI 形态。文件字段传 `FileInfo` / `FileInfo[]`，`JSON` / `DTO` / `Filters` / `Orders` 传结构化对象或数组。静态默认值优先用 `Field.defaultValue` 或 `metaField.defaultValue`。 |
-| `metaModel` | `MetaModel` | 否 | - | 显式指定元数据模型。 |
-| `abstractModelName` | `string` | 否 | `"DialogForm"` | 用于从字段构建抽象元数据。 |
-| `abstractModelLabelName` | `string` | 否 | `title` 或 `abstractModelName` | 抽象元数据模型展示名。 |
-| `abstractFields` | `AbstractMetaField[]` | 否 | - | 非实体对话框表单的字段元数据。 |
-| `buildPayload` | `(context) => payload` | 否 | - | API 调用前转换合并后的 payload。`context.payload` 在调用前已经过字段 codec 和关系 patch 处理，处于 submit/API 形态。 |
 | `description` | `ReactNode` | 否 | - | 对话框描述。 |
-| `confirmLabel` | `string` | 否 | `"Confirm"` | 确认按钮文案。 |
-| `cancelLabel` | `string` | 否 | `"Cancel"` | 取消按钮文案。 |
-| `pendingLabel` | `string` | 否 | `"Submitting..."` | 提交中按钮文案。 |
-| `successMessage` | `string` | 否 | 运行时文案或 `"Action completed."` | 成功 toast 文案。 |
-| `errorMessage` | `string` | 否 | 运行时文案或 `"Action failed."` | 失败 toast 文案。 |
-| `confirmDisabled` | `boolean` | 否 | `false` | 禁用确认按钮。 |
-| `closeOnSuccess` | `boolean` | 否 | `true` | 提交成功后自动关闭。 |
-| `resetOnClose` | `boolean` | 否 | `true` | 对话框关闭时重置表单状态。 |
-| `onSuccess` | `() => void` | 否 | - | 提交成功回调。 |
-| `onError` | `(error) => void` | 否 | - | 提交失败回调。 |
-| `children` | `ReactNode \| (renderProps) => ReactNode` | 否 | - | 表单内容。 |
+| `children` | `ReactNode \| (renderProps) => ReactNode` | 否 | - | 表单内容。子级 `<Field />` 声明会自动转换为内部抽象字段。 |
 
 ### 示例：用于 `Action type="dialog"`
 
@@ -133,132 +104,18 @@ export function UserAccountUnlockActionDialog() {
     <ActionDialog
       title="Unlock User Account"
       description="Provide an optional reason for audit logging."
-      abstractModelName="UserAccountUnlockAction"
-      abstractFields={[
-        {
-          fieldName: "reason",
-          fieldType: "Text",
-          labelName: "Reason (Optional)",
-        },
-      ]}
-      buildPayload={({ payload }) => {
-        const reason =
-          typeof payload.reason === "string" ? payload.reason.trim() : "";
-        return { reason: reason || undefined };
-      }}
-      confirmLabel="Confirm Unlock"
-      pendingLabel="Unlocking..."
     >
-      <Field fieldName="reason" />
+      <Field
+        fieldName="reason"
+        labelName="Reason (Optional)"
+        widgetType="Text"
+      />
     </ActionDialog>
   );
 }
 ```
 
-### 示例：独立受控使用
+## 相关
 
-```tsx
-<ActionDialog
-  open={open}
-  onOpenChange={setOpen}
-  modelName="UserAccount"
-  rowId={id}
-  operation="lockAccount"
-  title="Lock User Account"
-  confirmLabel="Confirm Lock"
-/>
-```
-
-## WizardDialog
-
-跨步骤共享表单状态的向导式对话框。
-
-### WizardDialog Props
-
-| Prop | 类型 | 必填 | 默认值 | 说明 |
-| --- | --- | --- | --- | --- |
-| `open` | `boolean` | 是 | - | 受控对话框开关状态。 |
-| `onOpenChange` | `(open: boolean) => void` | 是 | - | 受控开关状态处理器。 |
-| `steps` | `WizardStep[]` | 是 | - | 步骤定义。 |
-| `onSubmit` | `(values, context) => Promise \| unknown` | 是 | - | 最终提交处理器。 |
-| `title` | `ReactNode` | 否 | - | 对话框标题（步骤无标题时回退）。 |
-| `description` | `ReactNode` | 否 | - | 对话框描述（步骤无描述时回退）。 |
-| `contentClassName` | `string` | 否 | - | 内容容器自定义 className。 |
-| `initialStepIndex` | `number` | 否 | `0` | 初始步骤索引。 |
-| `metaModel` | `MetaModel` | 否 | - | 显式元数据模型。 |
-| `abstractModelName` | `string` | 否 | `"WizardForm"` | 用于从字段构建抽象元数据。 |
-| `abstractModelLabelName` | `string` | 否 | `title` 或 `abstractModelName` | 抽象元数据模型展示名。 |
-| `abstractFields` | `AbstractMetaField[]` | 否 | - | 非实体向导表单的字段元数据。 |
-| `zodSchema` | `ZodTypeAny` | 否 | - | 可选 schema 覆盖。 |
-| `defaultValues` | `DefaultValues` | 否 | `{}` | 面向对话框表单的运行时/上下文预填值，使用字段 UI 形态。文件字段传 `FileInfo` / `FileInfo[]`，`JSON` / `DTO` / `Filters` / `Orders` 传结构化对象或数组。静态创建默认值优先用 `Field.defaultValue` 或 `metaField.defaultValue`。 |
-| `recordId` | `string \| null` | 否 | - | 透传给字段属性解析器。 |
-| `readOnly` | `boolean` | 否 | `false` | 强制只读模式。 |
-| `cancelLabel` | `string` | 否 | `"Cancel"` | 取消按钮文案。 |
-| `backLabel` | `string` | 否 | `"Back"` | 上一步按钮文案。 |
-| `nextLabel` | `string` | 否 | `"Next"` | 下一步按钮文案。 |
-| `finishLabel` | `string` | 否 | `"Finish"` | 完成按钮文案。 |
-| `pendingLabel` | `string` | 否 | `"Submitting..."` | 提交中按钮文案。 |
-| `successMessage` | `string` | 否 | - | 成功 toast 文案。 |
-| `errorMessage` | `string` | 否 | - | 失败 toast 文案。 |
-| `closeOnSuccess` | `boolean` | 否 | `true` | 提交成功后自动关闭。 |
-| `resetOnClose` | `boolean` | 否 | `true` | 关闭时重置表单与步骤状态。 |
-| `onSuccess` | `(result) => void` | 否 | - | 提交成功回调。 |
-| `onError` | `(error) => void` | 否 | - | 提交失败回调。 |
-
-### WizardDialog：最小示例
-
-```tsx
-import { WizardDialog } from "@/components/views/dialogs";
-
-<WizardDialog
-  open={open}
-  onOpenChange={setOpen}
-  steps={[
-    {
-      key: "basic",
-      content: <div>Basic Step</div>,
-    },
-  ]}
-  onSubmit={async () => {}}
-/>;
-```
-
-### WizardDialog：常见配置示例
-
-```tsx
-import { Field } from "@/components/fields";
-import { WizardDialog } from "@/components/views/dialogs";
-
-<WizardDialog
-  open={open}
-  onOpenChange={setOpen}
-  title="Create Robot"
-  abstractModelName="CreateRobotWizard"
-  abstractFields={[
-    { fieldName: "name", fieldType: "String", required: true },
-    { fieldName: "provider", fieldType: "Option", optionSetCode: "AI_PROVIDER", required: true },
-    { fieldName: "prompt", fieldType: "Text" },
-  ]}
-  steps={[
-    {
-      key: "basic",
-      title: "Basic",
-      fields: ["name", "provider"],
-      content: (
-        <>
-          <Field fieldName="name" />
-          <Field fieldName="provider" />
-        </>
-      ),
-    },
-    {
-      key: "prompt",
-      title: "Prompt",
-      content: <Field fieldName="prompt" />,
-    },
-  ]}
-  onSubmit={async (values) => {
-    // custom submit
-  }}
-/>
-```
+- 表单页使用方式：[ModelForm](./form)
+- 表格动作使用方式：[ModelTable](./table)

@@ -1,8 +1,26 @@
-## Data Export
-File Starter supports three export modes:
-- Export by template fields
-- Export by file template
-- Dynamic export
+
+## Export
+
+Built-in export supports three scopes:
+- `Selected Rows` uses the current toolbar bulk selection ids
+- `Current Page` uses the current page id snapshot, not `pageNumber/pageSize` replay
+- `All Filtered Data` reuses current `filters/orders/groupBy/aggFunctions/effectiveDate`
+
+Front-end export is limited to `100000` records for a single request; over-limit scopes are disabled instead of truncated.
+
+Dialog tabs:
+- `By Template`
+  - builds candidate fields from current model metadata
+  - defaults selected fields to the currently visible table columns
+  - lets the user change fields, file name, and sheet name
+  - generates `.xlsx` workbooks for front-end initiated exports
+
+- `Dynamic Export`
+  - Export the data with selected fields.
+
+- `My Export History`
+  - loads `ExportHistory` for the current model
+  - The present files can be download by click the links.
 
 ### ExportTemplate Configuration Table
 | Field | Type | Default | Description |

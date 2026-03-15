@@ -3,7 +3,8 @@ export default {
   module: "Module",
   table: "Table",
   form: "Form",
+  actions: "Actions",
+  fields: "Field & Widget",
   dialog: "Dialog",
   tree: "Tree",
-  field: "Field & Widget",
 }

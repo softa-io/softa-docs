@@ -3,9 +3,13 @@
 Metadata-driven create/edit form container based on `react-hook-form` and Zod.
 
 ## Related Docs
-- [Fields and widgets](./field)
-- [Dialog components](./dialog)
-- [Table components](./table)
+
+- [Fields](./fields/index)
+- [Relation fields](./fields/relation-fields)
+- [Widget matrix](./fields/widget-matrix)
+- [Action](./action)
+- [Dialog](./dialog)
+- [ModelTable](./table)
 
 ## Import
 
@@ -19,7 +23,7 @@ Recommended usage in `src/app/**/[id]/page.tsx`:
 
 ```tsx
 import { UserAccountUnlockActionDialog } from "@/app/user/user-account/components/user-account-unlock-action-dialog";
-import { Action } from "@/components/common/Action";
+import { Action } from "@/components/actions/Action";
 import { FormSection } from "@/components/common/form-section";
 import { Field } from "@/components/fields";
 import { FormBody } from "@/components/views/form/components/FormBody";
@@ -73,16 +77,15 @@ export default function EditUserAccountPage() {
 
 Validation behavior:
 
-- `validationMode` is configurable
 - default is `onBlur`
-- `reValidateMode` follows `validationMode` conservatively:
-  - `onBlur` -> `onBlur`
-  - `onSubmit` / `onTouched` / `all` / `onChange` -> `onChange`
+- `reValidateMode` is `onChange`
 
 Need custom variations? Use `useModelFormContext()` in children and rearrange `FormHeader/FormToolbar/FormBody` directly.
 
-Canonical field and widget usage now lives in [Fields & Widgets](./field).
-Use that document for:
+Canonical field usage now lives in [Fields](./fields/index).
+Widget compatibility and widget-specific examples live in [Widget matrix](./fields/widget-matrix).
+Relation field behavior lives in [Relation fields](./fields/relation-fields).
+Use those documents for:
 
 - `Field` props and metadata overrides
 - `FieldType -> WidgetType` compatibility
@@ -119,7 +122,7 @@ When you do pass container-level `defaultValues`, use field UI values directly:
 - `Filters`: `FilterCondition`
 - `Orders`: structured order tuples/arrays
 
-Detailed field value contracts are documented in `src/components/fields/README.md`.
+Detailed field value contracts are documented in [Field](./fields/index).
 
 Example conditional field control:
 
@@ -241,7 +244,7 @@ Use `widgetProps` only for widget-specific configuration.
 Scope note:
 
 - `widgetProps` applies to `ModelForm` widgets and table inline editors because those paths render `Field` directly
-- `ModelTable` / `RelationTableView` read-mode cells intentionally do not consume `widgetProps`; table image/file cells use the shared compact renderer described in `src/components/views/table/README.md`
+- `ModelTable` / `RelationTable` read-mode cells intentionally do not consume `widgetProps`; table image/file cells use the shared compact renderer described in [ModelTable](./table)
 
 Current supported examples:
 
@@ -414,28 +417,36 @@ Inline edit behavior (`OneToMany`, without `formView`):
 
 - row enters edit mode only after row click (no auto-select on page enter)
 - edited value is written directly to main form relation array and saved with parent `Save/Create`
-- editable cells are limited to declared `<RelationTableView><Field /></RelationTableView>` columns intersected with editable related-model fields
+- editable cells are limited to declared `<RelationTable><Field /></RelationTable>` columns intersected with editable related-model fields
 - inline edit is available only in local table mode (`!isPaged` or remote conditions not met)
 - row-level `required` / `readonly` conditions evaluate against the current relation row with `scope="relation-table"`
 - row-level `Field.onChange` remote linkage also runs in `scope="relation-table"` and only patches the current relation row
-- `tableView.initialParams.filters` supports `#{fieldName}` and resolves against the current parent form values before remote relation queries
+- `RelationTable.pageSize` only affects paged relation tables (`isPaged`)
 
 Enable patterns:
 
 ```tsx
 const optionItemsTableView = (
-  <RelationTableView
-    initialParams={{
-      orders: [["sequence", "ASC"]],
-      pageSize: 10,
-      filters: [["companyId", "=", "#{companyId}"]],
-    }}
-  >
+  <RelationTable orders={["sequence", "ASC"]} pageSize={10}>
     <Field fieldName="sequence" />
     <Field fieldName="itemCode" />
     <Field fieldName="itemName" />
     <Field fieldName="active" />
-  </RelationTableView>
+  </RelationTable>
+);
+
+const multiSortTableView = (
+  <RelationTable
+    orders={[
+      ["sequence", "ASC"],
+      ["itemCode", "DESC"],
+    ]}
+    pageSize={20}
+  >
+    <Field fieldName="sequence" />
+    <Field fieldName="itemCode" />
+    <Field fieldName="itemName" />
+  </RelationTable>
 );
 
 // Enable table-cell inline edit (recommended for local relation editing)
@@ -473,15 +484,15 @@ Update mode:
 OneToMany view binding example:
 
 ```tsx
-import { Field, RelationTableView } from "@/components/fields";
+import { Field, RelationTable } from "@/components/fields";
 
 const optionItemsTableView = (
-  <RelationTableView initialParams={{ orders: [["sequence", "ASC"]], pageSize: 10 }}>
+  <RelationTable orders={["sequence", "ASC"]} pageSize={10}>
     <Field fieldName="sequence" />
     <Field fieldName="itemCode" />
     <Field fieldName="itemName" readonly={[["active", "=", false]]} />
     <Field fieldName="active" />
-  </RelationTableView>
+  </RelationTable>
 );
 
 function OptionItemsFormView() {
@@ -504,9 +515,7 @@ function OptionItemsFormView() {
   );
 }
 
-
 export default function SysOptionSetFormPage() {
-
   return (
     <ModelForm modelName="SysOptionSet">
       <FormHeader />
@@ -521,7 +530,8 @@ export default function SysOptionSetFormPage() {
         </FormSection>
 
         <FormSection>
-          <Field fieldName="optionItems"
+          <Field
+            fieldName="optionItems"
             tableView={optionItemsTableView}
             formView={OptionItemsFormView}
           />
@@ -560,16 +570,16 @@ Update mode:
 ManyToMany view binding example:
 
 ```tsx
-import { Field, RelationTableView } from "@/components/fields";
+import { Field, RelationTable } from "@/components/fields";
 
 const userRoleUserIdsTableView = (
-  <RelationTableView initialParams={{ orders: [["username", "ASC"]], pageSize: 10 }}>
+  <RelationTable orders={["username", "ASC"]} pageSize={10}>
     <Field fieldName="username" />
     <Field fieldName="nickname" />
     <Field fieldName="email" />
     <Field fieldName="mobile" />
     <Field fieldName="status" />
-  </RelationTableView>
+  </RelationTable>
 );
 
 function UserRoleUserIdsFormView() {
@@ -587,7 +597,6 @@ function UserRoleUserIdsFormView() {
 }
 
 export default function UserRoleFormPage() {
-
   return (
     <ModelForm modelName="UserRole">
       <FormHeader />
@@ -601,7 +610,8 @@ export default function UserRoleFormPage() {
           <Field fieldName="active" />
         </FormSection>
         <FormSection>
-          <Field fieldName="userIds"
+          <Field
+            fieldName="userIds"
             tableView={userRoleUserIdsTableView}
             formView={UserRoleUserIdsFormView}
           />
@@ -614,14 +624,12 @@ export default function UserRoleFormPage() {
 
 Notes:
 
-- `tableView` controls relation-table columns through child `<Field />` declarations and non-field query settings through `initialParams`.
-- `RelationTableView.initialParams.filters` is `AND`-merged with the effective field filter (`Field.filters ?? metaField.filters`).
+- `tableView` controls relation-table columns through child `<Field />` declarations and optional `RelationTable.orders` / `RelationTable.pageSize`.
+- `RelationTable.orders` supports either a single tuple (`["username", "ASC"]`) or multiple tuples (`[["username", "ASC"], ["email", "DESC"]]`).
+- remote relation table and picker queries use the effective field filter (`Field.filters ?? metaField.filters`), relation-scoped filters, and runtime search / column filters.
 - `isPaged` (OneToMany/ManyToMany fields only):
   - `false` (default): include relation `subQuery` in `getById`; relation table does not paginate in UI and renders all local rows.
   - `true`: relation table enables pagination UI; when `recordId + relatedModel + scoped relation filter` are ready, data is loaded by `relatedModel.searchPage` (remote mode), otherwise paginated locally.
-- Without `tableView.renderers`, Boolean values are rendered as default badges (`True`/`False`).
-- `tableView.renderers[fieldName]`: customize table cell rendering (status badge, tags, localized text).
-- `tableView.sortAccessors[fieldName]`: optional advanced hook for local relation table sort value mapping.
 - relation table pageSize default is `50`; page-size selector is shown only when pagination is enabled (`isPaged=true`).
 - ManyToMany picker dialog (`Add`) is server-driven; search/sort/page changes trigger `searchPage` requests.
 - `formView` is optional. In `ManyToMany`, row-click opens `ModelDialog` in read mode; add/remove still uses picker behavior.
@@ -647,17 +655,13 @@ Recommended default layout:
 
 ### ModelForm Props
 
-| Prop        | Type                                           | Required | Default | Notes                                         |
-| ----------- | ---------------------------------------------- | -------- | ------- | --------------------------------------------- |
-| `modelName` | `string`                                       | Yes      | -       | Model name used to request metadata from API (`/metadata/getMetaModel`). |
-| `id`        | `string \| null`                               | No       | Route `params.id` (`"new"` => `null`) | Optional override. |
-| `zodSchema` | `ZodTypeAny`                                   | No       | -       | Optional schema override.                     |
-| `schemaBuilder` | `(context) => ZodTypeAny`                  | No       | -       | Runtime schema extender. Receives `{ metaModel, baseSchema }` built from resolved metadata. |
-| `readOnly`  | `boolean`                                      | No       | `false` | Force read-only mode.                         |
-| `validationMode` | `"onBlur" \| "onChange" \| "onSubmit" \| "onTouched" \| "all"` | No | `"onBlur"` | React Hook Form validation mode for `ModelForm`. |
-| `children`  | `ReactNode`                                    | Yes      | -       | Form page layout content (`FormHeader/FormToolbar/FormBody`). |
-
-Schema precedence: `schemaBuilder` > `zodSchema` > metadata-derived base schema.
+| Prop            | Type                      | Required | Default                               | Notes                                                                                       |
+| --------------- | ------------------------- | -------- | ------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `modelName`     | `string`                  | Yes      | -                                     | Model name used to request metadata from API (`/metadata/getMetaModel`).                    |
+| `id`            | `string \| null`          | No       | Route `params.id` (`"new"` => `null`) | Optional override.                                                                          |
+| `schemaBuilder` | `(context) => ZodTypeAny` | No       | -                                     | Runtime schema extender. Receives `{ metaModel, baseSchema }` built from resolved metadata. |
+| `readOnly`      | `boolean`                 | No       | `false`                               | Force read-only mode.                                                                       |
+| `children`      | `ReactNode`               | Yes      | -                                     | Form page layout content (`FormHeader/FormToolbar/FormBody`).                               |
 
 Runtime field conditions:
 
@@ -667,7 +671,7 @@ Runtime field conditions:
 - Function conditions must be wrapped with `dependsOn([...], evaluator)`; bare function conditions are not supported.
 - `hidden` fields are not rendered and their validation errors are suppressed.
 - `required={false}` can relax metadata `required` at runtime; `readonly={false}` can override metadata readonly.
-- The same runtime behavior is used by `ModelForm`, `DialogForm`, and `WizardDialog`.
+- The same runtime behavior is used by `ModelForm` and dialog-based forms built on `DialogForm`.
 
 Remote `Field.onChange` in `ModelForm`:
 
@@ -679,279 +683,117 @@ Remote `Field.onChange` in `ModelForm`:
 - top-level registered XToMany fields are serialized as relation patch payloads, not raw UI rows
 - response `values` patch only returned keys; `null` clears a field
 - response `readonly` / `required` override local effective state until reset, cancel, reload, or a later response
-- this remote linkage runtime is implemented for `ModelForm`; it is not automatically available in standalone `DialogForm` / `WizardDialog`
+- this remote linkage runtime is implemented for `ModelForm`; it is not automatically available in standalone `DialogForm`
 
 ### FormHeader Props
 
-| Prop          | Type        | Required | Default | Notes |
-| ------------- | ----------- | -------- | ------- | ----- |
-| `title`       | `string`    | No       | `metaModel.labelName` (fallback `pageTitle`) | Optional override. |
-| `description` | `string`    | No       | `metaModel.description` | Optional override. |
-| `extras`      | `ReactNode` | No       | -       | Extra header content rendered near title. |
+| Prop          | Type        | Required | Default                                      | Notes                                     |
+| ------------- | ----------- | -------- | -------------------------------------------- | ----------------------------------------- |
+| `title`       | `string`    | No       | `metaModel.labelName` (fallback `pageTitle`) | Optional override.                        |
+| `description` | `string`    | No       | `metaModel.description`                      | Optional override.                        |
+| `extras`      | `ReactNode` | No       | -                                            | Extra header content rendered near title. |
 
 ### FormBody Props
 
-| Prop             | Type                            | Required | Default | Notes                                                                 |
-| ---------------- | ------------------------------- | -------- | ------- | --------------------------------------------------------------------- |
-| `sectionNavMode` | `"auto" \| "always" \| "never"` | No       | `"auto"` | `auto` shows section nav when section count > 3.     |
-| `enableAuditLog` | `boolean`                       | No       | `true` | Toggle audit panel (only renders in edit mode).      |
-| `children`       | `ReactNode`                     | Yes      | -       | Form sections / content nodes.                                        |
+| Prop             | Type                            | Required | Default  | Notes                                            |
+| ---------------- | ------------------------------- | -------- | -------- | ------------------------------------------------ |
+| `sectionNavMode` | `"auto" \| "always" \| "never"` | No       | `"auto"` | `auto` shows section nav when section count > 3. |
+| `enableAuditLog` | `boolean`                       | No       | `true`   | Toggle audit panel (only renders in edit mode).  |
+| `children`       | `ReactNode`                     | Yes      | -        | Form sections / content nodes.                   |
 
 ### FormToolbar Props
 
-| Prop                | Type                      | Required | Default | Notes                                                                                         |
-| ------------------- | ------------------------- | -------- | ------- | --------------------------------------------------------------------------------------------- |
-| `children`          | `ReactNode`               | No       | -       | Custom actions. Recommended: `<Action type=\"...\" />`.                                       |
-| `enableWorkflow`    | `boolean`                 | No       | `false` | Toggle workflow action group in toolbar left area. Only shown in edit mode and not read-only.|
-| `enableDuplicate`   | `boolean`                 | No       | `true` | Built-in duplicate action. In create state it stays visible but defaults to disabled; route read mode can still use it. |
-| `enableDelete`      | `boolean`                 | No       | `true` | Built-in delete action. In create state it stays visible but defaults to disabled; route read mode can still use it. |
-| `duplicatePlacement`| `"toolbar" \| "more"`     | No       | `"more"` | Placement of built-in Duplicate action.                                     |
-| `deletePlacement`   | `"toolbar" \| "more"`     | No       | `"more"` | Placement of built-in Delete action.                                        |
-| `moreActionsLabel`  | `string`                  | No       | `"More Actions"` | Label for More Actions trigger.                                   |
-| `confirmDeleteMessage` | `string`               | No       | `Delete this {modelLabel}? This action cannot be undone.` | Confirm text for built-in delete action. |
+| Prop                   | Type        | Required | Default                                                   | Notes                                                                                                                                                      |
+| ---------------------- | ----------- | -------- | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `children`             | `ReactNode` | No       | -                                                         | Custom actions. Recommended: `<Action type=\"...\" />`.                                                                                                    |
+| `enableWorkflow`       | `boolean`   | No       | `false`                                                   | Toggle workflow action group in toolbar left area. Only shown in edit mode and not read-only.                                                              |
+| `enableCreate`         | `boolean`   | No       | `true`                                                    | Built-in `Create New` action in the right toolbar group. Explicit prop value wins; when omitted, hard read-only forms hide it by default.                  |
+| `enableDuplicate`      | `boolean`   | No       | `true`                                                    | Built-in duplicate action. Explicit prop value wins; when omitted, hard read-only forms hide it by default. In create state it stays visible but disabled. |
+| `enableDelete`         | `boolean`   | No       | `true`                                                    | Built-in delete action. Explicit prop value wins; when omitted, hard read-only forms hide it by default. In create state it stays visible but disabled.    |
+| `confirmDeleteMessage` | `string`    | No       | `Delete this {modelLabel}? This action cannot be undone.` | Confirm text for built-in delete action.                                                                                                                   |
 
-### Action Props
+### Actions In `ModelForm`
 
-Use a single `Action` component with discriminated `type`.
+Common `Action` / `BulkAction` API now lives in [Action](./action).
+This section keeps only the `ModelForm` container rules and a complete page-level example.
 
-`Action` supports both static values and context-driven values via:
+Container support:
 
-```ts
-type ActionValue<T> = T | ((context: {
-  id: string | null;
-  modelName?: string;
-  scope: "form" | "model-table";
-  mode: "create" | "edit" | "read";
-  isDirty: boolean;
-  values?: Record<string, unknown>;
-  row?: Record<string, unknown>;
-}) => T);
-```
+| Container     | Supported Action Types                | Supported Placements |
+| ------------- | ------------------------------------- | -------------------- |
+| `FormToolbar` | `default`, `dialog`, `link`, `custom` | `toolbar`, `more`    |
+| `FormSection` | `link`, `custom`                      | `header`, `inline`   |
 
-| Prop             | Type                                    | Required | Default | Notes                                                                 |
-| ---------------- | --------------------------------------- | -------- | ------- | --------------------------------------------------------------------- |
-| `type`           | `"default" \| "dialog" \| "link" \| "custom"` | No | `"default"` | Action behavior. Omit to use direct API invoke.          |
-| `labelName`      | `ReactNode`                             | Yes      | -       | Action label.                                                         |
-| `placement`      | `"toolbar" \| "more" \| "header" \| "inline"` | No | FormToolbar:`"toolbar"`, FormSection:`"inline"` | Depends on parent container. |
-| `confirmMessage` | `ActionValue<string>`                   | No       | -       | Optional confirmation prompt before action execution.                 |
-| `successMessage` | `ActionValue<string>`                   | No       | -       | Success toast message for `default` and `dialog` actions.             |
-| `errorMessage`   | `ActionValue<string>`                   | No       | -       | Error toast message for `default` and `dialog` actions.               |
-| `icon`           | `ComponentType<{ className?: string }>` | No       | -       | Action icon.                                                          |
-| `destructive`    | `boolean`                               | No       | `false` | Destructive styling.                                                  |
-| `disabled`       | `boolean \| FilterCondition \| dependsOn(...)` | No | `false` | Disabled state. Use `boolean` for static UI state, `FilterCondition` for declarative value checks, and `dependsOn([...], evaluator)` for explicit function logic. |
-| `visible`        | `boolean \| FilterCondition \| dependsOn(...)` | No | `true` | Visibility control. Same condition model as `disabled`. |
+Rules:
 
-Behavior-specific props:
-
-| Component                  | Required Behavior Props | Default | Notes |
-| -------------------------- | ----------------------- | ------- | ----- |
-| `type` omitted or `type="default"` | `operation` | - | Calls `POST /{modelName}/{operation}` with current record `id` in query params and optional `payload` in body. `payload` supports `ActionValue<Record<string, unknown>>`. |
-| `type="dialog"` | `operation`, `component` | - | `component={MyDialogComponent}`. Open/close, operation, success/error messaging are injected from `Action`. |
-| `type="link"`   | `href`                  | `target="_self"` | `href` supports `string` or `({ id, modelName }) => string`. |
-| `type="custom"` | `onClick`               | - | Use for pure UI/local behaviors. Signature: `onClick({ id, modelName, scope, mode, isDirty, values, row }) => void`. |
-
-Action condition notes:
-
-- `disabled` and `visible` share the same runtime condition model as `Field`: `boolean`, `FilterCondition`, `dependsOn([...], evaluator)`
-- `FilterCondition` is evaluated against current form values and automatically tracks `#{fieldName}` references
-- bare function conditions are not supported; wrap function logic with `dependsOn([...], evaluator)`
-- if there is no field dependency, prefer plain `boolean`
-
-Action type examples:
-
-```tsx
-// 1) default (type omitted): direct API invoke
-<Action
-  labelName="Lock Account"
-  operation="lockAccount"
-  placement="more"
-  confirmMessage="Lock this user account?"
-  successMessage="User account locked."
-  errorMessage="Failed to lock user account."
-/>
-
-// 2) dialog: open custom dialog component, operation injected into dialog runtime
-<Action
-  type="dialog"
-  labelName="Unlock Account"
-  operation="unlockAccount"
-  placement="more"
-  component={UserAccountUnlockActionDialog}
-  successMessage="User account unlocked."
-  errorMessage="Failed to unlock user account."
-/>
-
-// 3) link: open URL
-<Action
-  type="link"
-  labelName="Open Audit"
-  placement="more"
-  href={({ id, modelName }) => `/${modelName}/audit?id=${id}`}
-  target="_blank"
-/>
-
-// 4) custom: local UI logic
-<Action
-  type="custom"
-  labelName="Run Health Check"
-  placement="more"
-  onClick={({ modelName }) => toast.info(`${modelName} health check started.`)}
-/>
-```
-
-### Action Support by Container
-
-| Container | Supported Action Types | Supported Placements |
-| --- | --- | --- |
-| `FormToolbar` | `default`, `dialog`, `link`, `custom` | `toolbar`, `more` |
-| `FormSection` | `link`, `custom` | `header`, `inline` |
-
-`FormSection` is a local UI action area and does not execute model API actions directly.
-For API actions (`default` / `dialog`), place actions in `FormToolbar`.
-
-Form toolbar business actions also follow these rules:
-
+- `FormToolbar` is the action area for page-level business actions
+- `FormSection` is a local UI action area and does not execute model API actions directly
+- for API actions (`default` / `dialog`), place actions in `FormToolbar`
 - edit mode with unsaved changes: clicking business actions asks whether to discard changes before continuing
 - create mode: built-in `Duplicate` / `Delete` remain visible but disabled
 - built-in `Duplicate` still uses backend `copyById`; exclusion of `BaseModel.reversedFields` is handled by backend duplicate semantics
 
-### FormToolbar Action Examples
-
-Minimal example:
+Complete example:
 
 ```tsx
-import { Action } from "@/components/common/Action";
-import { FormToolbar } from "@/components/views/form/components/FormToolbar";
-
-<FormToolbar>
-  <Action
-    labelName="Lock Account"
-    operation="lockAccount"
-    placement="more"
-  />
-</FormToolbar>;
-```
-
-Common setup example:
-
-```tsx
-import { Action } from "@/components/common/Action";
+import { Action } from "@/components/actions/Action";
+import { FormSection } from "@/components/common/form-section";
+import { Field } from "@/components/fields";
 import { ActionDialog } from "@/components/views/dialogs";
+import { FormBody } from "@/components/views/form/components/FormBody";
 import { FormToolbar } from "@/components/views/form/components/FormToolbar";
-import { ExternalLink, Lock, PlayCircle, ShieldCheck } from "lucide-react";
-import { toast } from "sonner";
+import { ModelForm } from "@/components/views/form/ModelForm";
+import { ExternalLink, Lock, RefreshCw, ShieldCheck } from "lucide-react";
 
 function UnlockDialog() {
   return (
-    <ActionDialog
-      title="Unlock Account"
-      abstractModelName="UnlockAccountAction"
-      abstractFields={[
-        {
-          fieldName: "reason",
-          fieldType: "String",
-          widgetType: "Text",
-          labelName: "Reason",
-        },
-      ]}
-    />
+    <ActionDialog title="Unlock Account">
+      <Field fieldName="reason" labelName="Reason" widgetType="Text" />
+    </ActionDialog>
   );
 }
 
-<FormToolbar enableWorkflow>
-  {/* default */}
-  <Action
-    labelName="Lock"
-    operation="lockAccount"
-    placement="toolbar"
-    icon={Lock}
-    confirmMessage="Lock this account?"
-    successMessage="Account locked."
-    errorMessage="Failed to lock account."
-  />
+<ModelForm modelName="UserAccount">
+  <FormToolbar>
+    <Action
+      labelName="Lock"
+      operation="lockAccount"
+      placement="toolbar"
+      icon={Lock}
+      confirmMessage="Lock this account?"
+    />
+    <Action
+      type="dialog"
+      labelName="Unlock"
+      operation="unlockAccount"
+      placement="more"
+      icon={ShieldCheck}
+      component={UnlockDialog}
+    />
+  </FormToolbar>
 
-  {/* dialog */}
-  <Action
-    type="dialog"
-    labelName="Unlock"
-    operation="unlockAccount"
-    placement="more"
-    icon={ShieldCheck}
-    component={UnlockDialog}
-  />
+  <FormBody>
+    <FormSection labelName="Credentials">
+      <Action
+        type="link"
+        labelName="Open Docs"
+        placement="header"
+        icon={ExternalLink}
+        href="https://docs.example.com/credentials"
+      />
+      <Action
+        type="custom"
+        labelName="Regenerate Preview"
+        placement="inline"
+        icon={RefreshCw}
+        onClick={() => console.log("regenerate")}
+      />
 
-  {/* link */}
-  <Action
-    type="link"
-    labelName="Open Audit"
-    placement="more"
-    icon={ExternalLink}
-    href={({ id, modelName }) => `/${modelName}/audit?id=${id}`}
-    target="_blank"
-  />
-
-  {/* custom */}
-  <Action
-    type="custom"
-    labelName="Run Health Check"
-    placement="more"
-    icon={PlayCircle}
-    onClick={({ modelName }) => toast.info(`${modelName} health check started.`)}
-  />
-</FormToolbar>;
-```
-
-### FormSection Action Examples
-
-Minimal example:
-
-```tsx
-import { Action } from "@/components/common/Action";
-import { FormSection } from "@/components/common/form-section";
-
-<FormSection labelName="Advanced">
-  <Action
-    type="custom"
-    labelName="Validate Inputs"
-    placement="inline"
-    onClick={() => console.log("validate")}
-  />
-  {/* section fields... */}
-</FormSection>;
-```
-
-Common setup example:
-
-```tsx
-import { Action } from "@/components/common/Action";
-import { FormSection } from "@/components/common/form-section";
-import { ExternalLink, RefreshCw } from "lucide-react";
-
-<FormSection
-  labelName="Credentials"
-  description="Manage key pair and endpoint."
->
-  {/* header action */}
-  <Action
-    type="link"
-    labelName="Open Docs"
-    placement="header"
-    icon={ExternalLink}
-    href="https://docs.example.com/credentials"
-    target="_blank"
-  />
-
-  {/* inline action */}
-  <Action
-    type="custom"
-    labelName="Regenerate Preview"
-    placement="inline"
-    icon={RefreshCw}
-    onClick={() => console.log("regenerate")}
-  />
-
-  {/* section fields... */}
-</FormSection>;
+      <Field fieldName="username" />
+      <Field fieldName="status" />
+    </FormSection>
+  </FormBody>
+</ModelForm>;
 ```
 
 ## Context API
@@ -972,7 +814,7 @@ Inside `ModelForm` children, use `useModelFormContext()` to access:
   - pristine form + remote snapshot changed => reset
   - dirty form + background refetch => do not overwrite current edits
 - Metadata resolution policy: always fetch from `/metadata/getMetaModel`; first response is cached by React Query and reused.
-- Metadata-driven field props via `FieldPropsProvider`.
+- Metadata-driven field props are resolved by the internal field runtime; business code should stay on `Field`.
 - Cancel behavior:
   - edit mode: `Cancel` confirms (when dirty), resets form to latest loaded data, then switches to read-only mode
   - read mode: `Back` navigates to list page
@@ -1000,12 +842,11 @@ Inside `ModelForm` children, use `useModelFormContext()` to access:
 ## Dialog Architecture
 
 Detailed dialog API, props, and full examples are maintained in:
- - [Dialog components](./dialog)
+[Dialog](./dialog).
 
 Quick selection:
 
 - `ActionDialog`: invoke model operation `/{modelName}/{operation}` (single/bulk).
 - `ModelDialog`: relation-field runtime dialog, no explicit `modelName` needed.
-- `WizardDialog`: multi-step flow with custom submit.
 
 To avoid documentation drift, this file only keeps form-page guidance; dialog details are centralized in dialogs README.

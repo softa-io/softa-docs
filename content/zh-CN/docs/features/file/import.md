@@ -1,80 +1,82 @@
-# 数据导入
 
-File Starter 支持两种数据导入模式：
+## 导入
 
-- 基于配置模板的导入（`ImportTemplate + ImportTemplateField`）
-- 无模板的动态映射导入（请求中直接提供表头到字段的映射关系）
+对话框标签页：
+- `By Template`
+  - 按已配置模板导入（`ImportTemplate` + `ImportTemplateField`）
+  - 支持下载模板
+  - 通过所选模板提交上传文件
 
-## ImportTemplate 配置表
+- `Dynamic Import`
+  - 动态映射导入（无需模板，在请求中提供映射）
+  - 在浏览器中解析上传的 `.xlsx` 工作簿
+  - 基于元数据自动把工作簿表头映射到模型字段
+  - 允许用户在提交前调整映射关系
 
+- `My Import History`
+  - 加载当前用户在当前模型下的导入历史
+  - 原始文件 / 失败文件可以通过点击链接下载
+
+### ImportTemplate 配置表
 | 字段 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
-| `name` | String | `null` | 导入模板名称 |
+| `name` | String | `null` | 模板名称 |
 | `modelName` | String | `null` | 要导入的模型名 |
 | `importRule` | ImportRule | `null` | 导入规则：CreateOrUpdate / OnlyCreate / OnlyUpdate |
-| `uniqueConstraints` | List<String> | `null` | 在 CreateOrUpdate 模式下用于查找唯一记录的字段集合 |
-| `ignoreEmpty` | Boolean | `null` | 是否在导入时忽略空值 |
-| `skipException` | Boolean | `null` | 行数据出错时是否继续后续行 |
-| `customHandler` | String | `null` | 自定义导入处理器的 Spring Bean 名（`CustomImportHandler`） |
-| `syncImport` | Boolean | `null` | 为 true 时同步导入，否则异步导入 |
-| `includeDescription` | Boolean | `null` | 导出模板时是否包含字段描述 |
-| `description` | String | `null` | 模板说明 |
+| `uniqueConstraints` | List<String> | `null` | `CreateOrUpdate` 使用的唯一键字段 |
+| `ignoreEmpty` | Boolean | `null` | 导入时忽略空值 |
+| `skipException` | Boolean | `null` | 某一行失败时是否继续 |
+| `customHandler` | String | `null` | `CustomImportHandler` 对应的 Spring bean 名称 |
+| `syncImport` | Boolean | `null` | 为 `true` 时同步导入，否则异步导入 |
+| `includeDescription` | Boolean | `null` | 是否在模板输出中包含说明 |
+| `description` | String | `null` | 说明文本 |
 | `importFields` | List<ImportTemplateField> | `null` | 导入字段列表 |
 
-## ImportTemplateField 配置表
-
+### ImportTemplateField 配置表
 | 字段 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
-| `templateId` | Long | `null` | 所属 ImportTemplate 的 ID |
+| `templateId` | Long | `null` | `ImportTemplate` id |
 | `fieldName` | String | `null` | 模型字段名 |
 | `customHeader` | String | `null` | 自定义 Excel 表头 |
-| `sequence` | Integer | `null` | 在模板中的字段顺序 |
-| `required` | Boolean | `null` | 是否必填字段 |
-| `defaultValue` | String | `null` | 默认值（支持 `#{var}` 占位） |
-| `description` | String | `null` | 字段说明 |
+| `sequence` | Integer | `null` | 模板中的字段顺序 |
+| `required` | Boolean | `null` | 是否必填 |
+| `defaultValue` | String | `null` | 默认值（支持 `#{var}`） |
+| `description` | String | `null` | 说明文本 |
 
-## 一、基于模板的导入
+### 1. 按模板导入（已配置）
+1. 配置 `ImportTemplate` 和 `ImportTemplateField`
 
-### 1. 配置 ImportTemplate 和 ImportTemplateField
-
-ImportTemplate 关键字段：
-
+`ImportTemplate` 关键字段：
 - `name`、`modelName`、`importRule`
-- `uniqueConstraints`（用于 CreateOrUpdate）
+- `uniqueConstraints`（用于 `CreateOrUpdate`）
 - `ignoreEmpty`、`skipException`、`customHandler`、`syncImport`
 
-ImportTemplateField 关键字段：
-
+`ImportTemplateField` 关键字段：
 - `fieldName`、`customHeader`、`sequence`、`required`、`defaultValue`
 
-注意：
+说明：
+- `ImportTemplateField` 的默认值支持 `#{var}` 变量。变量来自 `env`。
+- 如果 `syncImport = true`，导入会在当前进程内执行。
+- 如果 `syncImport = false`，会向 MQ 发送异步导入消息。
 
-- ImportTemplateField 中的 `defaultValue` 支持变量 `#{var}`，变量值从 `env` 参数中解析。
-- 当 `syncImport = true` 时，导入逻辑在当前进程内同步执行。
-- 当 `syncImport = false` 时，会向 MQ 发送异步导入消息，由异步消费者执行导入。
-
-### 2. 下载导入模板（可选）
+2. 下载模板文件（可选）
 
 接口：
-
 - `GET /ImportTemplate/getTemplateFile?id={templateId}`
 
-生成的模板文件会使用字段标签作为表头；必填字段的表头会以样式高亮。
+生成的模板会使用字段标签作为表头，必填表头会带样式标识。
 
-### 3. 通过模板导入
+3. 按模板导入
 
 接口：
-
 - `POST /import/importByTemplate`
 
-请求参数：
-
-- `templateId`：ImportTemplate 的 ID
+参数：
+- `templateId`：`ImportTemplate` id
 - `file`：Excel 文件
-- `env`：环境变量的 JSON 字符串
+- `env`：环境变量 JSON 字符串
 
 示例：
-
 ```bash
 curl -X POST http://localhost:8080/import/importByTemplate \
   -F templateId=1001 \
@@ -82,27 +84,22 @@ curl -X POST http://localhost:8080/import/importByTemplate \
   -F file=@/path/to/import.xlsx
 ```
 
-## 二、动态映射导入（无模板）
-
+### 2. 动态映射导入（无模板）
 接口：
-
 - `POST /import/dynamicImport`
 
-该接口接收 `multipart/form-data` 请求，包含：
-
+该接口接受 `multipart/form-data`，包含：
 - `file`：上传的 Excel 文件
-- `wizard`：`ImportWizard` 的 JSON 载荷
+- `wizard`：`ImportWizard` 的 JSON payload
 
 关键字段：
-
-- `modelName`：要导入的模型名
-- `importRule`：`CreateOrUpdate` / `OnlyCreate` / `OnlyUpdate`
-- `uniqueConstraints`：逗号分隔的唯一约束字段列表
+- `modelName`
+- `importRule`：`CreateOrUpdate` | `OnlyCreate` | `OnlyUpdate`
+- `uniqueConstraints`：逗号分隔的字段名
 - `importFieldDTOList`：表头到字段的映射列表
 - `ignoreEmpty`、`skipException`、`customHandler`、`syncImport`
 
 示例：
-
 ```bash
 curl -X POST http://localhost:8080/import/dynamicImport \
   -F file=@/path/to/import.xlsx \
@@ -119,15 +116,14 @@ curl -X POST http://localhost:8080/import/dynamicImport \
   };type=application/json'
 ```
 
-## 三、导入结果与失败行
+### 3. 导入结果与失败行
+- 导入返回 `ImportHistory`
+- 如果任意一行失败，系统会生成并保存一个“失败数据”Excel 文件，其中包含 `Failed Reason` 列
+- 导入状态可能为 `PROCESSING`、`SUCCESS`、`FAILURE`、`PARTIAL_FAILURE`
 
-- 接口返回 `ImportHistory` 记录。
-- 如果存在失败行，会生成一份“失败数据” Excel 文件并保存，附加一列 `Failed Reason`（失败原因）。
-- 导入状态可能为：`PROCESSING`、`SUCCESS`、`FAILURE`、`PARTIAL_FAILURE`。
-
-## 四、自定义导入处理器
-
-你可以实现 `CustomImportHandler` 接口，并在 `ImportTemplate.customHandler` 或 `ImportWizard.customHandler` 中通过 Bean 名引用：
+### 4. 自定义导入处理器
+你可以注册一个实现了 `CustomImportHandler` 的 Spring bean，并在
+`ImportTemplate.customHandler` 或 `ImportWizard.customHandler` 中通过名称引用它。
 
 ```java
 import io.softa.starter.file.excel.imports.CustomImportHandler;
@@ -136,13 +132,12 @@ import io.softa.starter.file.excel.imports.CustomImportHandler;
 public class ProductImportHandler implements CustomImportHandler {
     @Override
     public void handleImportData(List<Map<String, Object>> rows, Map<String, Object> env) {
-        // 自定义预处理逻辑
+        // custom preprocessing
     }
 }
 ```
 
 约定：
-
-- 可以原地修改每一行的值。
-- 可以通过写入 `Failed Reason` 标记某一行为失败。
-- 不要新增、删除、重排或替换行对象。
+- 可以原地修改行值
+- 可以通过写入 `Failed Reason` 将某一行标记为失败
+- 不要新增、删除、重排或替换行对象
