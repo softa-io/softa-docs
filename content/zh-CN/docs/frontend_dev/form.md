@@ -5,8 +5,8 @@
 ## 相关文档
 
 - [Fields](./fields/index)
-- [关联字段](./fields/relation-fields)
-- [Widget 矩阵](./fields/widget-matrix)
+- [关联字段](./fields/relations)
+- [Widget 矩阵](./fields/widgets)
 - [Action](./action)
 - [Dialog](./dialog)
 - [ModelTable](./table)
@@ -83,8 +83,8 @@ export default function EditUserAccountPage() {
 如果需要自定义变体，可以在子组件中使用 `useModelFormContext()`，并直接重新组织 `FormHeader` / `FormToolbar` / `FormBody`。
 
 字段的规范化用法现在统一维护在 [Fields](./fields/index)。
-widget 兼容性和 widget 专属示例维护在 [Widget 矩阵](./fields/widget-matrix)。
-关联字段行为维护在 [关联字段](./fields/relation-fields)。
+widget 兼容性和 widget 专属示例维护在 [Widget 矩阵](./fields/widgets)。
+关联字段行为维护在 [关联字段](./fields/relations)。
 这些文档用于说明：
 
 - `Field` props 与元数据覆盖

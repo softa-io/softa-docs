@@ -16,8 +16,8 @@
 
 相关文档：
 
-- `./relation-fields.md`：`RelationTable`、`SelectTree`、`OneToMany`、`ManyToMany`
-- `./widget-matrix.md`：`FieldType -> WidgetType` 矩阵与 widget 专属示例
+- [Relation fields](./relations)：`RelationTable`、`SelectTree`、`OneToMany`、`ManyToMany`
+- [Widgets](./widgets)：`FieldType -> WidgetType` 矩阵与 widget 专属示例
 - [ModelForm](../form)：页面壳层
 - [ModelTable](../table)：只读单元格与内联编辑
 - [Tree](../tree)：被 `sideTree` 和 `SelectTree` 使用的内部 tree 原语
@@ -104,9 +104,9 @@ const userTableView = (
 | `defaultValue` | `unknown`                          | 否   | 仅创建态使用的默认值覆盖。优先级高于 `metaField.defaultValue` 和对话框 / 页面级 `defaultValues`。 |
 | `filters`      | `string \| FilterCondition`        | 否   | 关联过滤条件覆盖。`Field.filters` 会覆盖 `metaField.filters`。支持 JSON 字符串形式的元数据过滤条件以及 `#{fieldName}` 引用。 |
 | `onChange`     | `FieldOnChangeProp`                | 否   | 远程字段联动。支持简写 `string[]` 或 `{ update?, with? }`。 |
-| `tableView`    | `ReactElement<RelationTableProps>` | 否   | `OneToMany` / `ManyToMany` 的关联表格配置。必须是 `<RelationTable />` 元素。详见 `./relation-fields.md`。 |
-| `formView`     | `RelationFormView`                 | 否   | 关联对话框 / 详情视图配置。详见 `./relation-fields.md`。 |
-| `isPaged`      | `boolean`                          | 否   | 为 `OneToMany` / `ManyToMany` 启用分页关联表格模式。详见 `./relation-fields.md`。 |
+| `tableView`    | `ReactElement<RelationTableProps>` | 否   | `OneToMany` / `ManyToMany` 的关联表格配置。必须是 `<RelationTable />` 元素。详见 [Relation Fields](./relations)。 |
+| `formView`     | `RelationFormView`                 | 否   | 关联对话框 / 详情视图配置。详见 [Relation Fields](./relations)。 |
+| `isPaged`      | `boolean`                          | 否   | 为 `OneToMany` / `ManyToMany` 启用分页关联表格模式。详见 [Relation Fields](./relations)。 |
 
 `FieldCondition`：
 
@@ -380,7 +380,7 @@ companyId.cascadedField = "employeeId.department.companyId";
 
 ## 字段类型概览
 
-本节说明不同 `fieldType` 的默认前端行为。widget 专属变体和 props 表请见 `./widget-matrix.md`。
+本节说明不同 `fieldType` 的默认前端行为。widget 专属变体和 props 表请见 [Widgets](./widgets)。
 
 ### 字符串与文本
 
@@ -465,7 +465,7 @@ companyId.cascadedField = "employeeId.department.companyId";
 <Field fieldName="departmentId" widgetType="SelectTree" />
 ```
 
-`SelectTree`、`RelationTable`、`OneToMany`、`ManyToMany` 请见 `./relation-fields.md`。
+`SelectTree`、`RelationTable`、`OneToMany`、`ManyToMany` 请见 [Relation Fields](./relations)。
 
 ### 文件类型
 
@@ -514,7 +514,7 @@ companyId.cascadedField = "employeeId.department.companyId";
 - 后端 payload 和元数据默认值可能仍以字符串形式到达；字段运行时会在加载时把它们归一化为 UI 形态
 - 传入页面 / 对话框 `defaultValues` 时，请直接使用上表中的 UI 形态，而不是预先字符串化
 - `ManyToMany` 即使使用 `widgetType="TagList"`，提交时仍是普通增量 patch map
-- 顶层关联字段的细节请见 `./relation-fields.md`
+- 顶层关联字段的细节请见 [Relation Fields](./relations) 。
 
 ### `FileInfo`
 

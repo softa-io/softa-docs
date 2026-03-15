@@ -8,7 +8,7 @@
   - 主文档：[ModelTable](./table)
   - 用于需要左侧树筛选面板的列表页
 - `Field widgetType="SelectTree"`
-  - 主文档：[关联字段](./fields/relation-fields)
+  - 主文档：[关联字段](./fields/relations)
   - 用于表单和内联编辑器中的层级关联选择
 
 此目录中的内部构件：

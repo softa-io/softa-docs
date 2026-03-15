@@ -5,8 +5,8 @@ Metadata-driven create/edit form container based on `react-hook-form` and Zod.
 ## Related Docs
 
 - [Fields](./fields/index)
-- [Relation fields](./fields/relation-fields)
-- [Widget matrix](./fields/widget-matrix)
+- [Relation fields](./fields/relations)
+- [Widget matrix](./fields/widgets)
 - [Action](./action)
 - [Dialog](./dialog)
 - [ModelTable](./table)
@@ -83,8 +83,8 @@ Validation behavior:
 Need custom variations? Use `useModelFormContext()` in children and rearrange `FormHeader/FormToolbar/FormBody` directly.
 
 Canonical field usage now lives in [Fields](./fields/index).
-Widget compatibility and widget-specific examples live in [Widget matrix](./fields/widget-matrix).
-Relation field behavior lives in [Relation fields](./fields/relation-fields).
+Widget compatibility and widget-specific examples live in [Widget matrix](./fields/widgets).
+Relation field behavior lives in [Relation fields](./fields/relations).
 Use those documents for:
 
 - `Field` props and metadata overrides

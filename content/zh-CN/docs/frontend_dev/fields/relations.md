@@ -12,7 +12,7 @@
 相关文档：
 
 - [Fields](./index)：核心 `Field` props、条件、`filters`、`Field.onChange`、值契约
-- [Widget 矩阵](./widget-matrix)：widget 兼容性与 widget 专属示例
+- [Widget 矩阵](./widgets)：widget 兼容性与 widget 专属示例
 - [ModelForm](../form)：页面壳层与关联表单示例
 - [ModelTable](../table)：只读单元格与内联编辑行为
 

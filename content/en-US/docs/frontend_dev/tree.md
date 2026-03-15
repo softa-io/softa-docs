@@ -8,7 +8,7 @@ Business-facing entry points live elsewhere:
   - primary doc: [ModelTable](./table)
   - use for list pages that need a left tree filter panel
 - `Field widgetType="SelectTree"`
-  - primary doc: [Relation fields](./fields/relation-fields)
+  - primary doc: [Relation fields](./fields/relations)
   - use for hierarchical relation selection inside forms and inline editors
 
 Internal building blocks in this folder:

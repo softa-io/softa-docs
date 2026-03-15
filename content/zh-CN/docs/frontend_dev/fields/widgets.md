@@ -9,7 +9,7 @@
 相关文档：
 
 - [Fields](./index)：核心 `Field` props、条件、`filters`、`Field.onChange`、值契约
-- [关联字段](./relation-fields)：`RelationTable`、`SelectTree`、`OneToMany`、`ManyToMany`
+- [关联字段](./relations)：`RelationTable`、`SelectTree`、`OneToMany`、`ManyToMany`
 
 ## FieldType -> WidgetType 矩阵
 
@@ -207,7 +207,7 @@
 <Field fieldName="userIds" widgetType="TagList" tableView={userTableView} />
 ```
 
-关联专属行为、查询规则和 `RelationTable` 请见 `./relation-fields.md`。
+关联专属行为、查询规则和 `RelationTable` 请见 [Relation Fields](./relations)。
 
 ## 文件与图片类 Widgets
 

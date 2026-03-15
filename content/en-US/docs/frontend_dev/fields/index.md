@@ -16,8 +16,8 @@ Use this README for:
 
 Related docs:
 
-- `./relation-fields.md`: `RelationTable`, `SelectTree`, `OneToMany`, `ManyToMany`
-- `./widget-matrix.md`: `FieldType -> WidgetType` matrix and widget-specific examples
+- [Relation Fields](./relations): `RelationTable`, `SelectTree`, `OneToMany`, `ManyToMany`
+- [Widgets](./widgets): `FieldType -> WidgetType` matrix and widget-specific examples
 - [ModelForm](../form): page shell
 - [ModelTable](../table): read cells and inline edit
 - [Tree](../tree): internal tree primitives used by `sideTree` and `SelectTree`
@@ -104,9 +104,9 @@ const userTableView = (
 | `defaultValue` | `unknown`                          | No       | Create-only default override. Has higher priority than `metaField.defaultValue` and dialog/page `defaultValues`.                                         |
 | `filters`      | `string \| FilterCondition`        | No       | Relation filter override. `Field.filters` overrides `metaField.filters`. Supports JSON-string metadata filters and `#{fieldName}` references.            |
 | `onChange`     | `FieldOnChangeProp`                | No       | Remote field linkage. Supports shorthand `string[]` or `{ update?, with? }`.                                                                              |
-| `tableView`    | `ReactElement<RelationTableProps>` | No       | Relation-table config for `OneToMany` / `ManyToMany`. Must be a `<RelationTable />` element. See `./relation-fields.md`.                                |
-| `formView`     | `RelationFormView`                 | No       | Relation dialog/detail view config. See `./relation-fields.md`.                                                                                            |
-| `isPaged`      | `boolean`                          | No       | Enables paged relation-table mode for `OneToMany` / `ManyToMany`. See `./relation-fields.md`.                                                            |
+| `tableView`    | `ReactElement<RelationTableProps>` | No       | Relation-table config for `OneToMany` / `ManyToMany`. Must be a `<RelationTable />` element. See [Relation Fields](./relations).                                |
+| `formView`     | `RelationFormView`                 | No       | Relation dialog/detail view config. See [Relation Fields](./relations).                                                                                            |
+| `isPaged`      | `boolean`                          | No       | Enables paged relation-table mode for `OneToMany` / `ManyToMany`. See [Relation Fields](./relations).                                                            |
 
 `FieldCondition`:
 
@@ -380,7 +380,7 @@ Syntax notes:
 
 ## Field-Type Overview
 
-This section explains the default front-end behavior by `fieldType`. For widget-specific variants and props tables, see `./widget-matrix.md`.
+This section explains the default front-end behavior by `fieldType`. For widget-specific variants and props tables, see [Widgets](./widgets).
 
 ### String And Text
 
@@ -465,7 +465,7 @@ Special format-oriented widgets:
 <Field fieldName="departmentId" widgetType="SelectTree" />
 ```
 
-See `./relation-fields.md` for `SelectTree`, `RelationTable`, `OneToMany`, and `ManyToMany`.
+See [Relation Fields](./relations) for `SelectTree`, `RelationTable`, `OneToMany`, and `ManyToMany`.
 
 ### File Types
 
@@ -514,7 +514,7 @@ Notes:
 - backend payloads and metadata defaults may still arrive as strings; the field runtime normalizes them into UI shapes on load
 - when you pass page/dialog `defaultValues`, use the UI shapes above directly instead of pre-stringifying values
 - `ManyToMany` with `widgetType="TagList"` still submits the normal incremental patch map
-- top-level relation field details are documented in `./relation-fields.md`
+- top-level relation field details are documented in [Relation Fields](./relations)
 
 ### `FileInfo`
 

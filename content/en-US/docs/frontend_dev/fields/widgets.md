@@ -9,7 +9,7 @@ Use this document for:
 Related docs:
 
 - [Fields](./index): core `Field` props, conditions, `filters`, `Field.onChange`, value contracts
-- [Relation fields](./relation-fields): `RelationTable`, `SelectTree`, `OneToMany`, `ManyToMany`
+- [Relation fields](./relations): `RelationTable`, `SelectTree`, `OneToMany`, `ManyToMany`
 
 ## FieldType -> WidgetType Matrix
 
@@ -207,7 +207,7 @@ Preview is rendered by `react-markdown` with `remark-gfm` enabled by default.
 <Field fieldName="userIds" widgetType="TagList" tableView={userTableView} />
 ```
 
-See `./relation-fields.md` for relation-specific behavior, query rules, and `RelationTable`.
+See [Relation Fields](./relations) for relation-specific behavior, query rules, and `RelationTable`.
 
 ## File And Image Widgets
 

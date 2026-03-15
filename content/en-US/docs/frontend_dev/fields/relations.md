@@ -12,7 +12,7 @@ Use this document for relation-oriented field APIs:
 Related docs:
 
 - [Fields](./index): core `Field` props, conditions, `filters`, `Field.onChange`, value contracts
-- [Widget matrix](./widget-matrix): widget compatibility and widget-specific examples
+- [Widget matrix](./widgets): widget compatibility and widget-specific examples
 - [ModelForm](../form): page shell and relation-form examples
 - [ModelTable](../table): read cells and inline edit behavior
 
