@@ -631,6 +631,84 @@ export default function UserRoleFormPage() {
 - `formView` 是可选的。在 `ManyToMany` 中，点击行会以只读模式打开 `ModelDialog`；新增 / 移除仍然走选择器行为
 - 未解析的 `#{fieldName}` 依赖会暂停远程关联查询和选择器查询，直到父表单中的依赖值存在
 
+### OneToOne（所属内联）
+
+对于**所属**的 OneToOne 关系（例如 `UserProfile → UserAccount`），向 `OneToOne` 字段传入 `formView` 后，相关模型的字段会内联渲染到父表单中，而不是显示引用选择器。
+
+- UI：内联在父表单体内的 `FormSection`
+- 支持：编辑所有声明的子字段
+- 子字段以 `{fieldName}.{subField}` 的形式注册到**父 RHF 实例**（例如 `userId.username`）
+- `getById` 会根据 `formView` JSX 静态推导出 `subQueries: { userId: { fields: [...] } }` 并自动注入，无需额外配置
+- 提交默认：增量（update 仅发送 `{ id, ...onlyChangedSubFields }`；create 发送完整子对象，不含 `id`）
+- `formView` 内的字段条件（`dependsOn`、`showWhen`）在子对象作用域内求值，监听父表单值时会正确添加前缀
+- `ManyToOne` 字段**不支持** `formView`；误用时开发模式下会打印 `console.error`
+
+用法：
+
+```tsx
+function UserAccountOneToOneView() {
+  return (
+    <FormSection labelName="Account">
+      <Field fieldName="username" />
+      <Field fieldName="nickname" />
+      <Field fieldName="email" />
+      <Field fieldName="mobile" />
+      <Field fieldName="status" />
+      <Field fieldName="policyId" />
+    </FormSection>
+  );
+}
+
+export default function UserProfileFormPage() {
+  return (
+    <ModelForm modelName="UserProfile">
+      <FormHeader />
+      <FormToolbar />
+
+      <FormBody>
+        <FormSection labelName="General" hideHeader>
+          <Field fieldName="fullName" />
+          <Field fieldName="birthDate" />
+          <Field fieldName="gender" />
+        </FormSection>
+
+        {/* OneToOne 内联：在当前表单内渲染 UserAccount 的字段 */}
+        <Field fieldName="userId" formView={UserAccountOneToOneView} />
+      </FormBody>
+    </ModelForm>
+  );
+}
+```
+
+提交 payload 示例（update，仅 `nickname` 变更）：
+
+```json
+{
+  "id": "...",
+  "userId": {
+    "id": "...",
+    "nickname": "Alice"
+  }
+}
+```
+
+提交 payload 示例（create）：
+
+```json
+{
+  "userId": {
+    "username": "alice",
+    "nickname": "Alice",
+    "email": "alice@example.com",
+    "mobile": null,
+    "status": "ACTIVE",
+    "policyId": "1"
+  }
+}
+```
+
+未传入 `formView` 时，`OneToOne` 与 `ManyToOne` 行为一致，渲染引用选择器组件。
+
 ### 兼容性
 
 后端仍然支持 XToMany 字段的整量提交。

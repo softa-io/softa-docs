@@ -631,6 +631,84 @@ Notes:
 - `formView` is optional. In `ManyToMany`, row-click opens `ModelDialog` in read mode; add/remove still uses picker behavior.
 - unresolved `#{fieldName}` dependencies pause remote relation queries and picker queries until the dependent parent form value exists
 
+### OneToOne (Owned Inline)
+
+For **owned** OneToOne relationships (e.g. `UserProfile → UserAccount`), passing `formView` to a `OneToOne` field renders its related-model fields inline inside the parent form, rather than showing a reference selector.
+
+- UI: inline `FormSection`(s) inside the parent form body
+- supports: edit all declared sub-fields
+- sub-fields register in the **parent RHF instance** as `{fieldName}.{subField}` (e.g. `userId.username`)
+- `getById` automatically adds `subQueries: { userId: { fields: [...] } }` derived statically from the `formView` JSX — no extra config needed
+- submit default: incremental (update sends `{ id, ...onlyChangedSubFields }`; create sends full sub-object without `id`)
+- field conditions (`dependsOn`, `showWhen`) inside `formView` resolve against the sub-object scope and are correctly prefixed when watching parent form values
+- `ManyToOne` fields do **not** support `formView`; a dev-mode `console.error` is shown if misused
+
+Usage:
+
+```tsx
+function UserAccountOneToOneView() {
+  return (
+    <FormSection labelName="Account">
+      <Field fieldName="username" />
+      <Field fieldName="nickname" />
+      <Field fieldName="email" />
+      <Field fieldName="mobile" />
+      <Field fieldName="status" />
+      <Field fieldName="policyId" />
+    </FormSection>
+  );
+}
+
+export default function UserProfileFormPage() {
+  return (
+    <ModelForm modelName="UserProfile">
+      <FormHeader />
+      <FormToolbar />
+
+      <FormBody>
+        <FormSection labelName="General" hideHeader>
+          <Field fieldName="fullName" />
+          <Field fieldName="birthDate" />
+          <Field fieldName="gender" />
+        </FormSection>
+
+        {/* OneToOne inline: renders UserAccount fields inside this form */}
+        <Field fieldName="userId" formView={UserAccountOneToOneView} />
+      </FormBody>
+    </ModelForm>
+  );
+}
+```
+
+Submit payload shape (update, only `nickname` changed):
+
+```json
+{
+  "id": "...",
+  "userId": {
+    "id": "...",
+    "nickname": "Alice"
+  }
+}
+```
+
+Submit payload shape (create):
+
+```json
+{
+  "userId": {
+    "username": "alice",
+    "nickname": "Alice",
+    "email": "alice@example.com",
+    "mobile": null,
+    "status": "ACTIVE",
+    "policyId": "1"
+  }
+}
+```
+
+When `formView` is **not** provided, `OneToOne` behaves identically to `ManyToOne` and renders a reference selector widget.
+
 ### Compatibility
 
 Backend still supports full submit for XToMany fields.
