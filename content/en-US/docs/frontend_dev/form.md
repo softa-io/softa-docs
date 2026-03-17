@@ -55,7 +55,7 @@ export default function EditUserAccountPage() {
         />
       </FormToolbar>
 
-      <FormBody className="rounded-lg border border-border bg-card p-6">
+      <FormBody>
         <FormSection labelName="General" hideHeader>
           <Field fieldName="username" />
           <Field fieldName="nickname" />
@@ -498,11 +498,7 @@ const optionItemsTableView = (
 function OptionItemsFormView() {
   return (
     <ModelDialog title="Option Item">
-      <FormBody
-        className="rounded-lg border border-border bg-card p-6"
-        enableAuditLog={false}
-        sectionNavMode="never"
-      >
+      <FormBody enableAuditLog={false}>
         <FormSection labelName="General" hideHeader>
           <Field fieldName="itemCode" />
           <Field fieldName="itemName" />
@@ -521,7 +517,7 @@ export default function SysOptionSetFormPage() {
       <FormHeader />
       <FormToolbar />
 
-      <FormBody className="rounded-lg border border-border bg-card p-6">
+      <FormBody>
         <FormSection>
           <Field fieldName="optionSetCode" />
           <Field fieldName="name" />
@@ -602,7 +598,7 @@ export default function UserRoleFormPage() {
       <FormHeader />
       <FormToolbar />
 
-      <FormBody className="rounded-lg border border-border bg-card p-6">
+      <FormBody>
         <FormSection labelName="General" hideHeader>
           <Field fieldName="name" />
           <Field fieldName="code" />
@@ -648,7 +644,7 @@ Recommended default layout:
 - Sticky toolbar:
   - left: built-in `FormEditStatus + FormPrimaryActions` (+ `FormWorkflowActions` when `enableWorkflow=true`)
   - right: business actions area (custom actions + built-in Duplicate/Delete + More Actions)
-- Body: `FormBody` renders section nav (auto) + form content + audit panel
+- Body: `FormBody` renders either stacked sections or true tabs, plus the built-in audit panel layout
 - Audit: `FormBody(enableAuditLog)` controls audit panel; right on large screens and bottom on small screens
 
 ## Props
@@ -695,11 +691,109 @@ Remote `Field.onChange` in `ModelForm`:
 
 ### FormBody Props
 
-| Prop             | Type                            | Required | Default  | Notes                                            |
-| ---------------- | ------------------------------- | -------- | -------- | ------------------------------------------------ |
-| `sectionNavMode` | `"auto" \| "always" \| "never"` | No       | `"auto"` | `auto` shows section nav when section count > 3. |
-| `enableAuditLog` | `boolean`                       | No       | `true`   | Toggle audit panel (only renders in edit mode).  |
-| `children`       | `ReactNode`                     | Yes      | -        | Form sections / content nodes.                   |
+| Prop             | Type                                        | Required | Default      | Notes                                                                    |
+| ---------------- | ------------------------------------------- | -------- | ------------ | ------------------------------------------------------------------------ |
+| `sectionNav`     | `boolean`                                   | No       | `false`      | Enables sidebar section nav. When `true`, nav renders when the section/tab has at least 2 sections. |
+| `enableAuditLog` | `boolean`                                   | No       | `true`       | Toggle audit panel (only renders in edit mode).                          |
+| `children`       | `ReactNode`                                 | Yes      | -            | Content nodes. `FormSection`/`Field` nodes at root level render as shared content above tabs; root `FormTab` nodes activate tabs mode. `FormTab` cannot be nested inside another `FormTab`. |
+
+`FormBody` infers layout mode from its root children. Any root `FormTab` activates tabs mode; `FormSection` and `Field` nodes placed outside `FormTab` are rendered above the tab strip as shared content visible across all tabs.
+`FormBody` also includes a built-in content surface style by default: `rounded-(--ui-card-radius) border border-border bg-card p-(--ui-card-padding)`. Use `className` to add extra styles or override defaults when needed.
+
+### FormTab Props
+
+`FormTab` is the root content block for tabbed `FormBody` layouts. It can contain multiple `FormSection` blocks or direct content nodes.
+
+| Prop        | Type        | Required | Default | Notes                                                |
+| ----------- | ----------- | -------- | ------- | ---------------------------------------------------- |
+| `labelName`  | `string`    | Yes      | -       | Visible tab label.                                                                    |
+| `value`      | `string`    | No       | auto    | Optional stable tab id; auto-derived from label.                                      |
+| `sectionNav` | `boolean`   | No       | -       | Overrides `FormBody`'s `sectionNav` for this tab only. Takes priority when defined.   |
+| `children`   | `ReactNode` | No       | -       | Tab panel content. `FormSection` remains recommended.                                  |
+
+### FormSection Props
+
+`FormSection` is the default content block inside `FormBody`. It provides section title/description rendering, a responsive field grid, local section actions, and section-nav registration.
+
+| Prop          | Type                  | Required | Default  | Notes                                                                                 |
+| ------------- | --------------------- | -------- | -------- | ------------------------------------------------------------------------------------- |
+| `labelName`   | `string`              | No       | -        | Visible section label; also used as the section-nav anchor text.                      |
+| `description` | `string`              | No       | -        | Optional helper text rendered under the section header.                               |
+| `className`   | `string`              | No       | -        | Extra wrapper class for the section container.                                        |
+| `columns`     | `1 \| 2 \| 3 \| 4`    | No       | `2`      | Responsive grid column count for section content on `md+` layouts.                    |
+| `hideHeader`  | `boolean`             | No       | `false`  | Hides the visual section header, but the section can still participate in nav.        |
+| `divided`     | `boolean`             | No       | `false`  | Adds a top border between sections. Suppressed on the first section (`:first-child`). |
+| `children`    | `ReactNode`           | No       | -        | Usually `Field` nodes plus optional section-scoped `Action` nodes.                    |
+
+Notes:
+
+- `FormSection` registers itself to the nearest `FormBody` section registry automatically.
+- Nav label falls back to `"Section"` when `labelName` is omitted.
+- Generic labels (`"Section"`) are auto-renamed in nav as `Section 1`, `Section 2`, and so on.
+- `hideHeader` only affects the rendered header; it does not disable section-nav registration.
+- `divided` is most useful when sections have no `labelName` (i.e. the header itself is hidden) and visual separation is still needed. When `labelName` is present the heading already provides visual separation, so `divided` is typically unnecessary.
+- `FormSection` supports only local UI actions: `type="link"` and `type="custom"` with `placement="header"` or `placement="inline"`.
+
+### Section Nav
+
+`FormSectionNav` is built into `FormBody`; pages usually do not render it directly.
+
+Behavior:
+
+- `FormBody` collects descendant `FormSection` anchors and renders nav from their registration order.
+- `sectionNav` is `false` by default; set to `true` to enable the sidebar nav.
+- Nav renders only when the current view has at least 2 registered sections.
+- In tabs mode, `FormTab`'s own `sectionNav` takes priority over `FormBody`'s setting for that tab. Omitting it on `FormTab` inherits `FormBody`'s value.
+- Clicking a nav item smoothly scrolls the form's own scroll container, not the browser window.
+- In stacked mode, sidebar nav is desktop-oriented: it appears from `xl` layout when there is no right audit column, and from `2xl` when audit log is rendered on the right.
+
+Stacked example:
+
+```tsx
+<FormBody sectionNav>
+  <FormSection labelName="General" hideHeader>
+    <Field fieldName="name" />
+    <Field fieldName="code" />
+  </FormSection>
+
+  <FormSection labelName="Security">
+    <Field fieldName="passwordMinLength" />
+    <Field fieldName="passwordComplexityEnabled" />
+  </FormSection>
+
+  <FormSection labelName="Audit">
+    <Field fieldName="createdBy" readOnly />
+    <Field fieldName="createdDate" readOnly />
+  </FormSection>
+
+  <FormSection labelName="Advanced">
+    <Field fieldName="description" />
+  </FormSection>
+</FormBody>
+```
+
+Tabbed example:
+
+```tsx
+import { FormBody, FormTab } from "@/components/views/form/components/FormBody";
+
+<FormBody>
+  <FormTab labelName="Profile" sectionNav>
+    <FormSection labelName="General">
+      <Field fieldName="name" />
+      <Field fieldName="code" />
+    </FormSection>
+
+    <FormSection labelName="Advanced">
+      <Field fieldName="description" />
+    </FormSection>
+  </FormTab>
+
+  <FormTab labelName="Members">
+    <Field fieldName="userIds" />
+  </FormTab>
+</FormBody>
+```
 
 ### FormToolbar Props
 

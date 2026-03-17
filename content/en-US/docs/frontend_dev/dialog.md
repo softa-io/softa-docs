@@ -59,7 +59,7 @@ function OptionItemsDialogView() {
   return (
     <ModelDialog title="Option Item">
       <FormHeader />
-      <FormBody enableAuditLog={false} sectionNavMode="never">
+      <FormBody enableAuditLog={false}>
         <FormSection labelName="General" hideHeader>
           <Field fieldName="itemCode" />
           <Field fieldName="itemName" />

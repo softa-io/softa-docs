@@ -55,7 +55,7 @@ export default function EditUserAccountPage() {
         />
       </FormToolbar>
 
-      <FormBody className="rounded-lg border border-border bg-card p-6">
+      <FormBody>
         <FormSection labelName="General" hideHeader>
           <Field fieldName="username" />
           <Field fieldName="nickname" />
@@ -498,11 +498,7 @@ const optionItemsTableView = (
 function OptionItemsFormView() {
   return (
     <ModelDialog title="Option Item">
-      <FormBody
-        className="rounded-lg border border-border bg-card p-6"
-        enableAuditLog={false}
-        sectionNavMode="never"
-      >
+      <FormBody enableAuditLog={false}>
         <FormSection labelName="General" hideHeader>
           <Field fieldName="itemCode" />
           <Field fieldName="itemName" />
@@ -521,7 +517,7 @@ export default function SysOptionSetFormPage() {
       <FormHeader />
       <FormToolbar />
 
-      <FormBody className="rounded-lg border border-border bg-card p-6">
+      <FormBody>
         <FormSection>
           <Field fieldName="optionSetCode" />
           <Field fieldName="name" />
@@ -602,7 +598,7 @@ export default function UserRoleFormPage() {
       <FormHeader />
       <FormToolbar />
 
-      <FormBody className="rounded-lg border border-border bg-card p-6">
+      <FormBody>
         <FormSection labelName="General" hideHeader>
           <Field fieldName="name" />
           <Field fieldName="code" />
@@ -648,7 +644,7 @@ export default function UserRoleFormPage() {
 - 吸顶工具栏：
   - 左侧：内置 `FormEditStatus + FormPrimaryActions`（启用 `enableWorkflow=true` 时再加 `FormWorkflowActions`）
   - 右侧：业务动作区域（自定义动作 + 内置 Duplicate/Delete + More Actions）
-- Body：`FormBody` 负责渲染分组导航（自动）+ 表单内容 + 审计面板
+- Body：`FormBody` 渲染堆叠的 section 或真正的 tab 布局，以及内置的审计面板布局
 - Audit：`FormBody(enableAuditLog)` 控制审计面板；大屏在右侧，小屏在底部
 
 ## Props
@@ -695,11 +691,110 @@ export default function UserRoleFormPage() {
 
 ### FormBody Props
 
-| Prop             | 类型                            | 必填 | 默认值   | 说明 |
-| ---------------- | ------------------------------- | ---- | -------- | ---- |
-| `sectionNavMode` | `"auto" \| "always" \| "never"` | 否   | `"auto"` | 当 section 数量大于 3 时，`auto` 会显示分组导航。 |
-| `enableAuditLog` | `boolean`                       | 否   | `true`   | 是否启用审计面板（仅编辑模式渲染）。 |
-| `children`       | `ReactNode`                     | 是   | -        | 表单 section / 内容节点。 |
+| Prop             | 类型                                        | 必填 | 默认值      | 说明 |
+| ---------------- | ------------------------------------------- | ---- | ----------- | ---- |
+| `sectionNav`     | `boolean`                                   | 否   | `false`     | 启用侧边栏 section 导航。为 `true` 时，当前视图至少有 2 个注册 section 才会渲染导航。 |
+| `enableAuditLog` | `boolean`                                   | 否   | `true`      | 是否启用审计面板（仅编辑模式渲染）。 |
+| `children`       | `ReactNode`                                 | 是   | -           | 内容节点。根级 `FormSection` / `Field` 节点渲染为 tab 上方的共享内容；根级 `FormTab` 节点激活 tab 模式。`FormTab` 不能嵌套在另一个 `FormTab` 中。 |
+
+`FormBody` 根据其根级子节点推断布局模式。任意根级 `FormTab` 会激活 tab 模式；放在 `FormTab` 外部的 `FormSection` 和 `Field` 节点将渲染在 tab 条上方，作为所有 tab 共享可见的内容。
+`FormBody` 默认内置了内容区域样式：`rounded-(--ui-card-radius) border border-border bg-card p-(--ui-card-padding)`。可通过 `className` 追加额外样式或覆盖默认值。
+
+### FormTab Props
+
+`FormTab` 是 tab 化 `FormBody` 布局的根内容块，可包含多个 `FormSection` 或直接的内容节点。
+
+| Prop         | 类型        | 必填 | 默认值 | 说明 |
+| ------------ | ----------- | ---- | ------ | ---- |
+| `labelName`  | `string`    | 是   | -      | 可见 tab 标签文字。 |
+| `value`      | `string`    | 否   | 自动   | 可选的稳定 tab id；由标签自动推导。 |
+| `sectionNav` | `boolean`   | 否   | -      | 仅对当前 tab 覆盖 `FormBody` 的 `sectionNav`。有值时优先生效。 |
+| `children`   | `ReactNode` | 否   | -      | Tab 面板内容。推荐使用 `FormSection`。 |
+
+### FormSection Props
+
+`FormSection` 是 `FormBody` 内部的默认内容块，提供 section 标题 / 描述渲染、响应式字段网格、局部 section 动作以及 section-nav 注册功能。
+
+| Prop          | 类型                   | 必填 | 默认值    | 说明 |
+| ------------- | ---------------------- | ---- | --------- | ---- |
+| `labelName`   | `string`               | 否   | -         | 可见 section 标签，也是 section-nav 的导航文本。 |
+| `description` | `string`               | 否   | -         | 可选的辅助说明文字，渲染在 section 标题下方。 |
+| `className`   | `string`               | 否   | -         | section 容器的额外 class。 |
+| `columns`     | `1 \| 2 \| 3 \| 4`    | 否   | `2`       | `md+` 布局时 section 内容的响应式网格列数。 |
+| `spacing`     | `"form" \| "card"`     | 否   | `"form"`  | section 网格的间距预设。嵌入更紧凑的 card 布局时使用 `card`。 |
+| `hideHeader`  | `boolean`              | 否   | `false`   | 隐藏可视 section 标题，但 section 仍可参与导航注册。 |
+| `divided`     | `boolean`              | 否   | `false`   | 在 section 上方添加顶部边框。对第一个 section（`:first-child`）不生效。 |
+| `children`    | `ReactNode`            | 否   | -         | 通常是 `Field` 节点，以及可选的 section 级 `Action` 节点。 |
+
+说明：
+
+- `FormSection` 会自动向最近的 `FormBody` section 注册表注册自身。
+- 默认 `labelName` 作为导航标签。
+- 无 `labelName` 时，通用标签（`"Section"`）在导航中会自动重命名为 `Section 1`、`Section 2` 等。
+- `hideHeader` 只影响已渲染的标题，不会禁用 section-nav 注册。
+- `divided` 在 section 没有 `labelName`（即标题本身被隐藏）但仍需视觉分隔时最为有用。当 `labelName` 存在时，标题本身已提供了视觉分隔，通常无需使用 `divided`。
+- `FormSection` 仅支持局部 UI 动作：`type="link"` 和 `type="custom"`，且 `placement` 为 `"header"` 或 `"inline"`。
+
+### Section Nav
+
+`FormSectionNav` 已内置于 `FormBody`，页面通常不需要直接渲染它。
+
+行为说明：
+
+- `FormBody` 收集后代 `FormSection` 的锚点，按注册顺序渲染导航。
+- `sectionNav` 默认为 `false`；设为 `true` 可启用侧边栏导航。
+- 导航仅在当前视图至少有 2 个已注册 section 时才渲染。
+- 在 tab 模式中，`FormTab` 自身的 `sectionNav` 对该 tab 的优先级高于 `FormBody` 的设置；`FormTab` 省略此项则继承 `FormBody` 的值。
+- 点击导航项会平滑滚动表单自身的滚动容器，而不是浏览器窗口。
+- 在堆叠模式下，侧边栏导航面向桌面端：无右侧审计列时从 `xl` 断点起显示，有审计日志渲染在右侧时从 `2xl` 断点起显示。
+
+堆叠布局示例：
+
+```tsx
+<FormBody sectionNav>
+  <FormSection labelName="General" hideHeader>
+    <Field fieldName="name" />
+    <Field fieldName="code" />
+  </FormSection>
+
+  <FormSection labelName="Security">
+    <Field fieldName="passwordMinLength" />
+    <Field fieldName="passwordComplexityEnabled" />
+  </FormSection>
+
+  <FormSection labelName="Audit">
+    <Field fieldName="createdBy" readOnly />
+    <Field fieldName="createdDate" readOnly />
+  </FormSection>
+
+  <FormSection labelName="Advanced">
+    <Field fieldName="description" />
+  </FormSection>
+</FormBody>
+```
+
+Tab 布局示例：
+
+```tsx
+import { FormBody, FormTab } from "@/components/views/form/components/FormBody";
+
+<FormBody>
+  <FormTab labelName="Profile" sectionNav>
+    <FormSection labelName="General">
+      <Field fieldName="name" />
+      <Field fieldName="code" />
+    </FormSection>
+
+    <FormSection labelName="Advanced">
+      <Field fieldName="description" />
+    </FormSection>
+  </FormTab>
+
+  <FormTab labelName="Members">
+    <Field fieldName="userIds" />
+  </FormTab>
+</FormBody>
+```
 
 ### FormToolbar Props
 
