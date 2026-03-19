@@ -1,28 +1,52 @@
-# 文件打印（文档导出）
 
-File Starter 支持基于模板的文档导出，可生成 Word 或 PDF 文件。文档模板存储在 `DocumentTemplate` 表中。
+## 文档导出（Word/PDF）
 
-## DocumentTemplate 配置表
+文档模板存储在 `DocumentTemplate` 中，可渲染为 Word 或 PDF。
 
-| 字段 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- |
-| `modelName` | String | `null` | 用于查询数据的模型名 |
-| `fileName` | String | `null` | 导出文件名 |
-| `fileId` | Long | `null` | 模板文件 ID（docx） |
-| `convertToPdf` | Boolean | `null` | 是否转换为 PDF，true 则输出 PDF，否则输出 Word |
+### DocumentTemplate 配置表
 
-DocumentTemplate 关键字段：
+| 字段          | 类型 | 默认值 | 说明 |
+|----------------| --- | --- | --- |
+| `modelName`    | String | 必填 | 用于拉取数据的模型名 |
+| `fileName`     | String | 必填 | 输出文件名 |
+| `templateType` | DocumentTemplateType | `WORD` | `WORD`、`RICH_TEXT` 或 `PDF` |
+| `fileId`       | Long | `null` | 模板文件 id（WORD 类型必填） |
+| `htmlTemplate`  | String | `null` | 带 `{{ }}` 占位符的 HTML（RICH_TEXT 类型必填） |
+| `convertToPdf` | Boolean | `null` | 为 true 时将 WORD 输出转为 PDF |
 
-- `modelName`、`fileName`、`fileId`、`convertToPdf`
+### 模板类型与生成流水线
 
-## 模板语法
+```
+templateType = WORD
+  1. 通过 poi-tl 从 .docx 提取变量（跳过 # 和 > 插件标签）
+  2. 为 OneToMany 字段构建 SubQueries（LoopRowTableRenderPolicy）
+  3. 拉取数据：modelService.getById(modelName, rowId, fields, subQueries, ConvertType.DISPLAY)
+  4. 通过 poi-tl 渲染 .docx（WordFileGenerator）
+  5. 若 convertToPdf=true，通过 docx4j 将 DOCX 转为 PDF
+  6. 上传至 OSS -> 返回 FileInfo
 
-- 使用 `{{ expr }}` 模板语法（变量与表达式），支持 Spring EL。
-- 支持通过 `LoopRowTableRenderPolicy` 对表格行进行循环渲染。
+templateType = RICH_TEXT
+  1. 通过 PlaceholderUtils 从 htmlTemplate（HTML）提取 {{ }} 变量
+  2. 为 OneToMany 字段构建 SubQueries
+  3. 拉取数据：modelService.getById(modelName, rowId, fields, subQueries, ConvertType.DISPLAY)
+  4. 将 {{ }} 转为 ${} 并通过 FreeMarker 渲染 HTML（PdfFileGenerator）
+  5. 通过 OpenPDF 将 HTML 转为 PDF
+  6. 上传至 OSS -> 返回 FileInfo
+```
 
-## 生成功能接口
+### WORD 模板语法
 
-接口：
+- 使用 `{{ variable }}` 占位符语法，支持 Spring EL。
+- 对通过 `LoopRowTableRenderPolicy` 以循环表格行渲染的 OneToMany 字段，使用 `{{#fieldName}}`。
+- OneToMany 字段由模型元数据自动识别；SubQueries 会自动构建以加载关联数据。
+
+### RICH_TEXT 模板
+
+- `htmlTemplate` 存储带 `{{ variable }}` 占位符的 HTML。
+- 渲染前将占位符转换为 FreeMarker 的 `${}` 语法。
+- 渲染后的 HTML 通过 OpenPDF 转为 PDF。
+
+### 接口
 
 - `GET /DocumentTemplate/generateDocument?templateId={id}&rowId={rowId}`
 
@@ -31,8 +55,6 @@ DocumentTemplate 关键字段：
 ```bash
 curl -X GET 'http://localhost:8080/DocumentTemplate/generateDocument?templateId=3001&rowId=10001'
 ```
-
-当 `convertToPdf = true` 时，输出 PDF 文件；否则输出 Word 文件。
 
 ## REST API 汇总
 
@@ -46,13 +68,14 @@ curl -X GET 'http://localhost:8080/DocumentTemplate/generateDocument?templateId=
   - `POST /export/dynamicExport`
 - 文档
   - `GET /DocumentTemplate/generateDocument`
-- 模板查询
+- 模板列表
   - `POST /ImportTemplate/listByModel`
   - `POST /ExportTemplate/listByModel`
 
 ## 示例
 
-Export params:
+导出参数：
+
 ```json
 {
   "fields": ["id", "name", "code", "status"],
@@ -64,7 +87,8 @@ Export params:
 }
 ```
 
-Import field mapping:
+导入字段映射：
+
 ```json
 [
   {"header": "Product Code", "fieldName": "productCode", "required": true},
@@ -73,7 +97,8 @@ Import field mapping:
 ]
 ```
 
-Import env:
+导入环境：
+
 ```json
 {
   "deptId": 10,

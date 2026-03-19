@@ -300,7 +300,7 @@ type FieldOnChangeProp =
 
 自动触发规则：
 
-- `blur`：文本类和编辑器类字段，如 `String`、`MultiString`、数值输入、`JSON`、`Filters`、`Orders`、`Code`、`Markdown`、`RichText`
+- `blur`：文本类和编辑器类字段，如 `String`、`MultiString`、数值输入、`JSON`、`Filters`、`Orders`、`Code`、`Markdown`、`RichText`、`TemplateEditor`
 - `change`：提交型字段，如 `Boolean`、`Date`、`DateTime`、`Time`、`Option`、`MultiOption`、`ManyToOne`、`OneToOne`、`File`、`MultiFile`
 
 前端使用的后端契约：
@@ -392,6 +392,7 @@ companyId.cascadedField = "employeeId.department.companyId";
   - `Color`
   - `Text`
   - `RichText`
+  - `TemplateEditor`
   - `Markdown`
   - `Code`
 
@@ -402,6 +403,7 @@ companyId.cascadedField = "employeeId.department.companyId";
 <Field fieldName="homepage" widgetType="URL" />
 <Field fieldName="description" widgetType="Text" />
 <Field fieldName="notes" widgetType="Markdown" />
+<Field fieldName="content" widgetType="RichText" />
 ```
 
 ### 数值类型
@@ -532,6 +534,7 @@ companyId.cascadedField = "employeeId.department.companyId";
 
 - `Text`
 - `RichText`
+- `TemplateEditor`
 - `Markdown`
 - `Code`
 - `OneToMany`

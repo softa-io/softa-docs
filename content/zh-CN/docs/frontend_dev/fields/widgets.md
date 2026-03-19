@@ -15,7 +15,7 @@
 
 | FieldType     | 默认行为                 | 支持的 WidgetType                                             |
 | ------------- | ------------------------ | ------------------------------------------------------------- |
-| `String`      | 单行输入                 | `URL`, `Email`, `Text`, `RichText`, `Markdown`, `Code`, `Color` |
+| `String`      | 单行输入                 | `URL`, `Email`, `Text`, `RichText`, `TemplateEditor`, `Markdown`, `Code`, `Color` |
 | `MultiString` | 逗号 / 回车提交的标签输入 | -                                                             |
 | `Integer`     | 数字输入                 | `Monetary`, `Percentage`, `Slider`                            |
 | `Long`        | 数字输入                 | `Monetary`, `Percentage`, `Slider`                            |
@@ -62,9 +62,54 @@
 
 ### `RichText`
 
+基于 Tiptap 的所见即所得富文本编辑器，存储和读取 HTML 字符串。
+
+工具栏：加粗、斜体、下划线、删除线、标题（H1–H4）、无序/有序列表、缩进/反缩进、对齐、链接、图片、表格、分割线、高亮、撤销/重做。
+
+两级懒加载：只读模式直接渲染原始 HTML，不加载编辑器；编辑模式再懒加载完整 Tiptap 编辑器。
+
 ```tsx
 <Field fieldName="content" widgetType="RichText" />
 ```
+
+### `TemplateEditor`
+
+基于 Tiptap 的模板编辑器，用于设计邮件模板、文档模板等需在后端渲染或生成 PDF 的内容。
+
+存储格式：带 `data-tpl-*` 属性的 HTML，用于模板专属节点。编辑器通过自定义 `parseHTML` / `renderHTML` 规则在存储的 HTML 与 Tiptap JSON 之间自动往返转换。
+
+功能：
+
+- **字段占位符** — 以行内芯片形式插入模型字段。HTML 输出：`<span data-tpl-field="fieldPath" data-tpl-label="label">{{fieldPath}}</span>`
+- **关联字段展开** — 将 `ManyToOne` / `OneToOne` 关联展开一层，插入嵌套路径（如 `department.name`）
+- **循环表格** — 将 `OneToMany` / `ManyToMany` 关联以可选列的循环表格插入。HTML 输出：`<table data-tpl-loop="relationField" data-tpl-model="RelatedModel">` 及 `<th data-tpl-field="col">` 表头
+- **字段选择器** — 工具栏「插入字段」按钮打开弹层，按直接字段 / 关联 / 集合分组展示可插入字段
+- **两级懒加载** — 与 `RichText` 相同：只读时仅渲染 HTML 不加载 Tiptap；编辑时懒加载完整编辑器
+
+```tsx
+<Field
+  fieldName="offerLetterTemplate"
+  widgetType="TemplateEditor"
+  widgetProps={{ modelName: "Employee" }}
+/>
+```
+
+```tsx
+<Field
+  fieldName="htmlTemplate"
+  widgetType="TemplateEditor"
+  widgetProps={{ modelName: "{{ modelName }}" }}
+/>
+```
+
+`TemplateEditor` widget props：
+
+| Prop        | 类型               | 默认值  | 说明                                                                                    |
+| ----------- | ------------------ | ------- | --------------------------------------------------------------------------------------- |
+| `modelName` | `string`           | -       | 可供插入的字段所属模型。支持静态值如 `"Employee"` 或字段引用如 `"{{ modelName }}"`。     |
+| `minHeight` | `number \| string` | `320px` | 编辑器最小高度。                                                                        |
+
+若未提供 `modelName`，会回退到字段自身的 `metaField.modelName`。
 
 ### `Markdown`
 

@@ -8,12 +8,12 @@ File Starter provides three core capabilities for developers:
 This document focuses on developer usage and API-level examples.
 
 ## Code Structure
-The Excel module is organized by responsibility:
 
 - `excel/export/strategy`: export strategy selection and concrete export implementations
 - `excel/export/support`: shared export support components such as data fetch, template resolve, writer, upload, and custom export hooks
 - `excel/imports`: import pipeline, handler factory, failure collection, persistence, and custom import hook
 - `excel/style`: shared Excel style handlers
+- `file/`: document file generators (Word, PDF)
 
 ## Dependency
 ```xml
@@ -28,9 +28,9 @@ The Excel module is organized by responsibility:
 - OSS storage (Minio or other supported providers) for template files and generated files.
 - Pulsar is required if you use async import.
 - Database contains file metadata tables and file-starter tables:
-  ImportTemplate, ImportTemplateField, ImportHistory,
-  ExportTemplate, ExportTemplateField, ExportHistory,
-  DocumentTemplate.
+  - Import: ImportTemplate, ImportTemplateField, ImportHistory,
+  - Export: ExportTemplate, ExportTemplateField, ExportHistory,
+  - Document: DocumentTemplate.
 
 ## Configuration
 ### MQ topics (async import)

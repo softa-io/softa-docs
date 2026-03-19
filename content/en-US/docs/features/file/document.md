@@ -3,29 +3,52 @@
 Document templates are stored in `DocumentTemplate` and rendered as Word or PDF.
 
 ### DocumentTemplate Configuration Table
-| Field | Type | Default | Description |
-| --- | --- | --- | --- |
-| `modelName` | String | `null` | Model name to fetch data |
-| `fileName` | String | `null` | Output file name |
-| `fileId` | Long | `null` | Template file id (docx) |
-| `convertToPdf` | Boolean | `null` | Convert to PDF if true |
+| Field          | Type | Default | Description |
+|----------------| --- | --- | --- |
+| `modelName`    | String | required | Model name to fetch data |
+| `fileName`     | String | required | Output file name |
+| `templateType` | DocumentTemplateType | `WORD` | `WORD`, `RICH_TEXT`, or `PDF` |
+| `fileId`       | Long | `null` | Template file id (required for WORD type) |
+| `htmlTemplate`  | String | `null` | HTML with `{{ }}` placeholders (required for RICH_TEXT type) |
+| `convertToPdf` | Boolean | `null` | Convert WORD output to PDF if true |
 
-DocumentTemplate key fields:
-- `modelName`, `fileName`, `fileId`, `convertToPdf`
+### Template Types and Generation Pipeline
 
-Template syntax:
-- Uses `{{ expr }}` template syntax (variables and expressions), supports Spring EL.
-- Supports table row loops via `LoopRowTableRenderPolicy`.
+```
+templateType = WORD
+  1. Extract variables from .docx via poi-tl (skip # and > plugin tags)
+  2. Build SubQueries for OneToMany fields (LoopRowTableRenderPolicy)
+  3. Fetch data: modelService.getById(modelName, rowId, fields, subQueries, ConvertType.DISPLAY)
+  4. Render .docx via poi-tl (WordFileGenerator)
+  5. If convertToPdf=true, convert DOCX to PDF via docx4j
+  6. Upload to OSS -> return FileInfo
 
-Endpoint:
+templateType = RICH_TEXT
+  1. Extract {{ }} variables from htmlTemplate (HTML) via PlaceholderUtils
+  2. Build SubQueries for OneToMany fields
+  3. Fetch data: modelService.getById(modelName, rowId, fields, subQueries, ConvertType.DISPLAY)
+  4. Convert {{ }} -> ${} and render HTML via FreeMarker (PdfFileGenerator)
+  5. Convert HTML to PDF via OpenPDF
+  6. Upload to OSS -> return FileInfo
+```
+
+### WORD Template Syntax
+- Uses `{{ variable }}` placeholder syntax with Spring EL support.
+- Use `{{#fieldName}}` for OneToMany fields rendered as looping table rows via `LoopRowTableRenderPolicy`.
+- OneToMany fields are auto-detected from model metadata; SubQueries are built automatically to load related data.
+
+### RICH_TEXT Template
+- `htmlTemplate` stores HTML with `{{ variable }}` placeholders.
+- Placeholders are converted to FreeMarker `${}` syntax before rendering.
+- The rendered HTML is converted to PDF via OpenPDF.
+
+### Endpoint
 - `GET /DocumentTemplate/generateDocument?templateId={id}&rowId={rowId}`
 
 Example:
 ```bash
 curl -X GET 'http://localhost:8080/DocumentTemplate/generateDocument?templateId=3001&rowId=10001'
 ```
-
-If `convertToPdf=true`, the generated file is PDF; otherwise Word.
 
 ## REST APIs (Summary)
 - Import

@@ -15,7 +15,7 @@ Related docs:
 
 | FieldType     | Default behavior               | Supported WidgetType                                            |
 | ------------- | ------------------------------ | --------------------------------------------------------------- |
-| `String`      | single-line input              | `URL`, `Email`, `Text`, `RichText`, `Markdown`, `Code`, `Color` |
+| `String`      | single-line input              | `URL`, `Email`, `Text`, `RichText`, `TemplateEditor`, `Markdown`, `Code`, `Color` |
 | `MultiString` | tag-style comma/enter input    | -                                                               |
 | `Integer`     | numeric input                  | `Monetary`, `Percentage`, `Slider`                              |
 | `Long`        | numeric input                  | `Monetary`, `Percentage`, `Slider`                              |
@@ -62,9 +62,54 @@ Related docs:
 
 ### `RichText`
 
+Tiptap-based WYSIWYG rich text editor. Stores and reads HTML strings.
+
+Toolbar: bold, italic, underline, strikethrough, headings (H1–H4), bullet/ordered lists, indent/outdent, text alignment, link, image, table, horizontal rule, highlight, undo/redo.
+
+Two-level lazy loading: read-only mode renders raw HTML without loading the editor; edit mode lazy-loads the full Tiptap editor.
+
 ```tsx
 <Field fieldName="content" widgetType="RichText" />
 ```
+
+### `TemplateEditor`
+
+Tiptap-based template editor for designing email templates, document templates, and other content intended for backend rendering and PDF generation.
+
+Storage format: HTML with `data-tpl-*` attributes for template-specific nodes. The editor round-trips between stored HTML and Tiptap JSON automatically via custom `parseHTML` / `renderHTML` rules.
+
+Features:
+
+- **Field placeholders** — insert model fields as inline chips. HTML output: `<span data-tpl-field="fieldPath" data-tpl-label="label">{{fieldPath}}</span>`
+- **Relation field expansion** — expand `ManyToOne` / `OneToOne` relations one level to insert nested paths (e.g. `department.name`)
+- **Loop tables** — insert `OneToMany` / `ManyToMany` relations as loop tables with selectable columns. HTML output: `<table data-tpl-loop="relationField" data-tpl-model="RelatedModel">` with `<th data-tpl-field="col">` headers
+- **Field picker** — toolbar "Insert Field" button opens a popover listing fields grouped by direct / relation / collection
+- **Two-level lazy loading** — same as `RichText`: read-only renders HTML without Tiptap; edit mode lazy-loads the full editor
+
+```tsx
+<Field
+  fieldName="offerLetterTemplate"
+  widgetType="TemplateEditor"
+  widgetProps={{ modelName: "Employee" }}
+/>
+```
+
+```tsx
+<Field
+  fieldName="htmlTemplate"
+  widgetType="TemplateEditor"
+  widgetProps={{ modelName: "{{ modelName }}" }}
+/>
+```
+
+`TemplateEditor` widget props:
+
+| Prop        | Type               | Default  | Notes                                                    |
+| ----------- | ------------------ | -------- | -------------------------------------------------------- |
+| `modelName` | `string`           | -        | Model whose fields are available for insertion. Supports static values like `"Employee"` and field references like `"{{ modelName }}"`. |
+| `minHeight` | `number \| string` | `320px`  | Minimum editor height.                                   |
+
+If `modelName` is omitted, falls back to the field's own `metaField.modelName`.
 
 ### `Markdown`
 

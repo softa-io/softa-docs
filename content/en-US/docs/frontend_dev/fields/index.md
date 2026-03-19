@@ -300,7 +300,7 @@ Current non-goals:
 
 Auto trigger rules:
 
-- `blur`: text-like and editor-like fields such as `String`, `MultiString`, numeric inputs, `JSON`, `Filters`, `Orders`, `Code`, `Markdown`, `RichText`
+- `blur`: text-like and editor-like fields such as `String`, `MultiString`, numeric inputs, `JSON`, `Filters`, `Orders`, `Code`, `Markdown`, `RichText`, `TemplateEditor`
 - `change`: commit-style fields such as `Boolean`, `Date`, `DateTime`, `Time`, `Option`, `MultiOption`, `ManyToOne`, `OneToOne`, `File`, `MultiFile`
 
 Backend contract used by frontend:
@@ -392,6 +392,7 @@ This section explains the default front-end behavior by `fieldType`. For widget-
   - `Color`
   - `Text`
   - `RichText`
+  - `TemplateEditor`
   - `Markdown`
   - `Code`
 
@@ -402,6 +403,7 @@ Examples:
 <Field fieldName="homepage" widgetType="URL" />
 <Field fieldName="description" widgetType="Text" />
 <Field fieldName="notes" widgetType="Markdown" />
+<Field fieldName="content" widgetType="RichText" />
 ```
 
 ### Numeric Types
@@ -532,6 +534,7 @@ Important runtime behavior:
 
 - `Text`
 - `RichText`
+- `TemplateEditor`
 - `Markdown`
 - `Code`
 - `OneToMany`

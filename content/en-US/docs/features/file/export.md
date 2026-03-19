@@ -78,7 +78,7 @@ JSON
 ```
 
 ### 2. Export By File Template (Upload Template File)
-This mode uses an uploaded Excel template file with placeholders like `{field}` or `{object.field}`.
+This mode uses an uploaded Excel template file with placeholders like `{{ field }}` or `{{ object.field }}`.
 The system extracts variables from the template to decide which fields to query.
 
 Endpoint:
