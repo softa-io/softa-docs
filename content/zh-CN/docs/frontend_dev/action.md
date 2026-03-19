@@ -76,7 +76,7 @@ type ActionValue<T> =
 动作条件说明：
 
 - `disabled` 和 `hidden` 与 `Field` 复用同一套运行时条件模型：`boolean`、`FilterCondition`、`dependsOn([...], evaluator)`
-- `FilterCondition` 会基于当前作用域值求值，并自动追踪 `#{fieldName}` 引用
+- `FilterCondition` 会基于当前作用域值求值，并自动追踪 `{{ fieldName }}` 引用
 - 不支持裸函数条件；请使用 `dependsOn([...], evaluator)` 包裹函数逻辑
 - 如果没有字段依赖，优先使用普通 `boolean`
 

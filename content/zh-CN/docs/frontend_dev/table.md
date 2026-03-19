@@ -117,8 +117,8 @@ type ModelTableRowData = { id: string };
 - `defaultValue` 仅作用于创建态；在表格流程中，它用于关联行创建和内联编辑器，不作用于只读单元格
 - 内联编辑字段值与表单使用相同的 UI 值契约；例如 `File -> FileInfo | null`、`MultiFile -> FileInfo[]`，以及 `JSON` / `DTO` / `Filters` / `Orders` 仍保持结构化
 - 表格只读单元格有意不消费 `widgetProps`；v1 使用统一紧凑表格渲染器，而不是复用表单风格 widget 变体
-- 对于内联编辑中的关联列（`ManyToOne` / `OneToOne`），`filters` 可使用 `#{fieldName}`，并会在发起关联查询前基于当前编辑行解析
-- 后端环境 token，例如 `TODAY`、`NOW`、`USER_ID`、`USER_COMP_ID`，会原样透传；如果后端应按字面量解释 token 风格字符串，请使用 `@{literal}`
+- 对于内联编辑中的关联列（`ManyToOne` / `OneToOne`），`filters` 可使用 `{{ fieldName }}`，并会在发起关联查询前基于当前编辑行解析（统一模板语法 `{{ expr }}`）
+- 后端环境 token，例如 `TODAY`、`NOW`、`USER_ID`、`USER_COMP_ID`，会原样透传；字面量可使用 `{{ 'value' }}` 或后端 token 如 `{{ NOW }}`
 - 在表格声明中，`hidden` 只支持 `boolean`；`hidden={true}` 会移除整列
 - 条件 `required` / `readonly` 支持内联编辑；条件 `hidden` 不支持
 
@@ -179,7 +179,7 @@ type ModelTableRowData = { id: string };
   <Field fieldName="companyId" />
   <Field
     fieldName="departmentId"
-    filters={[["companyId", "=", "#{companyId}"]]}
+    filters={[["companyId", "=", "{{ companyId }}"]]}
   />
   <Field fieldName="itemName" readonly={[["active", "=", false]]} />
   <Field fieldName="active" />
@@ -214,7 +214,7 @@ import { dependsOn, Field } from "@/components/fields";
 - 若当前行是 dirty 状态，切换到另一行前会询问是否丢弃修改
 - `required` / `readonly` 支持 `boolean`、`FilterCondition`、`dependsOn([...], evaluator)`
 - 内联编辑条件基于当前行对象求值，`scope="model-table"`，并额外提供 `rowIndex` 与 `rowId`
-- 使用 `#{fieldName}` 的关联字段过滤条件也基于当前行对象求值
+- 使用 `{{ fieldName }}` 的关联字段过滤条件也基于当前行对象求值
 - 如果关联过滤依赖缺失，则该行的关联查询会保持禁用，而不是加载未过滤选项
 - 只有元数据中可编辑且在当前有效状态下不是只读的列，才会成为内联编辑器；不支持的列保持只读
 - `File`、`MultiFile`、`Image` 和 `MultiImage` 支持内联编辑，并在活跃行中复用普通 `Field` 上传 widget
@@ -419,7 +419,7 @@ type initialParams = QueryParamsWithoutFields;
 - `initialParams` 用于 `filters`、`pageSize`、`groupBy`、`effectiveDate`、`subQueries` 等高级查询关注点
 - 如果同时传入 `orders` 和 `initialParams.orders`，则顶层 `orders` 胜出
 
-`initialParams.filters` 仍然是表格查询本身的服务端基础过滤条件。它不会解析 `#{fieldName}` 引用；这种声明式语法仅支持关联字段 `filters`。
+`initialParams.filters` 仍然是表格查询本身的服务端基础过滤条件。它不会解析 `{{ expr }}` 引用；这种声明式语法仅支持关联字段 `filters`。
 
 查询初始化默认值：
 

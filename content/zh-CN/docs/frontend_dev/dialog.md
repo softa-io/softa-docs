@@ -12,9 +12,9 @@
 
 对话框内容中的关联字段 `filters` 与 `ModelForm` 遵循相同规则：
 
-- `#{fieldName}` 会在发送关联查询前，从当前对话框表单值中解析
+- `{{ fieldName }}` 会在发送关联查询前，从当前对话框表单值中解析（统一模板语法 `{{ expr }}`）
 - 后端环境 token，例如 `TODAY`、`NOW`、`USER_ID`、`USER_COMP_ID`，会原样透传
-- `@{literal}` 也会原样透传，以便后端把它视为强制字面量
+- 字面量可使用 `{{ 'value' }}` 或后端 token 如 `{{ NOW }}`；保留字段引用在支持的场景下使用 `{{ @fieldName }}`
 
 `Field.onChange` 的远程联动有所不同：
 

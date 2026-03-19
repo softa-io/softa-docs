@@ -85,7 +85,7 @@ Structured Filters are categorized into Unit, Tree, and Empty types, correspondi
 
 - **Query Structure Tree:** A query structure tree combines multiple query units nested together. For example, `[["name", "=", "Tom"], "OR", ["code", "=", "A100"]], "AND", ["priority", ">", 1]]` supports infinitely nested combined conditions. Logical operators between query conditions accept only `AND` and `OR`, are case-insensitive, and default to `AND` if not provided.
 
-- **Field Comparison:** Softa supports field comparisons within filtering conditions, such as `fieldA > fieldB`, by replacing the `value` attribute in `FilterUnit: [field, operator, value]` with a placeholder for the reserved field name `@{fieldName}`, like `["fieldA", ">", "@{FieldB}"]`.
+- **Field Comparison:** Softa supports field comparisons within filtering conditions, such as `fieldA > fieldB`, by replacing the `value` attribute in `FilterUnit: [field, operator, value]` with a reserved-field reference expression `{{ @fieldName }}`, e.g. `["fieldA", ">", "{{ @FieldB }}"]`. Cascading references use `{{ @parent.fieldName }}`.
 
 ### 3.2 Filters Cascading Query
 

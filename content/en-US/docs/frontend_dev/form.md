@@ -169,7 +169,7 @@ Example relation filter linkage:
 <Field
   fieldName="departmentId"
   filters={[
-    ["companyId", "=", "#{companyId}"],
+    ["companyId", "=", "{{ companyId }}"],
     "AND",
     ["active", "=", true],
     "AND",
@@ -180,11 +180,10 @@ Example relation filter linkage:
 
 Relation filter notes in `ModelForm`:
 
-- `#{companyId}` resolves from current form values before the relation query is sent
-- backend env tokens such as `TODAY`, `NOW`, `USER_ID`, `USER_COMP_ID` are passed through unchanged
-- `@{literal}` can be used when backend should treat a token-like string as a literal
+- `{{ companyId }}` resolves from current form values before the relation query is sent (unified template syntax `{{ expr }}`)
+- backend env tokens such as `TODAY`, `NOW`, `USER_ID`, `USER_COMP_ID` are passed through unchanged; literals use `{{ 'value' }}` or backend tokens like `{{ NOW }}` as needed
 - `Field.filters` overrides `metaField.filters`; if omitted, metadata filters still apply
-- unresolved `#{...}` dependencies pause the relation query instead of loading unfiltered data
+- unresolved `{{ expr }}` dependencies pause the relation query instead of loading unfiltered data
 
 Examples of using `widgetType` to drive renderer behavior:
 
@@ -629,7 +628,7 @@ Notes:
 - relation table pageSize default is `50`; page-size selector is shown only when pagination is enabled (`isPaged=true`).
 - ManyToMany picker dialog (`Add`) is server-driven; search/sort/page changes trigger `searchPage` requests.
 - `formView` is optional. In `ManyToMany`, row-click opens `ModelDialog` in read mode; add/remove still uses picker behavior.
-- unresolved `#{fieldName}` dependencies pause remote relation queries and picker queries until the dependent parent form value exists
+- unresolved `{{ expr }}` dependencies pause remote relation queries and picker queries until the dependent parent form value exists
 
 ### OneToOne (Owned Inline)
 
@@ -741,7 +740,7 @@ Runtime field conditions:
 
 - `Field.required`, `Field.readonly`, `Field.hidden` support `boolean | FilterCondition | dependsOn(...)`.
 - Conditions are evaluated against current form values.
-- `FilterCondition` automatically tracks both operand fields and local `#{fieldName}` references.
+- `FilterCondition` automatically tracks both operand fields and local `{{ fieldName }}` references.
 - Function conditions must be wrapped with `dependsOn([...], evaluator)`; bare function conditions are not supported.
 - `hidden` fields are not rendered and their validation errors are suppressed.
 - `required={false}` can relax metadata `required` at runtime; `readonly={false}` can override metadata readonly.

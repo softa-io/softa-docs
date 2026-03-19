@@ -39,7 +39,7 @@ Dialog tabs:
 | `customHeader` | String | `null` | Custom Excel header |
 | `sequence` | Integer | `null` | Field order in template |
 | `required` | Boolean | `null` | Required field |
-| `defaultValue` | String | `null` | Default value (supports `#{var}`) |
+| `defaultValue` | String | `null` | Default value (supports `{{ expr }}`) |
 | `description` | String | `null` | Description text |
 
 ### 1. Import By Template (Configured)
@@ -54,7 +54,7 @@ ImportTemplateField key fields:
 - `fieldName`, `customHeader`, `sequence`, `required`, `defaultValue`
 
 Notes:
-- Default values in ImportTemplateField support variables `#{var}`. Variables are resolved from `env`.
+- Default values in ImportTemplateField support expressions `{{ expr }}`. Variables are resolved from `env`.
 - If `syncImport = true`, import is executed in-process.
 - If `syncImport = false`, an async import message is sent to MQ.
 

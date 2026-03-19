@@ -124,14 +124,13 @@ The flow engine passes a NodeContext across nodes. It includes:
 - TriggerParams: the row data that triggered the flow.
 - SourceRowId: the id of the triggering record.
 
-Variable and expression syntax:
-- Variables: #{var}. Supports map access: #{TriggerParams.status}.
-- Expressions: ${...} for computed values in templates.
-- Filters also allow reserved field references: @{fieldName}.
+Template expression syntax (all templates use `{{ expr }}`):
+- Variables and expressions: `{{ TriggerParams.id }}`, `{{ price * qty }}`, `{{ NOW }}`.
+- Reserved field references in filters: `{{ @fieldName }}`, `{{ @parent.fieldName }}`.
 
 Node results:
 - Many nodes store their output in NodeContext using the node id as the key.
-  Use #{<nodeId>} or #{<nodeId>.field} in templates and filters.
+  Use `{{ <nodeId> }}` or `{{ <nodeId>.field }}` in templates and filters.
 
 Node exception policy:
 - FlowNode.exceptionPolicy supports NodeExceptionPolicy to handle node result exceptions.
@@ -166,9 +165,8 @@ provide NodeProcessor implementations for them. Add custom processors to make th
 ## 4. Flow Key Elements
 The following parameters are aligned with the current code. Field values support:
 - constants
-- variables `#{var}`, including map access `#{TriggerParams.status}`
-- expressions `${...}`
-- reserved field names `@{fieldName}` in Filters
+- expressions `{{ expr }}` (variables, map access, computed values), e.g. `{{ TriggerParams.status }}`, `{{ price * qty }}`, `{{ NOW }}`
+- reserved field references in Filters: `{{ @fieldName }}`, `{{ @parent.fieldName }}`
 
 NodeGetDataType options:
 - MultiRows, SingleRow, OneFieldValue, OneFieldValues, Exist, Count
@@ -181,35 +179,35 @@ ValueType options:
 | Compute Data | `ComputeDataParams` | `expression` | Required | Computation expression, multi-line text |
 |  |  | `valueType` | Required | Result value type, `ValueType` |
 | Create Data | `CreateDataParams` | `modelName` | Required | Model name to create |
-|  |  | `rowTemplate` | Required | Data template; values support constants, `#{}`, `${}` |
+|  |  | `rowTemplate` | Required | Data template; values support constants and `{{ expr }}` |
 | Delete Data | `DeleteDataParams` | `modelName` | Required | Model name to delete |
-|  |  | `pkVariable` | Either | PK variable name, single/multi `#{var}` |
-|  |  | `filters` |  | Composite filters; values support constants, `#{}`, `${}`, `@{}` |
+|  |  | `pkVariable` | Either | PK variable name, single/multi `{{ var }}` |
+|  |  | `filters` |  | Composite filters; values support constants, `{{ expr }}`, `{{ @fieldName }}` |
 | Get Data | `GetDataParams` | `modelName` | Required | Model name to query |
 |  |  | `getDataType` | Required | Return type, `NodeGetDataType` |
 |  |  | `fields` |  | Field list; empty defaults to id only |
-|  |  | `filters` |  | Composite filters; values support constants, `#{}`, `${}`, `@{}` |
+|  |  | `filters` |  | Composite filters; values support constants, `{{ expr }}`, `{{ @fieldName }}` |
 |  |  | `orders` |  | Order conditions, Orders array |
 |  |  | `acrossTimeline` |  | Whether to query across timeline |
 |  |  | `limitSize` |  | Max rows, up to 10000 |
 | Update Data | `UpdateDataParams` | `modelName` | Required | Model name to update |
-|  |  | `pkVariable` | Either | PK variable name, single/multi `#{var}` |
-|  |  | `filters` |  | Composite filters; values support constants, `#{}`, `${}`, `@{}` |
-|  |  | `rowTemplate` | Required | Data template; values support constants, `#{}`, `${}` |
+|  |  | `pkVariable` | Either | PK variable name, single/multi `{{ var }}` |
+|  |  | `filters` |  | Composite filters; values support constants, `{{ expr }}`, `{{ @fieldName }}` |
+|  |  | `rowTemplate` | Required | Data template; values support constants and `{{ expr }}` |
 | Validate Data | `ValidateDataParams` | `expression` | Required | Validation expression, multi-line text |
-|  |  | `exceptionMsg` | Required | Exception message on failure, supports `#{}` |
+|  |  | `exceptionMsg` | Required | Exception message on failure, supports `{{ expr }}` |
 | Async Task | `AsyncTaskParams` | `asyncTaskHandlerCode` | Required | Async task handler |
-|  |  | `dataTemplate` |  | Task params template; values support constants, `#{}`, `${}` |
-| Extract Transform | `ExtractTransformParams` | `collectionVariable` | Required | Collection variable, `#{var}` |
+|  |  | `dataTemplate` |  | Task params template; values support constants and `{{ expr }}` |
+| Extract Transform | `ExtractTransformParams` | `collectionVariable` | Required | Collection variable, `{{ var }}` |
 |  |  | `itemKey` | Required | Field name to extract |
-| Return Data | `ReturnDataParams` | `dataTemplate` | Required | Return data template; values support constants, `#{}`, `${}` |
+| Return Data | `ReturnDataParams` | `dataTemplate` | Required | Return data template; values support constants and `{{ expr }}` |
 | Condition | `ConditionParams` | `passCondition` | Required | Condition expression |
 |  |  | `exceptionSignal` | Required | `NodeExceptionSignal` |
-|  |  | `exceptionMessage` |  | Exception message, supports `#{}` |
+|  |  | `exceptionMessage` |  | Exception message, supports `{{ expr }}` |
 | Branch Gateway | `BranchGatewayParams` | `serialGateway` |  | Serial gateway flag, default parallel |
 | Query AI | `QueryAiParams` | `robotId` | Required |  |
 |  |  | `conversationId` | Required |  |
-|  |  | `queryContent` | Required | Supports `#{}` interpolation |
+|  |  | `queryContent` | Required | Supports `{{ expr }}` interpolation |
 | Trigger Subflow | `TriggerSubflowParams` | `subflowTriggerId` | Required | Subflow trigger ID |
 |  |  | `dataTemplate` |  | Subflow params template |
 | WebHook | `WebHookParams` |  |  | No params yet |
@@ -307,7 +305,7 @@ Node parameters reference (common `nodeParams` templates):
 {
   "validateData": {
     "expression": "TriggerParams.totalAmount > 0",
-    "exceptionMsg": "totalAmount must be greater than 0 for order #{TriggerParams.id}"
+    "exceptionMsg": "totalAmount must be greater than 0 for order {{ TriggerParams.id }}"
   },
   "getData": {
     "modelName": "Order",
@@ -318,7 +316,7 @@ Node parameters reference (common `nodeParams` templates):
     "limitSize": 100
   },
   "extractTransform": {
-    "collectionVariable": "#{101}",
+    "collectionVariable": "{{ 101 }}",
     "itemKey": "id"
   },
   "computeData": {
@@ -327,10 +325,10 @@ Node parameters reference (common `nodeParams` templates):
   },
   "updateData": {
     "modelName": "Order",
-    "pkVariable": "#{102}",
+    "pkVariable": "{{ 102 }}",
     "rowTemplate": {
       "status": "PROCESSING",
-      "updatedAt": "${NOW}"
+      "updatedAt": "{{ NOW }}"
     }
   },
   "deleteData": {
@@ -344,26 +342,26 @@ Node parameters reference (common `nodeParams` templates):
   },
   "returnData": {
     "dataTemplate": {
-      "orderId": "#{TriggerParams.id}",
-      "status": "#{TriggerParams.status}"
+      "orderId": "{{ TriggerParams.id }}",
+      "status": "{{ TriggerParams.status }}"
     }
   },
   "asyncTask": {
     "asyncTaskHandlerCode": "OrderNotify",
     "dataTemplate": {
-      "orderId": "#{TriggerParams.id}",
-      "status": "#{TriggerParams.status}"
+      "orderId": "{{ TriggerParams.id }}",
+      "status": "{{ TriggerParams.status }}"
     }
   },
   "triggerSubflow": {
     "subflowTriggerId": 4001,
     "dataTemplate": {
-      "orderId": "#{TriggerParams.id}",
-      "totalAmount": "#{TriggerParams.totalAmount}"
+      "orderId": "{{ TriggerParams.id }}",
+      "totalAmount": "{{ TriggerParams.totalAmount }}"
     }
   },
   "loopByDataset": {
-    "dataSetParam": "#{101}",
+    "dataSetParam": "{{ 101 }}",
     "loopItemNaming": "orderItem"
   },
   "loopByPage": {
@@ -376,7 +374,7 @@ Node parameters reference (common `nodeParams` templates):
   "queryAi": {
     "robotId": 1,
     "conversationId": 1,
-    "queryContent": "Summarize order #{TriggerParams.id}"
+    "queryContent": "Summarize order {{ TriggerParams.id }}"
   }
 }
 ```

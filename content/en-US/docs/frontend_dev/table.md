@@ -117,8 +117,8 @@ Table declaration notes:
 - `defaultValue` is create-only; in table flows it is used for relation row creation and inline editors, not for read-mode cells
 - inline-edit field values use the same UI value contracts as forms; for example `File -> FileInfo | null`, `MultiFile -> FileInfo[]`, and `JSON` / `DTO` / `Filters` / `Orders` stay structured
 - table read cells intentionally do not consume `widgetProps`; v1 uses a unified compact table renderer instead of form-style widget variants
-- for relation columns (`ManyToOne` / `OneToOne`) in inline edit, `filters` may use `#{fieldName}` and resolves against the current editing row before the relation query is sent
-- backend env tokens such as `TODAY`, `NOW`, `USER_ID`, `USER_COMP_ID` are passed through unchanged; use `@{literal}` when backend should treat a token-like string as a literal
+- for relation columns (`ManyToOne` / `OneToOne`) in inline edit, `filters` may use `{{ fieldName }}` and resolves against the current editing row before the relation query is sent (unified template syntax `{{ expr }}`)
+- backend env tokens such as `TODAY`, `NOW`, `USER_ID`, `USER_COMP_ID` are passed through unchanged; literals use `{{ 'value' }}` or backend tokens like `{{ NOW }}` as needed
 - `hidden` only supports `boolean` in table declarations; `hidden={true}` removes the whole column
 - conditional `required` / `readonly` are supported in inline edit, but conditional `hidden` is not
 
@@ -179,7 +179,7 @@ Example:
   <Field fieldName="companyId" />
   <Field
     fieldName="departmentId"
-    filters={[["companyId", "=", "#{companyId}"]]}
+    filters={[["companyId", "=", "{{ companyId }}"]]}
   />
   <Field fieldName="itemName" readonly={[["active", "=", false]]} />
   <Field fieldName="active" />
@@ -214,7 +214,7 @@ Behavior:
 - switching to another row while current row is dirty asks for discard confirmation
 - `required` / `readonly` support `boolean`, `FilterCondition`, and `dependsOn([...], evaluator)`
 - inline-edit conditions are evaluated against the current row object with `scope="model-table"`, plus `rowIndex` and `rowId`
-- relation-field filters using `#{fieldName}` are also evaluated against the current row object
+- relation-field filters using `{{ fieldName }}` are also evaluated against the current row object
 - if a relation-field filter dependency is missing, that row's relation query stays disabled instead of loading unfiltered options
 - only metadata-editable and not effectively readonly columns become inline editors; unsupported columns stay read-only
 - `File`, `MultiFile`, `Image`, and `MultiImage` participate in inline edit and reuse the normal `Field` upload widgets inside the active row
@@ -419,7 +419,7 @@ Recommended split:
 - use `initialParams` for advanced query concerns such as `filters`, `pageSize`, `groupBy`, `effectiveDate`, or `subQueries`
 - if both `orders` and `initialParams.orders` are provided, top-level `orders` wins
 
-`initialParams.filters` remains a normal server-side base filter for the table query itself. It does not resolve `#{fieldName}` references; that declarative syntax is only supported on relation-field `filters`.
+`initialParams.filters` remains a normal server-side base filter for the table query itself. It does not resolve `{{ expr }}` references; that declarative syntax is only supported on relation-field `filters`.
 
 Query bootstrap defaults:
 

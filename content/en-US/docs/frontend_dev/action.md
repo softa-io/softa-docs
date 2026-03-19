@@ -76,7 +76,7 @@ type ActionValue<T> =
 Action condition notes:
 
 - `disabled` and `hidden` share the same runtime condition model as `Field`: `boolean`, `FilterCondition`, `dependsOn([...], evaluator)`
-- `FilterCondition` is evaluated against current scope values and automatically tracks `#{fieldName}` references
+- `FilterCondition` is evaluated against current scope values and automatically tracks `{{ fieldName }}` references
 - bare function conditions are not supported; wrap function logic with `dependsOn([...], evaluator)`
 - if there is no field dependency, prefer plain `boolean`
 

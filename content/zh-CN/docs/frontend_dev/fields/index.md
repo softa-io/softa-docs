@@ -102,7 +102,7 @@ const userTableView = (
 | `readonly`     | `FieldCondition`                   | 否   | 动态只读控制。支持 `boolean`、`FilterCondition` 或 `dependsOn(...)`。 |
 | `hidden`       | `FieldCondition`                   | 否   | 动态可见性控制。隐藏字段不会渲染，同时会抑制其校验。 |
 | `defaultValue` | `unknown`                          | 否   | 仅创建态使用的默认值覆盖。优先级高于 `metaField.defaultValue` 和对话框 / 页面级 `defaultValues`。 |
-| `filters`      | `string \| FilterCondition`        | 否   | 关联过滤条件覆盖。`Field.filters` 会覆盖 `metaField.filters`。支持 JSON 字符串形式的元数据过滤条件以及 `#{fieldName}` 引用。 |
+| `filters`      | `string \| FilterCondition`        | 否   | 关联过滤条件覆盖。`Field.filters` 会覆盖 `metaField.filters`。支持 JSON 字符串形式的元数据过滤条件以及 `{{ expr }}`（如 `{{ fieldName }}`）引用。 |
 | `onChange`     | `FieldOnChangeProp`                | 否   | 远程字段联动。支持简写 `string[]` 或 `{ update?, with? }`。 |
 | `tableView`    | `ReactElement<RelationTableProps>` | 否   | `OneToMany` / `ManyToMany` 的关联表格配置。必须是 `<RelationTable />` 元素。详见 [Relation Fields](./relations)。 |
 | `formView`     | `RelationFormView`                 | 否   | 关联对话框 / 详情视图配置。详见 [Relation Fields](./relations)。 |
@@ -213,9 +213,9 @@ import { dependsOn, Field } from "@/components/fields";
 
 过滤值中推荐使用的声明式值语法：
 
-- `#{fieldName}`：在发请求前从当前前端作用域解析
+- `{{ fieldName }}`：在发请求前从当前前端作用域解析（统一模板语法 `{{ expr }}`）
 - `TODAY`、`NOW`、`USER_ID`、`USER_EMP_ID`、`USER_POSITION_ID`、`USER_DEPT_ID`、`USER_COMP_ID`：原样透传，由后端替换环境变量
-- `@{literal}`：原样透传，强制后端按字面量解释
+- 字面量：使用 `{{ 'value' }}` 或后端 token 如 `{{ NOW }}`；保留字段引用在支持的场景下使用 `{{ @fieldName }}`
 
 示例：
 
@@ -223,13 +223,13 @@ import { dependsOn, Field } from "@/components/fields";
 <Field
   fieldName="departmentId"
   filters={[
-    ["companyId", "=", "#{companyId}"],
+    ["companyId", "=", "{{ companyId }}"],
     "AND",
     ["active", "=", true],
     "AND",
     ["effectiveDate", "<=", "TODAY"],
     "AND",
-    ["type", "=", "@{TODAY}"],
+    ["type", "=", "{{ TODAY }}"],
   ]}
 />
 ```
@@ -238,7 +238,7 @@ import { dependsOn, Field } from "@/components/fields";
 
 - `Field.filters` 会覆盖 `metaField.filters`
 - 如果省略 `Field.filters`，关联 widget 会回退到 `metaField.filters`
-- `#{fieldName}` 会基于当前作用域值解析：
+- `{{ fieldName }}` 会基于当前作用域值解析：
   - `ModelForm`：当前表单值
   - `ModelTable` 内联编辑：当前编辑行
   - `RelationTable` 内联编辑：当前关联行
@@ -246,7 +246,7 @@ import { dependsOn, Field } from "@/components/fields";
   - `ManyToOne` / `OneToOne` -> `id`
   - `Option` -> `itemCode`
   - `MultiOption` -> `itemCode[]`
-- 如果任意 `#{fieldName}` 依赖缺失，则关联查询会视为未就绪，不会发送请求
+- 如果任意 `{{ expr }}` 依赖缺失，则关联查询会视为未就绪，不会发送请求
 - 前端不会求值后端环境 token，例如 `TODAY`；它们会原样透传
 
 ## 远程 `Field.onChange`

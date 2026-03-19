@@ -102,7 +102,7 @@ const userTableView = (
 | `readonly`     | `FieldCondition`                   | No       | Dynamic readonly control. Supports `boolean`, `FilterCondition`, or `dependsOn(...)`.                                                                    |
 | `hidden`       | `FieldCondition`                   | No       | Dynamic visibility control. Hidden fields are not rendered and their validation is suppressed.                                                            |
 | `defaultValue` | `unknown`                          | No       | Create-only default override. Has higher priority than `metaField.defaultValue` and dialog/page `defaultValues`.                                         |
-| `filters`      | `string \| FilterCondition`        | No       | Relation filter override. `Field.filters` overrides `metaField.filters`. Supports JSON-string metadata filters and `#{fieldName}` references.            |
+| `filters`      | `string \| FilterCondition`        | No       | Relation filter override. `Field.filters` overrides `metaField.filters`. Supports JSON-string metadata filters and `{{ expr }}` (e.g. `{{ fieldName }}`) references.            |
 | `onChange`     | `FieldOnChangeProp`                | No       | Remote field linkage. Supports shorthand `string[]` or `{ update?, with? }`.                                                                              |
 | `tableView`    | `ReactElement<RelationTableProps>` | No       | Relation-table config for `OneToMany` / `ManyToMany`. Must be a `<RelationTable />` element. See [Relation Fields](./relations).                                |
 | `formView`     | `RelationFormView`                 | No       | Relation dialog/detail view config. See [Relation Fields](./relations).                                                                                            |
@@ -213,9 +213,9 @@ Accepted input:
 
 Recommended declarative value syntax inside filter values:
 
-- `#{fieldName}`: resolve from current frontend scope before request
+- `{{ fieldName }}`: resolve from current frontend scope before request (unified template syntax `{{ expr }}`)
 - `TODAY`, `NOW`, `USER_ID`, `USER_EMP_ID`, `USER_POSITION_ID`, `USER_DEPT_ID`, `USER_COMP_ID`: pass through unchanged and let backend replace environment variables
-- `@{literal}`: pass through unchanged and force literal interpretation on backend
+- literals: use `{{ 'value' }}` or backend tokens like `{{ NOW }}`; reserved field references: `{{ @fieldName }}` where supported
 
 Example:
 
@@ -223,13 +223,13 @@ Example:
 <Field
   fieldName="departmentId"
   filters={[
-    ["companyId", "=", "#{companyId}"],
+    ["companyId", "=", "{{ companyId }}"],
     "AND",
     ["active", "=", true],
     "AND",
     ["effectiveDate", "<=", "TODAY"],
     "AND",
-    ["type", "=", "@{TODAY}"],
+    ["type", "=", "{{ TODAY }}"],
   ]}
 />
 ```
@@ -238,7 +238,7 @@ Behavior:
 
 - `Field.filters` overrides `metaField.filters`
 - if `Field.filters` is omitted, relation widgets fall back to `metaField.filters`
-- `#{fieldName}` is resolved against current scope values:
+- `{{ fieldName }}` is resolved against current scope values:
   - `ModelForm`: current form values
   - `ModelTable` inline edit: current editing row
   - `RelationTable` inline edit: current relation row
@@ -246,7 +246,7 @@ Behavior:
   - `ManyToOne` / `OneToOne` -> `id`
   - `Option` -> `itemCode`
   - `MultiOption` -> `itemCode[]`
-- if any `#{fieldName}` dependency is missing, the relation query is treated as not ready and is not sent
+- if any `{{ expr }}` dependency is missing, the relation query is treated as not ready and is not sent
 - frontend does not evaluate backend environment tokens such as `TODAY`; they are passed through unchanged
 
 ## Remote `Field.onChange`

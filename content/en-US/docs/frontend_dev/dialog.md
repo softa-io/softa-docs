@@ -12,9 +12,9 @@ These accept `boolean | FilterCondition | dependsOn(...)` and participate in dia
 
 Relation-field `filters` in dialog content follow the same rule as `ModelForm`:
 
-- `#{fieldName}` resolves from current dialog form values before the relation query is sent
+- `{{ fieldName }}` resolves from current dialog form values before the relation query is sent (unified template syntax `{{ expr }}`)
 - backend env tokens such as `TODAY`, `NOW`, `USER_ID`, `USER_COMP_ID` are passed through unchanged
-- `@{literal}` is passed through unchanged so backend can treat it as a forced literal
+- Literals use `{{ 'value' }}` or backend tokens like `{{ NOW }}`; reserved field references use `{{ @fieldName }}` where supported
 
 `Field.onChange` remote linkage is different:
 

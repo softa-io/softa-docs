@@ -98,7 +98,7 @@ Filter的最小查询单元对象为 `FilterUnit`，结构为 `[field, operator,
 
 （3）**字段间比较**
 
-Softa 支持在筛选条件中，进行字段间比较。比如在需要筛选 `fieldA > fieldB` 数据的场景 ，可以将 `FilterUnit: [field, operator, value]` 结构的 value属性，替换为保留字段名的占位符  `@{fieldName}` ，如 `["fieldA", ">", "@{FieldB}"]`。
+Softa 支持在筛选条件中，进行字段间比较。例如需要筛选 `fieldA > fieldB` 时，可将 `FilterUnit: [field, operator, value]` 的 value 写成保留字段引用表达式 `{{ @fieldName }}`，如 `["fieldA", ">", "{{ @FieldB }}"]`；级联引用使用 `{{ @parent.fieldName }}`。
 
 
 ### 3.2 Filters 级联查询

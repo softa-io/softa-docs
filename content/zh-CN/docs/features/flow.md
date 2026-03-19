@@ -155,16 +155,15 @@ Flow 引擎在节点之间传递一个 `NodeContext`，其中包括：
 - `TriggerParams`：触发该流程的记录数据
 - `SourceRowId`：触发记录的主键 ID
 
-变量与表达式语法：
+模板表达式语法（所有模板统一使用 `{{ expr }}`）：
 
-- 变量：`#{var}`，支持 Map 取值：`#{TriggerParams.status}`
-- 表达式：`${...}`，用于模板中的计算
-- 在 Filters 中还支持保留字段引用：`@{fieldName}`
+- 变量与表达式：`{{ TriggerParams.id }}`、`{{ price * qty }}`、`{{ NOW }}`。
+- Filters 中的保留字段引用：`{{ @fieldName }}`、`{{ @parent.fieldName }}`。
 
 节点结果：
 
 - 多数节点会将输出结果放入 `NodeContext`，键为节点 ID。
-- 可通过 `#{<nodeId>}` 或 `#{<nodeId>.field}` 在后续节点或模板中引用。
+- 在后续节点或模板中可通过 `{{ <nodeId> }}` 或 `{{ <nodeId>.field }}` 引用。
 
 节点异常策略：
 
@@ -203,9 +202,8 @@ Flow 引擎在节点之间传递一个 `NodeContext`，其中包括：
 以下参数与当前代码保持一致，字段值支持：
 
 - 常量
-- 变量 `#{var}`，包括 `#{TriggerParams.status}` 这类 Map 访问
-- 表达式 `${...}`
-- Filters 中的保留字段 `@{fieldName}`
+- 表达式 `{{ expr }}`（变量、Map 访问、计算等），如 `{{ TriggerParams.status }}`、`{{ price * qty }}`、`{{ NOW }}`
+- Filters 中的保留字段引用：`{{ @fieldName }}`、`{{ @parent.fieldName }}`
 
 常用枚举：
 
@@ -303,7 +301,7 @@ Node parameters reference (common `nodeParams` templates):
 {
   "validateData": {
     "expression": "TriggerParams.totalAmount > 0",
-    "exceptionMsg": "totalAmount must be greater than 0 for order #{TriggerParams.id}"
+    "exceptionMsg": "totalAmount must be greater than 0 for order {{ TriggerParams.id }}"
   },
   "getData": {
     "modelName": "Order",
@@ -314,7 +312,7 @@ Node parameters reference (common `nodeParams` templates):
     "limitSize": 100
   },
   "extractTransform": {
-    "collectionVariable": "#{101}",
+    "collectionVariable": "{{ 101 }}",
     "itemKey": "id"
   },
   "computeData": {
@@ -323,10 +321,10 @@ Node parameters reference (common `nodeParams` templates):
   },
   "updateData": {
     "modelName": "Order",
-    "pkVariable": "#{102}",
+    "pkVariable": "{{ 102 }}",
     "rowTemplate": {
       "status": "PROCESSING",
-      "updatedAt": "${NOW}"
+      "updatedAt": "{{ NOW }}"
     }
   },
   "deleteData": {
@@ -340,26 +338,26 @@ Node parameters reference (common `nodeParams` templates):
   },
   "returnData": {
     "dataTemplate": {
-      "orderId": "#{TriggerParams.id}",
-      "status": "#{TriggerParams.status}"
+      "orderId": "{{ TriggerParams.id }}",
+      "status": "{{ TriggerParams.status }}"
     }
   },
   "asyncTask": {
     "asyncTaskHandlerCode": "OrderNotify",
     "dataTemplate": {
-      "orderId": "#{TriggerParams.id}",
-      "status": "#{TriggerParams.status}"
+      "orderId": "{{ TriggerParams.id }}",
+      "status": "{{ TriggerParams.status }}"
     }
   },
   "triggerSubflow": {
     "subflowTriggerId": 4001,
     "dataTemplate": {
-      "orderId": "#{TriggerParams.id}",
-      "totalAmount": "#{TriggerParams.totalAmount}"
+      "orderId": "{{ TriggerParams.id }}",
+      "totalAmount": "{{ TriggerParams.totalAmount }}"
     }
   },
   "loopByDataset": {
-    "dataSetParam": "#{101}",
+    "dataSetParam": "{{ 101 }}",
     "loopItemNaming": "orderItem"
   },
   "loopByPage": {
@@ -372,7 +370,7 @@ Node parameters reference (common `nodeParams` templates):
   "queryAi": {
     "robotId": 1,
     "conversationId": 1,
-    "queryContent": "Summarize order #{TriggerParams.id}"
+    "queryContent": "Summarize order {{ TriggerParams.id }}"
   }
 }
 ```

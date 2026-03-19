@@ -17,7 +17,7 @@ DocumentTemplate 关键字段：
 
 ## 模板语法
 
-- 使用 `#{var}` 占位符，支持 Spring EL 表达式。
+- 使用 `{{ expr }}` 模板语法（变量与表达式），支持 Spring EL。
 - 支持通过 `LoopRowTableRenderPolicy` 对表格行进行循环渲染。
 
 ## 生成功能接口

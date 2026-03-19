@@ -169,7 +169,7 @@ import { dependsOn, Field } from "@/components/fields";
 <Field
   fieldName="departmentId"
   filters={[
-    ["companyId", "=", "#{companyId}"],
+    ["companyId", "=", "{{ companyId }}"],
     "AND",
     ["active", "=", true],
     "AND",
@@ -180,11 +180,10 @@ import { dependsOn, Field } from "@/components/fields";
 
 `ModelForm` 中的关联过滤说明：
 
-- `#{companyId}` 会在发送关联查询前，从当前表单值中解析
-- 后端环境 token，例如 `TODAY`、`NOW`、`USER_ID`、`USER_COMP_ID`，会原样透传
-- 当后端应把类似 token 的字符串视为字面量时，可使用 `@{literal}`
+- `{{ companyId }}` 会在发送关联查询前，从当前表单值中解析（统一模板语法 `{{ expr }}`）
+- 后端环境 token，例如 `TODAY`、`NOW`、`USER_ID`、`USER_COMP_ID`，会原样透传；字面量可使用 `{{ 'value' }}` 或后端 token 如 `{{ NOW }}`
 - `Field.filters` 会覆盖 `metaField.filters`；若省略，仍会使用元数据中的过滤条件
-- 未解析的 `#{...}` 依赖会暂停关联查询，而不是加载未过滤数据
+- 未解析的 `{{ expr }}` 依赖会暂停关联查询，而不是加载未过滤数据
 
 通过 `widgetType` 驱动渲染行为的示例：
 
@@ -629,7 +628,7 @@ export default function UserRoleFormPage() {
 - 关联表格 `pageSize` 默认是 `50`；只有在启用分页（`isPaged=true`）时才会显示页大小选择器
 - ManyToMany 的选择器对话框（`Add`）由服务端驱动；搜索 / 排序 / 翻页变化都会触发 `searchPage` 请求
 - `formView` 是可选的。在 `ManyToMany` 中，点击行会以只读模式打开 `ModelDialog`；新增 / 移除仍然走选择器行为
-- 未解析的 `#{fieldName}` 依赖会暂停远程关联查询和选择器查询，直到父表单中的依赖值存在
+- 未解析的 `{{ expr }}` 依赖会暂停远程关联查询和选择器查询，直到父表单中的依赖值存在
 
 ### OneToOne（所属内联）
 
@@ -741,7 +740,7 @@ export default function UserProfileFormPage() {
 
 - `Field.required`、`Field.readonly`、`Field.hidden` 支持 `boolean | FilterCondition | dependsOn(...)`
 - 条件基于当前表单值求值
-- `FilterCondition` 会自动追踪操作数字段和本地 `#{fieldName}` 引用
+- `FilterCondition` 会自动追踪操作数字段和本地 `{{ fieldName }}` 引用
 - 函数条件必须通过 `dependsOn([...], evaluator)` 包裹；不支持裸函数
 - `hidden` 字段不会渲染，其校验错误也会被抑制
 - `required={false}` 可以在运行时放宽元数据 `required`；`readonly={false}` 可以覆盖元数据只读

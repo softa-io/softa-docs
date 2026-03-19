@@ -40,7 +40,7 @@
 | `customHeader` | String | `null` | 自定义 Excel 表头 |
 | `sequence` | Integer | `null` | 模板中的字段顺序 |
 | `required` | Boolean | `null` | 是否必填 |
-| `defaultValue` | String | `null` | 默认值（支持 `#{var}`） |
+| `defaultValue` | String | `null` | 默认值（支持 `{{ expr }}`） |
 | `description` | String | `null` | 说明文本 |
 
 ### 1. 按模板导入（已配置）
@@ -55,7 +55,7 @@
 - `fieldName`、`customHeader`、`sequence`、`required`、`defaultValue`
 
 说明：
-- `ImportTemplateField` 的默认值支持 `#{var}` 变量。变量来自 `env`。
+- `ImportTemplateField` 的默认值支持表达式 `{{ expr }}`，变量来自 `env`。
 - 如果 `syncImport = true`，导入会在当前进程内执行。
 - 如果 `syncImport = false`，会向 MQ 发送异步导入消息。
 

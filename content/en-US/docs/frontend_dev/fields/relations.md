@@ -92,7 +92,7 @@ Dependent relation filter example:
 <Field
   fieldName="departmentId"
   filters={[
-    ["companyId", "=", "#{companyId}"],
+    ["companyId", "=", "{{ companyId }}"],
     "AND",
     ["active", "=", true],
   ]}
@@ -102,7 +102,7 @@ Dependent relation filter example:
 Notes:
 
 - `filters` is applied to the default searchable reference query
-- when a dependent `#{fieldName}` has no current value, the selector stays query-disabled instead of loading all options
+- when a dependent `{{ fieldName }}` has no current value, the selector stays query-disabled instead of loading all options
 
 ### `SelectTree`
 
@@ -121,7 +121,7 @@ Common pattern with dependent filtering:
   fieldName="departmentId"
   widgetType="SelectTree"
   filters={[
-    ["companyId", "=", "#{companyId}"],
+    ["companyId", "=", "{{ companyId }}"],
     "AND",
     ["active", "=", true],
   ]}
@@ -133,7 +133,7 @@ Behavior:
 - `SelectTree` is the recommended developer-facing tree entry for forms and inline editors
 - it is still declared through `Field`, not by rendering `SelectTreePanel` directly
 - it uses the same `Field.filters` rules as searchable reference fields
-- when a dependent `#{fieldName}` value is missing, the tree selector stays query-disabled instead of loading an unfiltered tree
+- when a dependent `{{ fieldName }}` value is missing, the tree selector stays query-disabled instead of loading an unfiltered tree
 - low-level `Tree` / `SelectTreePanel` are internal infrastructure
 
 ## `OneToMany`
@@ -176,7 +176,7 @@ Behavior:
 - `false` (default): include relation `subQuery` in `getById`; relation table does not paginate in UI and renders local rows
 - `true`: relation table enables pagination UI; when `recordId + relatedModel + scoped relation filter` are ready, data is loaded by `relatedModel.searchPage` (remote mode), otherwise paginated locally
 - editable cells are limited to declared `RelationTable` columns intersected with editable related-model fields
-- unresolved `#{fieldName}` dependencies pause remote relation queries until the dependent parent form value exists
+- unresolved `{{ expr }}` dependencies pause remote relation queries until the dependent parent form value exists
 
 ## `ManyToMany`
 
@@ -226,7 +226,7 @@ Behavior:
 ### Query Notes
 
 - `ManyToMany` picker dialog merges the effective field filter, internal relation-scoped filters, search filter, and column filters using `AND`
-- unresolved `#{fieldName}` dependencies pause remote picker and relation-table queries until the source value exists
+- unresolved `{{ expr }}` dependencies pause remote picker and relation-table queries until the source value exists
 - `formView` is optional; in `ManyToMany`, row-click opens `ModelDialog` in read mode while add/remove still uses picker behavior
 
 ## Shared Read / Inline Behavior

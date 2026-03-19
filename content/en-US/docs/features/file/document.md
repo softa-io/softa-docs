@@ -14,7 +14,7 @@ DocumentTemplate key fields:
 - `modelName`, `fileName`, `fileId`, `convertToPdf`
 
 Template syntax:
-- Uses `#{var}` placeholders, supports Spring EL.
+- Uses `{{ expr }}` template syntax (variables and expressions), supports Spring EL.
 - Supports table row loops via `LoopRowTableRenderPolicy`.
 
 Endpoint:

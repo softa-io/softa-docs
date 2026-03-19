@@ -92,7 +92,7 @@ const optionItemsTableView = (
 <Field
   fieldName="departmentId"
   filters={[
-    ["companyId", "=", "#{companyId}"],
+    ["companyId", "=", "{{ companyId }}"],
     "AND",
     ["active", "=", true],
   ]}
@@ -102,7 +102,7 @@ const optionItemsTableView = (
 说明：
 
 - `filters` 会应用到默认的可搜索关联查询上
-- 当依赖的 `#{fieldName}` 当前没有值时，选择器会保持查询禁用状态，而不是加载全部选项
+- 当依赖的 `{{ fieldName }}` 当前没有值时，选择器会保持查询禁用状态，而不是加载全部选项
 
 ### `SelectTree`
 
@@ -121,7 +121,7 @@ const optionItemsTableView = (
   fieldName="departmentId"
   widgetType="SelectTree"
   filters={[
-    ["companyId", "=", "#{companyId}"],
+    ["companyId", "=", "{{ companyId }}"],
     "AND",
     ["active", "=", true],
   ]}
@@ -133,7 +133,7 @@ const optionItemsTableView = (
 - `SelectTree` 是表单和内联编辑器中推荐的开发者侧树选择入口
 - 它仍然通过 `Field` 声明，而不是直接渲染 `SelectTreePanel`
 - 它遵循与可搜索关联字段相同的 `Field.filters` 规则
-- 当依赖的 `#{fieldName}` 缺失时，树选择器会保持查询禁用状态，而不是加载未过滤的整棵树
+- 当依赖的 `{{ fieldName }}` 缺失时，树选择器会保持查询禁用状态，而不是加载未过滤的整棵树
 - 底层 `Tree` / `SelectTreePanel` 属于内部基础设施
 
 ## `OneToMany`
@@ -176,7 +176,7 @@ const optionItemsTableView = (
 - `false`（默认）：在 `getById` 中包含关联 `subQuery`；关联表格 UI 不分页，直接渲染本地行
 - `true`：关联表格启用分页 UI；当 `recordId + relatedModel + 作用域内关联过滤条件` 准备就绪时，通过 `relatedModel.searchPage` 加载数据（远程模式），否则退回为本地分页
 - 可编辑单元格限定为声明在 `RelationTable` 中的列，并与关联模型中可编辑字段求交集
-- 未解析的 `#{fieldName}` 依赖会暂停远程关联查询，直到父表单中的依赖值存在
+- 未解析的 `{{ expr }}` 依赖会暂停远程关联查询，直到父表单中的依赖值存在
 
 ## `ManyToMany`
 
@@ -226,7 +226,7 @@ const userTableView = (
 ### 查询说明
 
 - `ManyToMany` 选择器对话框会使用 `AND` 合并有效字段过滤条件、内部关联作用域过滤条件、搜索过滤条件和列过滤条件
-- 未解析的 `#{fieldName}` 依赖会暂停远程选择器和关联表格查询，直到来源值存在
+- 未解析的 `{{ expr }}` 依赖会暂停远程选择器和关联表格查询，直到来源值存在
 - `formView` 是可选的；在 `ManyToMany` 中，点击行会以只读模式打开 `ModelDialog`，而新增 / 移除仍然使用选择器行为
 
 ## 共享的只读 / 内联行为
