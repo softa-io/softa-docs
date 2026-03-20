@@ -13,6 +13,7 @@
 | `fileId`       | Long | `null` | 模板文件 id（WORD 类型必填） |
 | `htmlTemplate`  | String | `null` | 带 `{{ }}` 占位符的 HTML（RICH_TEXT 类型必填） |
 | `convertToPdf` | Boolean | `null` | 为 true 时将 WORD 输出转为 PDF |
+| `description`  | String | `null` | 说明文本 |
 
 ### 模板类型与生成流水线
 
@@ -56,6 +57,34 @@ templateType = RICH_TEXT
 curl -X GET 'http://localhost:8080/DocumentTemplate/generateDocument?templateId=3001&rowId=10001'
 ```
 
+### 编程式 API
+
+除 REST 接口（按 `modelName` + `rowId` 拉取数据）外，也可以直接向 `DocumentTemplateService` 传入自定义数据对象调用：
+
+```java
+@Autowired
+private DocumentTemplateService documentTemplateService;
+
+// 方式 1：按 rowId 生成（自动从模型拉取数据）
+FileInfo fileInfo = documentTemplateService.generateDocument(templateId, rowId);
+
+// 方式 2：按自定义数据对象生成（Map 或 POJO）
+Map<String, Object> data = Map.of(
+    "name", "Alice",
+    "deptId", "Engineering",
+    "orderItems", List.of(
+        Map.of("productName", "Widget", "quantity", 10),
+        Map.of("productName", "Gadget", "quantity", 5)
+    )
+);
+FileInfo fileInfo = documentTemplateService.generateDocument(templateId, data);
+```
+
+`generateDocument(templateId, data)` 重载会跳过模型数据拉取步骤，直接使用所给数据渲染模板。适用于：
+
+- 数据来自外部来源或自定义聚合
+- 需要基于非模型数据结构渲染文档
+
 ## REST API 汇总
 
 - 导入
@@ -63,8 +92,7 @@ curl -X GET 'http://localhost:8080/DocumentTemplate/generateDocument?templateId=
   - `POST /import/dynamicImport`
   - `GET /ImportTemplate/getTemplateFile`
 - 导出
-  - `POST /export/exportByTemplate`
-  - `POST /export/exportByFileTemplate`
+  - `POST /export/exportByTemplate`（根据 `customFileTemplate` 分发至字段模板或文件模板模式）
   - `POST /export/dynamicExport`
 - 文档
   - `GET /DocumentTemplate/generateDocument`
@@ -74,11 +102,11 @@ curl -X GET 'http://localhost:8080/DocumentTemplate/generateDocument?templateId=
 
 ## 示例
 
-导出参数：
+导出参数（含级联字段）：
 
 ```json
 {
-  "fields": ["id", "name", "code", "status"],
+  "fields": ["id", "name", "code", "status", "deptId.name", "deptId.managerId.name"],
   "filters": ["status", "=", "ACTIVE"],
   "orders": ["createdTime", "DESC"],
   "limit": 200,
@@ -87,7 +115,18 @@ curl -X GET 'http://localhost:8080/DocumentTemplate/generateDocument?templateId=
 }
 ```
 
-导入字段映射：
+导入字段映射（含关联反查）：
+
+```json
+[
+  {"header": "Product Code", "fieldName": "productCode", "required": true},
+  {"header": "Product Name", "fieldName": "productName", "required": true},
+  {"header": "Category Code", "fieldName": "categoryId.code", "required": true},
+  {"header": "Price", "fieldName": "price"}
+]
+```
+
+导入字段映射（直接外键 id）：
 
 ```json
 [

@@ -1,4 +1,3 @@
-
 ## Document Export (Word/PDF)
 Document templates are stored in `DocumentTemplate` and rendered as Word or PDF.
 
@@ -11,6 +10,7 @@ Document templates are stored in `DocumentTemplate` and rendered as Word or PDF.
 | `fileId`       | Long | `null` | Template file id (required for WORD type) |
 | `htmlTemplate`  | String | `null` | HTML with `{{ }}` placeholders (required for RICH_TEXT type) |
 | `convertToPdf` | Boolean | `null` | Convert WORD output to PDF if true |
+| `description`  | String | `null` | Description text |
 
 ### Template Types and Generation Pipeline
 
@@ -50,14 +50,39 @@ Example:
 curl -X GET 'http://localhost:8080/DocumentTemplate/generateDocument?templateId=3001&rowId=10001'
 ```
 
+### Programmatic API
+Besides the REST endpoint (which fetches data by `modelName` + `rowId`), you can also call `DocumentTemplateService` directly with a custom data object:
+
+```java
+@Autowired
+private DocumentTemplateService documentTemplateService;
+
+// Option 1: Generate by rowId (fetches data from the model automatically)
+FileInfo fileInfo = documentTemplateService.generateDocument(templateId, rowId);
+
+// Option 2: Generate by custom data object (Map or POJO)
+Map<String, Object> data = Map.of(
+    "name", "Alice",
+    "deptId", "Engineering",
+    "orderItems", List.of(
+        Map.of("productName", "Widget", "quantity", 10),
+        Map.of("productName", "Gadget", "quantity", 5)
+    )
+);
+FileInfo fileInfo = documentTemplateService.generateDocument(templateId, data);
+```
+
+The `generateDocument(templateId, data)` overload skips the model data fetch step and renders the template directly with the provided data. This is useful when:
+- The data comes from an external source or custom aggregation.
+- You want to render a document from a non-model data structure.
+
 ## REST APIs (Summary)
 - Import
   - `POST /import/importByTemplate`
   - `POST /import/dynamicImport`
   - `GET /ImportTemplate/getTemplateFile`
 - Export
-  - `POST /export/exportByTemplate`
-  - `POST /export/exportByFileTemplate`
+  - `POST /export/exportByTemplate` (dispatches to field-template or file-template mode based on `customFileTemplate`)
   - `POST /export/dynamicExport`
 - Document
   - `GET /DocumentTemplate/generateDocument`
@@ -66,10 +91,10 @@ curl -X GET 'http://localhost:8080/DocumentTemplate/generateDocument?templateId=
   - `POST /ExportTemplate/listByModel`
 
 ## Examples
-Export params:
+Export params (with cascaded fields):
 ```json
 {
-  "fields": ["id", "name", "code", "status"],
+  "fields": ["id", "name", "code", "status", "deptId.name", "deptId.managerId.name"],
   "filters": ["status", "=", "ACTIVE"],
   "orders": ["createdTime", "DESC"],
   "limit": 200,
@@ -78,7 +103,17 @@ Export params:
 }
 ```
 
-Import field mapping:
+Import field mapping (with relation lookup):
+```json
+[
+  {"header": "Product Code", "fieldName": "productCode", "required": true},
+  {"header": "Product Name", "fieldName": "productName", "required": true},
+  {"header": "Category Code", "fieldName": "categoryId.code", "required": true},
+  {"header": "Price", "fieldName": "price"}
+]
+```
+
+Import field mapping (direct FK id):
 ```json
 [
   {"header": "Product Code", "fieldName": "productCode", "required": true},

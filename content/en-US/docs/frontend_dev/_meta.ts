@@ -1,9 +1,9 @@
 export default {
   index: "Overview",
   module: "Module",
-  table: "Table",
-  form: "Form",
-  action: "Actions",
+  table: "ModelTable",
+  form: "ModelForm",
+  action: "Action",
   fields: "Field & Widget",
   dialog: "Dialog",
   tree: "Tree",
