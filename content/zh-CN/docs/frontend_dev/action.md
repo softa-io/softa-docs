@@ -32,7 +32,7 @@ import { BulkAction } from "@/components/actions/BulkAction";
 
 ## `Action`
 
-在业务代码中，建议使用一个带判别 `type` 的 `Action` 组件。
+使用单一 `Action` 组件，通过判别联合的 `type` 区分行为。
 
 `Action` 同时支持静态值和基于上下文的动态值：
 
@@ -54,7 +54,7 @@ type ActionValue<T> =
 
 | Prop             | 类型                                           | 必填 | 默认值                | 说明 |
 | ---------------- | ---------------------------------------------- | ---- | --------------------- | ---- |
-| `type`           | `"default" \| "dialog" \| "link" \| "custom"` | 否   | `"default"`           | 动作行为。省略时表示直接调用 API。 |
+| `type`           | `"default" \| "dialog" \| "link" \| "custom" \| "form"` | 否   | `"default"`           | 动作行为。省略时表示直接调用 API。 |
 | `labelName`      | `ReactNode`                                    | 是   | -                     | 动作文案。 |
 | `placement`      | `"toolbar" \| "more" \| "header" \| "inline"` | 否   | 取决于容器            | 支持的位置依赖于父容器。 |
 | `confirmMessage` | `ActionValue<string>`                          | 否   | -                     | 执行动作前的可选确认提示。 |
@@ -72,6 +72,7 @@ type ActionValue<T> =
 | `type="dialog"`                    | `operation`, `component` | -            | 使用 `component={MyDialogComponent}`。对话框的打开 / 关闭、operation、成功 / 失败提示由 `Action` 注入。 |
 | `type="link"`                      | `href`                 | 新标签页打开   | `href` 支持 `string` 或 `({ id, modelName }) => string`。 |
 | `type="custom"`                    | `onClick`              | -              | 纯 UI / 本地行为。签名：`onClick({ id, modelName, scope, mode, isDirty, values, row }) => void`。 |
+| `type="form"`                      | `component`, `relatedField` | -         | 在对话框中打开独立的 `ModelForm`。`component` 渲染子表单视图；`relatedField` 为子模型中引用父记录的字段名。父级 `id` 会自动注入到 `ModelForm.defaultValues` 的 `{ [relatedField]: parentId }`，并包含在创建 / 更新 API 的 payload 中。 |
 
 动作条件说明：
 
@@ -119,6 +120,46 @@ type ActionValue<T> =
   placement="more"
   onClick={({ modelName }) => console.log(`${modelName} health check started.`)}
 />
+
+// 5) form：在对话框中打开独立的 ModelForm
+<Action
+  type="form"
+  labelName="Add Config Group"
+  placement="toolbar"
+  component={ConfigGroupForm}
+  relatedField="tenantConfigId"
+/>
+```
+
+### `type="form"` 下的组件定义
+
+`component` 是标准 React 组件，内部渲染带自有 `modelName` 的 `ModelForm`。通过 `Action type="form"` 打开时，`ModelForm` 会自动适配对话框模式：
+
+- 忽略路由 `params.id`（仅使用传入的 `id` prop）
+- 创建 / 更新成功：关闭对话框，而不是 `router.push`
+- 取消：关闭对话框，而不是返回导航
+- `relatedField` 的值会注入 `defaultValues` 并写入 API payload，即使该字段未在表单中展示
+
+```tsx
+import { FormSection } from "@/components/common/form-section";
+import { Field } from "@/components/fields";
+import { FormBody } from "@/components/views/form/components/FormBody";
+import { FormToolbar } from "@/components/views/form/components/FormToolbar";
+import { ModelForm } from "@/components/views/form/ModelForm";
+
+function ConfigGroupForm() {
+  return (
+    <ModelForm modelName="TenantConfigGroup">
+      <FormToolbar />
+      <FormBody enableAuditLog={false}>
+        <FormSection labelName="General" hideHeader>
+          <Field fieldName="groupName" />
+          <Field fieldName="description" />
+        </FormSection>
+      </FormBody>
+    </ModelForm>
+  );
+}
 ```
 
 ## `BulkAction`
@@ -154,7 +195,7 @@ type ActionValue<T> =
 
 | 容器          | 支持的 Action 类型                     | 支持的位置          |
 | ------------- | -------------------------------------- | ------------------- |
-| `FormToolbar` | `default`, `dialog`, `link`, `custom`  | `toolbar`, `more`   |
+| `FormToolbar` | `default`, `dialog`, `link`, `custom`, `form`  | `toolbar`, `more`   |
 | `FormSection` | `link`, `custom`                       | `header`, `inline`  |
 
 规则：

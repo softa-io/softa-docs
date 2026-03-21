@@ -80,6 +80,48 @@ Validation behavior:
 - default is `onBlur`
 - `reValidateMode` is `onChange`
 
+### Dialog Mode (Action type="form")
+
+`ModelForm` can run inside a dialog when opened via `<Action type="form" />`. In this mode it automatically adapts:
+
+- **ID resolution**: ignores route `params.id` (uses only the `id` prop; defaults to create mode)
+- **Create/update success**: closes the dialog instead of `router.push`
+- **Cancel**: closes the dialog instead of navigating back
+- **relatedField injection**: the parent record `id` is merged into `defaultValues` as `{ [relatedField]: parentId }` and included in the API payload — even if the field is not displayed in the form
+
+No special props are needed on `ModelForm` itself — dialog mode is detected automatically via `ActionFormRuntimeContext`.
+
+Example:
+
+```tsx
+// Parent form page
+<FormToolbar>
+  <Action
+    type="form"
+    labelName="Add Config Group"
+    placement="toolbar"
+    component={ConfigGroupForm}
+    relatedField="tenantConfigId"
+  />
+</FormToolbar>
+
+// Child form component (used as Action.component)
+function ConfigGroupForm() {
+  return (
+    <ModelForm modelName="TenantConfigGroup">
+      <FormToolbar />
+      <FormBody enableAuditLog={false}>
+        <FormSection labelName="General" hideHeader>
+          <Field fieldName="groupName" />
+          <Field fieldName="description" />
+          {/* tenantConfigId is not displayed but is auto-injected into the API payload */}
+        </FormSection>
+      </FormBody>
+    </ModelForm>
+  );
+}
+```
+
 Need custom variations? Use `useModelFormContext()` in children and rearrange `FormHeader/FormToolbar/FormBody` directly.
 
 Canonical field usage now lives in [Fields](./fields/index).
@@ -734,6 +776,7 @@ Recommended default layout:
 | `id`            | `string \| null`          | No       | Route `params.id` (`"new"` => `null`) | Optional override.                                                                          |
 | `schemaBuilder` | `(context) => ZodTypeAny` | No       | -                                     | Runtime schema extender. Receives `{ metaModel, baseSchema }` built from resolved metadata. |
 | `readOnly`      | `boolean`                 | No       | `false`                               | Force read-only mode.                                                                       |
+| `defaultValues` | `Record<string, unknown>` | No       | -                                     | Extra default values merged into metadata defaults. Useful for injecting parent context such as `relatedField` values. |
 | `children`      | `ReactNode`               | Yes      | -                                     | Form page layout content (`FormHeader/FormToolbar/FormBody`).                               |
 
 Runtime field conditions:

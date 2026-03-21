@@ -54,7 +54,7 @@ type ActionValue<T> =
 
 | Prop             | Type                                           | Required | Default | Notes |
 | ---------------- | ---------------------------------------------- | -------- | ------- | ----- |
-| `type`           | `"default" \| "dialog" \| "link" \| "custom"` | No       | `"default"` | Action behavior. Omit to use direct API invoke. |
+| `type`           | `"default" \| "dialog" \| "link" \| "custom" \| "form"` | No       | `"default"` | Action behavior. Omit to use direct API invoke. |
 | `labelName`      | `ReactNode`                                    | Yes      | -       | Action label. |
 | `placement`      | `"toolbar" \| "more" \| "header" \| "inline"` | No       | container-dependent | Placement support depends on parent container. |
 | `confirmMessage` | `ActionValue<string>`                          | No       | -       | Optional confirmation prompt before action execution. |
@@ -72,6 +72,7 @@ type ActionValue<T> =
 | `type="dialog"`                    | `operation`, `component` | -                | `component={MyDialogComponent}`. Open/close, operation, success/error messaging are injected from `Action`. |
 | `type="link"`                      | `href`                   | opens in new tab | `href` supports `string` or `({ id, modelName }) => string`. |
 | `type="custom"`                    | `onClick`                | -                | Use for pure UI/local behaviors. Signature: `onClick({ id, modelName, scope, mode, isDirty, values, row }) => void`. |
+| `type="form"`                      | `component`, `relatedField` | -             | Opens a dialog containing an independent `ModelForm`. `component` renders the child form view; `relatedField` names the child-model field that references the parent record. The parent `id` is automatically injected into `ModelForm.defaultValues` as `{ [relatedField]: parentId }` and included in the create/update API payload. |
 
 Action condition notes:
 
@@ -119,6 +120,46 @@ Action condition notes:
   placement="more"
   onClick={({ modelName }) => console.log(`${modelName} health check started.`)}
 />
+
+// 5) form: open independent ModelForm in dialog
+<Action
+  type="form"
+  labelName="Add Config Group"
+  placement="toolbar"
+  component={ConfigGroupForm}
+  relatedField="tenantConfigId"
+/>
+```
+
+### `type="form"` Component Definition
+
+The `component` is a standard React component that renders a `ModelForm` with its own `modelName`. When opened via `Action type="form"`, `ModelForm` automatically adapts to dialog mode:
+
+- ignores route `params.id` (uses only the `id` prop)
+- on create/update success: closes the dialog instead of navigating
+- on cancel: closes the dialog instead of navigating
+- `relatedField` value is injected into `defaultValues` and included in the API payload, even if the field is not displayed
+
+```tsx
+import { FormSection } from "@/components/common/form-section";
+import { Field } from "@/components/fields";
+import { FormBody } from "@/components/views/form/components/FormBody";
+import { FormToolbar } from "@/components/views/form/components/FormToolbar";
+import { ModelForm } from "@/components/views/form/ModelForm";
+
+function ConfigGroupForm() {
+  return (
+    <ModelForm modelName="TenantConfigGroup">
+      <FormToolbar />
+      <FormBody enableAuditLog={false}>
+        <FormSection labelName="General" hideHeader>
+          <Field fieldName="groupName" />
+          <Field fieldName="description" />
+        </FormSection>
+      </FormBody>
+    </ModelForm>
+  );
+}
 ```
 
 ## `BulkAction`
@@ -152,10 +193,10 @@ Behavior-specific props:
 
 Container support:
 
-| Container     | Supported Action Types                | Supported Placements |
-| ------------- | ------------------------------------- | -------------------- |
-| `FormToolbar` | `default`, `dialog`, `link`, `custom` | `toolbar`, `more`    |
-| `FormSection` | `link`, `custom`                      | `header`, `inline`   |
+| Container     | Supported Action Types                        | Supported Placements |
+| ------------- | --------------------------------------------- | -------------------- |
+| `FormToolbar` | `default`, `dialog`, `link`, `custom`, `form` | `toolbar`, `more`    |
+| `FormSection` | `link`, `custom`                              | `header`, `inline`   |
 
 Rules:
 

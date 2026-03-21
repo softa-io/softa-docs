@@ -80,7 +80,49 @@ export default function EditUserAccountPage() {
 - 默认是 `onBlur`
 - `reValidateMode` 是 `onChange`
 
-如果需要自定义变体，可以在子组件中使用 `useModelFormContext()`，并直接重新组织 `FormHeader` / `FormToolbar` / `FormBody`。
+### 对话框模式（Action type="form"）
+
+通过 `<Action type="form" />` 打开时，`ModelForm` 可在对话框内运行。此模式下会自动适配：
+
+- **ID 解析**：忽略路由 `params.id`（仅使用 `id` prop；默认可视为创建模式）
+- **创建 / 更新成功**：关闭对话框，而不是 `router.push`
+- **取消**：关闭对话框，而不是返回导航
+- **relatedField 注入**：父记录 `id` 会合并进 `defaultValues`，形如 `{ [relatedField]: parentId }`，并写入 API payload —— 即使表单中未展示该字段
+
+`ModelForm` 本身无需额外 props —— 对话框模式通过 `ActionFormRuntimeContext` 自动识别。
+
+示例：
+
+```tsx
+// 父表单页面
+<FormToolbar>
+  <Action
+    type="form"
+    labelName="Add Config Group"
+    placement="toolbar"
+    component={ConfigGroupForm}
+    relatedField="tenantConfigId"
+  />
+</FormToolbar>
+
+// 子表单组件（作为 Action.component）
+function ConfigGroupForm() {
+  return (
+    <ModelForm modelName="TenantConfigGroup">
+      <FormToolbar />
+      <FormBody enableAuditLog={false}>
+        <FormSection labelName="General" hideHeader>
+          <Field fieldName="groupName" />
+          <Field fieldName="description" />
+          {/* tenantConfigId 未展示，但会自动注入 API payload */}
+        </FormSection>
+      </FormBody>
+    </ModelForm>
+  );
+}
+```
+
+需要自定义布局？在子组件中使用 `useModelFormContext()`，并直接调整 `FormHeader` / `FormToolbar` / `FormBody` 的组合即可。
 
 字段的规范化用法现在统一维护在 [Fields](./fields/index)。
 widget 兼容性和 widget 专属示例维护在 [Widget 矩阵](./fields/widgets)。
@@ -734,6 +776,7 @@ export default function UserProfileFormPage() {
 | `id`            | `string \| null`          | 否   | 路由 `params.id`（`"new"` => `null`） | 可选覆盖。 |
 | `schemaBuilder` | `(context) => ZodTypeAny` | 否   | -                                     | 运行时 schema 扩展器。接收 `{ metaModel, baseSchema }`，其中 `baseSchema` 基于已解析元数据构建。 |
 | `readOnly`      | `boolean`                 | 否   | `false`                               | 强制只读模式。 |
+| `defaultValues` | `Record<string, unknown>` | 否   | -                                     | 与元数据默认值合并的额外默认值。适合注入父上下文，例如 `relatedField` 对应值。 |
 | `children`      | `ReactNode`               | 是   | -                                     | 表单页面布局内容（`FormHeader/FormToolbar/FormBody`）。 |
 
 运行时字段条件：
@@ -798,7 +841,6 @@ export default function UserProfileFormPage() {
 | `description` | `string`               | 否   | -         | 可选的辅助说明文字，渲染在 section 标题下方。 |
 | `className`   | `string`               | 否   | -         | section 容器的额外 class。 |
 | `columns`     | `1 \| 2 \| 3 \| 4`    | 否   | `2`       | `md+` 布局时 section 内容的响应式网格列数。 |
-| `spacing`     | `"form" \| "card"`     | 否   | `"form"`  | section 网格的间距预设。嵌入更紧凑的 card 布局时使用 `card`。 |
 | `hideHeader`  | `boolean`              | 否   | `false`   | 隐藏可视 section 标题，但 section 仍可参与导航注册。 |
 | `divided`     | `boolean`              | 否   | `false`   | 在 section 上方添加顶部边框。对第一个 section（`:first-child`）不生效。 |
 | `children`    | `ReactNode`            | 否   | -         | 通常是 `Field` 节点，以及可选的 section 级 `Action` 节点。 |
@@ -806,8 +848,8 @@ export default function UserProfileFormPage() {
 说明：
 
 - `FormSection` 会自动向最近的 `FormBody` section 注册表注册自身。
-- 默认 `labelName` 作为导航标签。
-- 无 `labelName` 时，通用标签（`"Section"`）在导航中会自动重命名为 `Section 1`、`Section 2` 等。
+- 未提供 `labelName` 时，导航标签回退为 `"Section"`。
+- 通用标签（`"Section"`）在导航中会自动重命名为 `Section 1`、`Section 2` 等。
 - `hideHeader` 只影响已渲染的标题，不会禁用 section-nav 注册。
 - `divided` 在 section 没有 `labelName`（即标题本身被隐藏）但仍需视觉分隔时最为有用。当 `labelName` 存在时，标题本身已提供了视觉分隔，通常无需使用 `divided`。
 - `FormSection` 仅支持局部 UI 动作：`type="link"` 和 `type="custom"`，且 `placement` 为 `"header"` 或 `"inline"`。
@@ -893,7 +935,7 @@ import { FormBody, FormTab } from "@/components/views/form/components/FormBody";
 
 | 容器          | 支持的 Action 类型                     | 支持的位置          |
 | ------------- | -------------------------------------- | ------------------- |
-| `FormToolbar` | `default`, `dialog`, `link`, `custom`  | `toolbar`, `more`   |
+| `FormToolbar` | `default`, `dialog`, `link`, `custom`, `form`  | `toolbar`, `more`   |
 | `FormSection` | `link`, `custom`                       | `header`, `inline`  |
 
 规则：
