@@ -4,6 +4,7 @@ File Starter provides three core capabilities for developers:
 - [Data import](./import)
 - [Data export](./export)
 - [Document export (Word/PDF)](./document)
+- Document signing
 
 This document focuses on developer usage and API-level examples.
 
@@ -13,7 +14,8 @@ This document focuses on developer usage and API-level examples.
 - `excel/export/support`: shared export support components such as data fetch, template resolve, writer, upload, and custom export hooks
 - `excel/imports`: import pipeline, handler factory, failure collection, persistence, and custom import hook
 - `excel/style`: shared Excel style handlers
-- `file/`: document file generators (Word, PDF)
+- `file/`: document file generators and PDF signing helpers (Word, PDF, signing)
+
 
 ## Dependency
 ```xml
@@ -30,7 +32,9 @@ This document focuses on developer usage and API-level examples.
 - Database contains file metadata tables and file-starter tables:
   - Import: ImportTemplate, ImportTemplateField, ImportHistory,
   - Export: ExportTemplate, ExportTemplateField, ExportHistory,
-  - Document: DocumentTemplate.
+  - Document: DocumentTemplate,
+  - Signing: SigningRequest, SigningDocument.
+
 
 ## Configuration
 ### MQ topics (async import)
