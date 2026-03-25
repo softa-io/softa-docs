@@ -67,7 +67,7 @@ Supports event-driven business process definition and execution:
 - Supports synchronous and asynchronous flows.
 - Version management for workflows.
 
-### 2.5 `designer-starter` Designer Module
+### 2.5 `studio-starter` Studio Module
 Provides versioned management of metadata and multi-environment publishing features:
 - Centralized management of relationships between business applications, system environments, and metadata versions.
 - Supports merging metadata across environments, such as Dev, Test, UAT, and Prod.
