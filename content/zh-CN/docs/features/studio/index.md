@@ -127,13 +127,10 @@ SQL 模板不直接读取原始 `DesignModel` / `DesignField` / `DesignModelInde
 | `DesignSqlTemplate` | 按数据库类型管理的 Pebble SQL 模板 |
 | `DesignCodeTemplate` | 按语言管理的 Pebble 代码模板，可配置 `sequence`、`subDirectory`、`fileName`、`templateContent` |
 | `DesignModelIndex` | 模型索引定义 |
-| `DesignModelValidation` | 模型校验规则 |
-| `DesignModelOnchange` | 模型 OnChange 事件规则 |
 | `DesignView` | 视图定义 |
 | `DesignNavigation` | 导航定义 |
 | `DesignOptionSet` | 选项集定义 |
 | `DesignOptionItem` | 选项项定义 |
-| `DesignConfig` | 配置管理 |
 
 ### 版本控制与部署模型
 
@@ -163,9 +160,6 @@ SQL 模板不直接读取原始 `DesignModel` / `DesignField` / `DesignModelInde
 
 - `DesignView`
 - `DesignNavigation`
-- `DesignConfig`
-- `DesignModelValidation`
-- `DesignModelOnchange`
 
 ## DDL 存储设计
 
@@ -309,16 +303,14 @@ SQL 模板不直接读取原始 `DesignModel` / `DesignField` / `DesignModelInde
 
 ### 最高优先级补齐项
 
-1. **将 `DesignView` / `DesignNavigation` / `DesignConfig` 纳入发布管道**
+1. **将 `DesignView` / `DesignNavigation` 纳入发布管道**
    - 这些实体已有设计时 CRUD，运行时侧也已存在对应模型，但未加入 `VERSION_CONTROL_MODELS`。这是当前最大的功能缺口：设计变更无法随环境晋升。
-2. **为 `DesignModelValidation` 与 `DesignModelOnchange` 提供运行时支持**
-   - 二者目前仅存于设计侧；若无运行时模型与执行器，其字段不会影响应用行为。
-3. **理顺工作项激活模型**
+2. **理顺工作项激活模型**
    - README 曾描述 `startWorkItem`，实现侧暴露的是 `readyWorkItem`，且未填充 `DesignWorkItem.startTime`。API 命名、流程语义与持久化时间戳应对齐。
-4. **闭合部署契约缺口**
+3. **闭合部署契约缺口**
    - README 曾提及回滚，且 `DesignDeploymentStatus` 含 `ROLLED_BACK`，但尚无回滚接口/实现。`DesignAppEnv.asyncUpgrade` 也仍为同步执行。
-5. **清理预留或未接线的环境/配置字段**
-   - `DesignAppEnv.protectedEnv`、`active`、`clientId`、`autoUpgrade` 在部署流程中尚未强制生效。`DesignConfig` 也未暴露运行时 `SysConfig` 上已有的 `active` 标志。
+4. **清理预留或未接线的环境/配置字段**
+   - `DesignAppEnv.protectedEnv`、`active`、`clientId`、`autoUpgrade` 在部署流程中尚未强制生效。
 
 ### 其他说明
 
