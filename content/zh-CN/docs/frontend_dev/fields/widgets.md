@@ -16,7 +16,7 @@
 | FieldType     | 默认行为                 | 支持的 WidgetType                                             |
 | ------------- | ------------------------ | ------------------------------------------------------------- |
 | `String`      | 单行输入                 | `URL`, `Email`, `Text`, `RichText`, `TemplateEditor`, `Markdown`, `Code`, `Color` |
-| `MultiString` | 逗号 / 回车提交的标签输入 | -                                                             |
+| `MultiString` | 逗号 / 回车提交的标签式输入 | -                                                             |
 | `Integer`     | 数字输入                 | `Monetary`, `Percentage`, `Slider`                            |
 | `Long`        | 数字输入                 | `Monetary`, `Percentage`, `Slider`                            |
 | `Double`      | 数字输入                 | `Monetary`, `Percentage`, `Slider`                            |
@@ -307,10 +307,10 @@
 ### `TagList`
 
 ```tsx
-<Field fieldName="userIds" widgetType="TagList" tableView={userTableView} />
+<Field fieldName="userIds" widgetType="TagList" tableView={UserTableView} />
 ```
 
-关联专属行为、查询规则和 `RelationTable` 请见 [Relation Fields](./relations)。
+关联专属行为、查询规则与 `RelationTable` 请见 [关联字段](./relations)。
 
 ## 文件与图片类 Widgets
 

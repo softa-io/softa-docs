@@ -163,7 +163,7 @@ widget 兼容性和 widget 专属示例维护在 [Widget 矩阵](./fields/widget
 - `Filters`：`FilterCondition`
 - `Orders`：结构化排序元组 / 数组
 
-更详细的字段值契约见 [Fields](./fields/index)。
+更详细的字段值契约见 [Field](./fields/index)。
 
 条件字段控制示例：
 
@@ -468,41 +468,45 @@ import { dependsOn, Field } from "@/components/fields";
 启用模式：
 
 ```tsx
-const optionItemsTableView = (
-  <RelationTable orders={["sequence", "ASC"]} pageSize={10}>
-    <Field fieldName="sequence" />
-    <Field fieldName="itemCode" />
-    <Field fieldName="itemName" />
-    <Field fieldName="active" />
-  </RelationTable>
-);
+function OptionItemsTableView() {
+  return (
+    <RelationTable orders={["sequence", "ASC"]} pageSize={10}>
+      <Field fieldName="sequence" />
+      <Field fieldName="itemCode" />
+      <Field fieldName="itemName" />
+      <Field fieldName="active" />
+    </RelationTable>
+  );
+}
 
-const multiSortTableView = (
-  <RelationTable
-    orders={[
-      ["sequence", "ASC"],
-      ["itemCode", "DESC"],
-    ]}
-    pageSize={20}
-  >
-    <Field fieldName="sequence" />
-    <Field fieldName="itemCode" />
-    <Field fieldName="itemName" />
-  </RelationTable>
-);
+function MultiSortTableView() {
+  return (
+    <RelationTable
+      orders={[
+        ["sequence", "ASC"],
+        ["itemCode", "DESC"],
+      ]}
+      pageSize={20}
+    >
+      <Field fieldName="sequence" />
+      <Field fieldName="itemCode" />
+      <Field fieldName="itemName" />
+    </RelationTable>
+  );
+}
 
 // 启用表格单元格内联编辑（推荐用于本地关联编辑）
-<Field fieldName="optionItems" tableView={optionItemsTableView} />
+<Field fieldName="optionItems" tableView={OptionItemsTableView} />
 
 // 关闭内联编辑，改为对话框编辑
 <Field
   fieldName="optionItems"
-  tableView={optionItemsTableView}
+  tableView={OptionItemsTableView}
   formView={OptionItemsFormView}
 />
 
 // 分页关联表格（启用分页；可能切换到远程 searchPage 模式）
-<Field fieldName="optionItems" tableView={optionItemsTableView} isPaged />
+<Field fieldName="optionItems" tableView={OptionItemsTableView} isPaged />
 ```
 
 提交 payload 形态：
@@ -528,14 +532,16 @@ OneToMany 视图绑定示例：
 ```tsx
 import { Field, RelationTable } from "@/components/fields";
 
-const optionItemsTableView = (
-  <RelationTable orders={["sequence", "ASC"]} pageSize={10}>
-    <Field fieldName="sequence" />
-    <Field fieldName="itemCode" />
-    <Field fieldName="itemName" readonly={[["active", "=", false]]} />
-    <Field fieldName="active" />
-  </RelationTable>
-);
+function OptionItemsTableView() {
+  return (
+    <RelationTable orders={["sequence", "ASC"]} pageSize={10}>
+      <Field fieldName="sequence" />
+      <Field fieldName="itemCode" />
+      <Field fieldName="itemName" readonly={[["active", "=", false]]} />
+      <Field fieldName="active" />
+    </RelationTable>
+  );
+}
 
 function OptionItemsFormView() {
   return (
@@ -570,7 +576,7 @@ export default function SysOptionSetFormPage() {
         <FormSection>
           <Field
             fieldName="optionItems"
-            tableView={optionItemsTableView}
+            tableView={OptionItemsTableView}
             formView={OptionItemsFormView}
           />
         </FormSection>
@@ -610,15 +616,17 @@ ManyToMany 视图绑定示例：
 ```tsx
 import { Field, RelationTable } from "@/components/fields";
 
-const userRoleUserIdsTableView = (
-  <RelationTable orders={["username", "ASC"]} pageSize={10}>
-    <Field fieldName="username" />
-    <Field fieldName="nickname" />
-    <Field fieldName="email" />
-    <Field fieldName="mobile" />
-    <Field fieldName="status" />
-  </RelationTable>
-);
+function UserRoleUserIdsTableView() {
+  return (
+    <RelationTable orders={["username", "ASC"]} pageSize={10}>
+      <Field fieldName="username" />
+      <Field fieldName="nickname" />
+      <Field fieldName="email" />
+      <Field fieldName="mobile" />
+      <Field fieldName="status" />
+    </RelationTable>
+  );
+}
 
 function UserRoleUserIdsFormView() {
   return (
@@ -650,7 +658,7 @@ export default function UserRoleFormPage() {
         <FormSection>
           <Field
             fieldName="userIds"
-            tableView={userRoleUserIdsTableView}
+            tableView={UserRoleUserIdsTableView}
             formView={UserRoleUserIdsFormView}
           />
         </FormSection>
@@ -662,7 +670,7 @@ export default function UserRoleFormPage() {
 
 说明：
 
-- `tableView` 通过子级 `<Field />` 声明以及可选的 `RelationTable.orders` / `RelationTable.pageSize` 控制关联表格列
+- `tableView` 通过**零 props** 视图组件返回 `<RelationTable />`，并由子级 `<Field />` 声明以及可选的 `RelationTable.orders` / `RelationTable.pageSize` 控制关联表格列
 - `RelationTable.orders` 同时支持单个元组（`["username", "ASC"]`）或多个元组（`[["username", "ASC"], ["email", "DESC"]]`）
 - 远程关联表格和选择器查询会组合有效字段过滤条件（`Field.filters ?? metaField.filters`）、关联作用域过滤条件，以及运行时搜索 / 列过滤条件
 - `isPaged`（仅 `OneToMany` / `ManyToMany`）：
@@ -762,7 +770,7 @@ export default function UserProfileFormPage() {
 
 - Header：标题 + 描述
 - 吸顶工具栏：
-  - 左侧：内置 `FormEditStatus + FormPrimaryActions`（启用 `enableWorkflow=true` 时再加 `FormWorkflowActions`）
+  - 左侧：内置 `FormEditStatus + FormPrimaryActions`（`ModelForm` / `ModelSideForm` 启用 `enableWorkflow=true` 时再加 `FormWorkflowActions`）
   - 右侧：业务动作区域（自定义动作 + 内置 Duplicate/Delete + More Actions）
 - Body：`FormBody` 渲染堆叠的 section 或真正的 tab 布局，以及内置的审计面板布局
 - Audit：`FormBody(enableAuditLog)` 控制审计面板；大屏在右侧，小屏在底部
@@ -778,6 +786,11 @@ export default function UserProfileFormPage() {
 | `schemaBuilder` | `(context) => ZodTypeAny` | 否   | -                                     | 运行时 schema 扩展器。接收 `{ metaModel, baseSchema }`，其中 `baseSchema` 基于已解析元数据构建。 |
 | `readOnly`      | `boolean`                 | 否   | `false`                               | 强制只读模式。 |
 | `defaultValues` | `Record<string, unknown>` | 否   | -                                     | 与元数据默认值合并的额外默认值。适合注入父上下文，例如 `relatedField` 对应值。 |
+| `enableWorkflow`       | `boolean`                 | 否   | `false`                               | 仅在编辑模式下，在工具栏左侧显示工作流动作组。 |
+| `enableCreate`         | `boolean`                 | 否   | auto                                  | 内置「新建」开关。`false` 关闭。省略时遵循默认行为（只读表单除非显式 `true` 否则隐藏）。 |
+| `enableDuplicate`      | `boolean`                 | 否   | auto                                  | 内置复制开关。`false` 关闭。省略时遵循默认行为（只读表单除非显式 `true` 否则隐藏）。 |
+| `enableDelete`         | `boolean`                 | 否   | auto                                  | 内置删除开关。`false` 关闭。省略时遵循默认行为（只读表单除非显式 `true` 否则隐藏）。 |
+| `confirmDeleteMessage` | `string`                  | 否   | `Delete this {modelLabel}? This action cannot be undone.` | 内置删除操作的确认文案。 |
 | `children`      | `ReactNode`               | 是   | -                                     | 表单页面布局内容（`FormHeader/FormToolbar/FormBody`）。 |
 
 运行时字段条件：

@@ -27,18 +27,21 @@ import { Field, RelationTable } from "@/components/fields";
 ## `RelationTable`
 
 `RelationTable` is the relation-table view definition for `OneToMany` and `ManyToMany`.
+Declare a zero-prop `tableView` component and return `<RelationTable />` from it.
 
 Example:
 
 ```tsx
-const optionItemsTableView = (
-  <RelationTable orders={["sequence", "ASC"]} pageSize={10}>
-    <Field fieldName="sequence" />
-    <Field fieldName="itemCode" />
-    <Field fieldName="itemName" />
-    <Field fieldName="active" />
-  </RelationTable>
-);
+function OptionItemsTableView() {
+  return (
+    <RelationTable orders={["sequence", "ASC"]} pageSize={10}>
+      <Field fieldName="sequence" />
+      <Field fieldName="itemCode" />
+      <Field fieldName="itemName" />
+      <Field fieldName="active" />
+    </RelationTable>
+  );
+}
 ```
 
 ### Props
@@ -143,21 +146,23 @@ Rendered as relation table with inline or dialog editing. Public usage stays on 
 Example:
 
 ```tsx
-const optionItemsTableView = (
-  <RelationTable orders={["sequence", "ASC"]} pageSize={10}>
-    <Field fieldName="sequence" />
-    <Field fieldName="itemCode" />
-    <Field fieldName="itemName" />
-    <Field fieldName="active" />
-  </RelationTable>
-);
+function OptionItemsTableView() {
+  return (
+    <RelationTable orders={["sequence", "ASC"]} pageSize={10}>
+      <Field fieldName="sequence" />
+      <Field fieldName="itemCode" />
+      <Field fieldName="itemName" />
+      <Field fieldName="active" />
+    </RelationTable>
+  );
+}
 
-<Field fieldName="optionItems" tableView={optionItemsTableView} />;
+<Field fieldName="optionItems" tableView={OptionItemsTableView} />;
 ```
 
 Common props:
 
-- `tableView`: relation-table columns via `<RelationTable><Field /></RelationTable>`
+- `tableView`: relation-table view component that renders `<RelationTable><Field /></RelationTable>`
 - `formView`: dialog form for row create/edit
 - `isPaged`: enable pagination / remote relation mode
 
@@ -185,16 +190,18 @@ Rendered as relation table plus picker dialog by default.
 Example:
 
 ```tsx
-const userTableView = (
-  <RelationTable orders={["username", "ASC"]} pageSize={10}>
-    <Field fieldName="username" />
-    <Field fieldName="nickname" />
-    <Field fieldName="email" />
-    <Field fieldName="status" />
-  </RelationTable>
-);
+function UserTableView() {
+  return (
+    <RelationTable orders={["username", "ASC"]} pageSize={10}>
+      <Field fieldName="username" />
+      <Field fieldName="nickname" />
+      <Field fieldName="email" />
+      <Field fieldName="status" />
+    </RelationTable>
+  );
+}
 
-<Field fieldName="userIds" tableView={userTableView} />;
+<Field fieldName="userIds" tableView={UserTableView} />;
 ```
 
 Default submit behavior is incremental patch map:
@@ -211,7 +218,7 @@ Default submit behavior is incremental patch map:
 `widgetType="TagList"` switches `ManyToMany` to a searchable multi-select dropdown with tags rendered below the trigger.
 
 ```tsx
-<Field fieldName="userIds" widgetType="TagList" tableView={userTableView} />
+<Field fieldName="userIds" widgetType="TagList" tableView={UserTableView} />
 ```
 
 Behavior:

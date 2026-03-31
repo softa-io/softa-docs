@@ -170,14 +170,16 @@ import { Group } from "@/components/fields/extend/Group";
 ```
 
 ```tsx
-const userTableView = (
-  <RelationTable orders={["username", "ASC"]} pageSize={10}>
-    <Field fieldName="username" />
-    <Field fieldName="email" />
-  </RelationTable>
-);
+function UserTableView() {
+  return (
+    <RelationTable orders={["username", "ASC"]} pageSize={10}>
+      <Field fieldName="username" />
+      <Field fieldName="email" />
+    </RelationTable>
+  );
+}
 
-<Field fieldName="userIds" tableView={userTableView} />;
+<Field fieldName="userIds" tableView={UserTableView} />;
 ```
 
 ## 核心 Props
@@ -200,7 +202,7 @@ const userTableView = (
 | `defaultValue` | `unknown`                          | 否   | 仅创建态使用的默认值覆盖。优先级高于 `metaField.defaultValue` 和对话框 / 页面级 `defaultValues`。 |
 | `filters`      | `string \| FilterCondition`        | 否   | 关联过滤条件覆盖。`Field.filters` 会覆盖 `metaField.filters`。支持 JSON 字符串形式的元数据过滤条件以及 `{{ expr }}`（如 `{{ fieldName }}`）引用。 |
 | `onChange`     | `FieldOnChangeProp`                | 否   | 远程字段联动。支持简写 `string[]` 或 `{ update?, with? }`。 |
-| `tableView`    | `ReactElement<RelationTableProps>` | 否   | `OneToMany` / `ManyToMany` 的关联表格配置。必须是 `<RelationTable />` 元素。详见 [Relation Fields](./relations)。 |
+| `tableView`    | `RelationTableView`                | 否   | `OneToMany` / `ManyToMany` 的关联表格视图。须为零 props 的组件，且渲染 `<RelationTable />`。详见 [关联字段](./relations)。 |
 | `formView`     | `RelationFormView`                 | 否   | 关联对话框 / 详情视图配置。详见 [Relation Fields](./relations)。 |
 | `isPaged`      | `boolean`                          | 否   | 为 `OneToMany` / `ManyToMany` 启用分页关联表格模式。详见 [Relation Fields](./relations)。 |
 

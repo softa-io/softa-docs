@@ -22,32 +22,35 @@
 import { Field, RelationTable } from "@/components/fields";
 ```
 
-`RelationTable` 只在关联字段声明内部使用，例如 `Field.tableView`。
+`RelationTable` 仅在关联字段声明中使用，例如 `Field.tableView`。
 
 ## `RelationTable`
 
-`RelationTable` 是 `OneToMany` 和 `ManyToMany` 的关联表格视图定义。
+`RelationTable` 是 `OneToMany` 与 `ManyToMany` 的关联表格视图定义。  
+请声明一个**零 props** 的 `tableView` 组件，并在其中返回 `<RelationTable />`。
 
 示例：
 
 ```tsx
-const optionItemsTableView = (
-  <RelationTable orders={["sequence", "ASC"]} pageSize={10}>
-    <Field fieldName="sequence" />
-    <Field fieldName="itemCode" />
-    <Field fieldName="itemName" />
-    <Field fieldName="active" />
-  </RelationTable>
-);
+function OptionItemsTableView() {
+  return (
+    <RelationTable orders={["sequence", "ASC"]} pageSize={10}>
+      <Field fieldName="sequence" />
+      <Field fieldName="itemCode" />
+      <Field fieldName="itemName" />
+      <Field fieldName="active" />
+    </RelationTable>
+  );
+}
 ```
 
 ### Props
 
-| Prop       | 类型             | 必填 | 说明                                                                 |
-| ---------- | ---------------- | ---- | -------------------------------------------------------------------- |
-| `children` | `ReactNode`      | 是   | 关联表格中按顺序声明的 `<Field />` 列。                              |
-| `orders`   | `OrderCondition` | 否   | 关联表格的默认排序。支持单个元组或多个元组。                         |
-| `pageSize` | `number`         | 否   | 关联表格页大小。仅对分页关联表格（`isPaged={true}`）生效。           |
+| Prop       | 类型             | 必填 | 说明                                                                                      |
+| ---------- | ---------------- | ---- | ----------------------------------------------------------------------------------------- |
+| `children` | `ReactNode`      | 是   | 按顺序声明关联表格列的 `<Field />`。                                                      |
+| `orders`   | `OrderCondition` | 否   | 关联表格默认排序。支持单个元组或多个元组。                                                |
+| `pageSize` | `number`         | 否   | 关联表格页大小。仅对分页关联表格（`isPaged={true}`）生效。                                |
 
 排序示例：
 
@@ -73,12 +76,12 @@ const optionItemsTableView = (
 行为说明：
 
 - `RelationTable.pageSize` 仅影响分页关联表格（`isPaged`）
-- `RelationTable.orders` 同时支持单个元组和多个元组
-- 列声明仍然由子级 `<Field />` 的顺序决定
+- `RelationTable.orders` 同时支持单个元组与多个元组
+- 列声明仍由子级 `<Field />` 的顺序决定
 
 ## `ManyToOne` / `OneToOne`
 
-默认行为是可搜索的关联选择器：
+默认行为为可搜索的关联选择：
 
 ```tsx
 <Field fieldName="departmentId" />
@@ -101,18 +104,18 @@ const optionItemsTableView = (
 
 说明：
 
-- `filters` 会应用到默认的可搜索关联查询上
-- 当依赖的 `{{ fieldName }}` 当前没有值时，选择器会保持查询禁用状态，而不是加载全部选项
+- `filters` 作用于默认的可搜索关联查询
+- 当依赖的 `{{ fieldName }}` 在当前作用域没有值时，选择器保持**查询禁用**，而不会加载全部选项
 
 ### `SelectTree`
 
-当关联模型是层级结构时，使用 `SelectTree`：
+关联模型为层级结构时使用 `SelectTree`：
 
 ```tsx
 <Field fieldName="departmentId" widgetType="SelectTree" />
 ```
 
-带依赖过滤的常见用法：
+带依赖过滤的常见写法：
 
 ```tsx
 <Field fieldName="companyId" />
@@ -130,38 +133,40 @@ const optionItemsTableView = (
 
 行为：
 
-- `SelectTree` 是表单和内联编辑器中推荐的开发者侧树选择入口
-- 它仍然通过 `Field` 声明，而不是直接渲染 `SelectTreePanel`
-- 它遵循与可搜索关联字段相同的 `Field.filters` 规则
-- 当依赖的 `{{ fieldName }}` 缺失时，树选择器会保持查询禁用状态，而不是加载未过滤的整棵树
+- `SelectTree` 是表单与内联编辑器中面向开发者的推荐树形入口
+- 仍通过 `Field` 声明，而非直接渲染 `SelectTreePanel`
+- 与可搜索关联字段使用相同的 `Field.filters` 规则
+- 依赖的 `{{ fieldName }}` 缺失时，树选择器保持查询禁用，不会加载未过滤的整棵树
 - 底层 `Tree` / `SelectTreePanel` 属于内部基础设施
 
 ## `OneToMany`
 
-默认渲染为支持内联编辑或对话框编辑的关联表格。公开用法仍然是 `Field`。
+渲染为关联表格，支持行内编辑或对话框编辑。对外仍统一使用 `Field`。
 
 示例：
 
 ```tsx
-const optionItemsTableView = (
-  <RelationTable orders={["sequence", "ASC"]} pageSize={10}>
-    <Field fieldName="sequence" />
-    <Field fieldName="itemCode" />
-    <Field fieldName="itemName" />
-    <Field fieldName="active" />
-  </RelationTable>
-);
+function OptionItemsTableView() {
+  return (
+    <RelationTable orders={["sequence", "ASC"]} pageSize={10}>
+      <Field fieldName="sequence" />
+      <Field fieldName="itemCode" />
+      <Field fieldName="itemName" />
+      <Field fieldName="active" />
+    </RelationTable>
+  );
+}
 
-<Field fieldName="optionItems" tableView={optionItemsTableView} />;
+<Field fieldName="optionItems" tableView={OptionItemsTableView} />;
 ```
 
 常用 props：
 
-- `tableView`：通过 `<RelationTable><Field /></RelationTable>` 定义关联表格列
-- `formView`：用于行创建 / 编辑的对话框表单
+- `tableView`：零 props 的关联表格视图组件，内部渲染 `<RelationTable><Field /></RelationTable>`
+- `formView`：行创建/编辑用的对话框表单
 - `isPaged`：启用分页 / 远程关联模式
 
-默认提交行为是增量 patch map：
+默认提交行为为增量 patch map：
 
 ```json
 {
@@ -173,31 +178,33 @@ const optionItemsTableView = (
 
 行为：
 
-- `false`（默认）：在 `getById` 中包含关联 `subQuery`；关联表格 UI 不分页，直接渲染本地行
-- `true`：关联表格启用分页 UI；当 `recordId + relatedModel + 作用域内关联过滤条件` 准备就绪时，通过 `relatedModel.searchPage` 加载数据（远程模式），否则退回为本地分页
-- 可编辑单元格限定为声明在 `RelationTable` 中的列，并与关联模型中可编辑字段求交集
-- 未解析的 `{{ expr }}` 依赖会暂停远程关联查询，直到父表单中的依赖值存在
+- `false`（默认）：在 `getById` 中包含关联 `subQuery`；关联表格 UI 不分页，渲染本地行
+- `true`：关联表格启用分页 UI；当 `recordId + relatedModel + 作用域内关联过滤` 就绪时，由 `relatedModel.searchPage` 加载数据（远程模式），否则在本地做分页
+- 可编辑单元格限制为已声明的 `RelationTable` 列与关联模型可编辑字段的交集
+- 未解析的 `{{ expr }}` 依赖会暂停远程关联查询，直到父表单依赖值存在
 
 ## `ManyToMany`
 
-默认渲染为关联表格加选择器对话框。
+默认渲染为关联表格 + 选择器对话框。
 
 示例：
 
 ```tsx
-const userTableView = (
-  <RelationTable orders={["username", "ASC"]} pageSize={10}>
-    <Field fieldName="username" />
-    <Field fieldName="nickname" />
-    <Field fieldName="email" />
-    <Field fieldName="status" />
-  </RelationTable>
-);
+function UserTableView() {
+  return (
+    <RelationTable orders={["username", "ASC"]} pageSize={10}>
+      <Field fieldName="username" />
+      <Field fieldName="nickname" />
+      <Field fieldName="email" />
+      <Field fieldName="status" />
+    </RelationTable>
+  );
+}
 
-<Field fieldName="userIds" tableView={userTableView} />;
+<Field fieldName="userIds" tableView={UserTableView} />;
 ```
 
-默认提交行为是增量 patch map：
+默认提交行为为增量 patch map：
 
 ```json
 {
@@ -208,40 +215,40 @@ const userTableView = (
 
 ### `TagList`
 
-`widgetType="TagList"` 会将 `ManyToMany` 切换为可搜索的多选下拉框，并在触发器下方渲染标签。
+`widgetType="TagList"` 将 `ManyToMany` 切换为可搜索的多选下拉，并在触发器下方以标签展示已选项。
 
 ```tsx
-<Field fieldName="userIds" widgetType="TagList" tableView={userTableView} />
+<Field fieldName="userIds" widgetType="TagList" tableView={UserTableView} />
 ```
 
 行为：
 
-- 提供支持多选交互的可搜索下拉框
-- 已选值会作为标签渲染在触发器下方
-- 触发器文本保持紧凑，只显示已选数量
-- 字段布局默认遵循周围 `FormSection` 的列布局；若希望独占整行，请显式传入 `fullWidth`
-- 顶层 `ModelForm` 的 `getById` 只会把字段名加入 `fields`，不会追加关联 `subQuery`
-- 字段 UI 值为 `ModelReference[]`，但顶层提交仍然使用普通的增量 patch map
+- 可搜索下拉，支持多选交互
+- 已选值在触发器下方渲染为标签
+- 触发器文案保持紧凑，仅显示选中数量
+- 字段布局默认遵循周围 `FormSection` 列宽；需要独占整行时请显式传入 `fullWidth`
+- 顶层 `ModelForm` 的 `getById` 仅把字段名加入 `fields`，不会追加关联 `subQuery`
+- 字段 UI 值为 `ModelReference[]`，顶层提交仍使用常规增量 patch map
 
 ### 查询说明
 
-- `ManyToMany` 选择器对话框会使用 `AND` 合并有效字段过滤条件、内部关联作用域过滤条件、搜索过滤条件和列过滤条件
-- 未解析的 `{{ expr }}` 依赖会暂停远程选择器和关联表格查询，直到来源值存在
-- `formView` 是可选的；在 `ManyToMany` 中，点击行会以只读模式打开 `ModelDialog`，而新增 / 移除仍然使用选择器行为
+- `ManyToMany` 选择器对话框以 `AND` 合并有效字段过滤、内部关联作用域过滤、搜索过滤与列过滤
+- 未解析的 `{{ expr }}` 依赖会暂停远程选择器与关联表格查询，直到源值存在
+- `formView` 可选；在 `ManyToMany` 中，点击行以只读模式打开 `ModelDialog`，新增/移除仍走选择器
 
 ## 共享的只读 / 内联行为
 
-关联字段的共享行为：
+关联字段的共通行为：
 
-- `ModelTable` / `RelationTable` 的只读单元格会把 `OneToMany` 和 `ManyToMany` 都渲染为紧凑标签列表，标签优先使用 `displayName`，回退到 `id`，而不是输出 JSON 字符串
-- `widgetProps` 不会透传到 `RelationTable` 的只读单元格渲染器
-- 关联表格会复用与 `ModelTable` 相同的紧凑文件 / 图片只读渲染器
+- `ModelTable` / `RelationTable` 只读单元格将 `OneToMany` 与 `ManyToMany` 都渲染为紧凑标签列表，优先 `displayName`，回退 `id`，而非 JSON 字符串
+- `widgetProps` 不会传入 `RelationTable` 只读单元格渲染器
+- 关联表格复用与 `ModelTable` 相同的紧凑文件/图片只读渲染
 - `RelationTable.pageSize` 仅影响分页关联表格（`isPaged=true`）
-- 远程关联表格和选择器查询会组合有效字段过滤条件（`Field.filters ?? metaField.filters`）、关联作用域过滤条件，以及运行时搜索 / 列过滤条件
+- 远程关联表格与选择器查询使用有效字段过滤（`Field.filters ?? metaField.filters`）、关联作用域过滤以及运行时搜索/列过滤
 
 ## 表单视图示例
 
-`formView` 通常与 `ModelDialog` 搭配使用：
+`formView` 通常与 `ModelDialog` 搭配：
 
 ```tsx
 function UserRoleUserIdsFormView() {

@@ -170,14 +170,16 @@ Quick relation examples:
 ```
 
 ```tsx
-const userTableView = (
-  <RelationTable orders={["username", "ASC"]} pageSize={10}>
-    <Field fieldName="username" />
-    <Field fieldName="email" />
-  </RelationTable>
-);
+function UserTableView() {
+  return (
+    <RelationTable orders={["username", "ASC"]} pageSize={10}>
+      <Field fieldName="username" />
+      <Field fieldName="email" />
+    </RelationTable>
+  );
+}
 
-<Field fieldName="userIds" tableView={userTableView} />;
+<Field fieldName="userIds" tableView={UserTableView} />;
 ```
 
 ## Core Props
@@ -200,7 +202,7 @@ const userTableView = (
 | `defaultValue` | `unknown`                          | No       | Create-only default override. Has higher priority than `metaField.defaultValue` and dialog/page `defaultValues`.                                         |
 | `filters`      | `string \| FilterCondition`        | No       | Relation filter override. `Field.filters` overrides `metaField.filters`. Supports JSON-string metadata filters and `{{ expr }}` (e.g. `{{ fieldName }}`) references.            |
 | `onChange`     | `FieldOnChangeProp`                | No       | Remote field linkage. Supports shorthand `string[]` or `{ update?, with? }`.                                                                              |
-| `tableView`    | `ReactElement<RelationTableProps>` | No       | Relation-table config for `OneToMany` / `ManyToMany`. Must be a `<RelationTable />` element. See [Relation Fields](./relations).                                |
+| `tableView`    | `RelationTableView`                | No       | Relation-table view for `OneToMany` / `ManyToMany`. Must be a zero-prop component that renders `<RelationTable />`. See [Relation Fields](./relations).          |
 | `formView`     | `RelationFormView`                 | No       | Relation dialog/detail view config. See [Relation Fields](./relations).                                                                                            |
 | `isPaged`      | `boolean`                          | No       | Enables paged relation-table mode for `OneToMany` / `ManyToMany`. See [Relation Fields](./relations).                                                            |
 

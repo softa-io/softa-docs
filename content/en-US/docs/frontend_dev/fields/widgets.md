@@ -307,7 +307,7 @@ When `itemColor` is empty, the mapper also falls back to `itemName` / `itemCode`
 ### `TagList`
 
 ```tsx
-<Field fieldName="userIds" widgetType="TagList" tableView={userTableView} />
+<Field fieldName="userIds" widgetType="TagList" tableView={UserTableView} />
 ```
 
 See [Relation Fields](./relations) for relation-specific behavior, query rules, and `RelationTable`.

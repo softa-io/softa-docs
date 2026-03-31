@@ -7,7 +7,7 @@ Metadata-driven create/edit form container based on `react-hook-form` and Zod.
 - [Fields](./fields/index)
 - [Relation fields](./fields/relations)
 - [Widget matrix](./fields/widgets)
-- [Group (inline field layout)](../../fields/README.md#group)
+- [Group (inline field layout)](./fields/index#group)
 - [Action](./action)
 - [Dialog](./dialog)
 - [ModelTable](./table)
@@ -468,41 +468,45 @@ Inline edit behavior (`OneToMany`, without `formView`):
 Enable patterns:
 
 ```tsx
-const optionItemsTableView = (
-  <RelationTable orders={["sequence", "ASC"]} pageSize={10}>
-    <Field fieldName="sequence" />
-    <Field fieldName="itemCode" />
-    <Field fieldName="itemName" />
-    <Field fieldName="active" />
-  </RelationTable>
-);
+function OptionItemsTableView() {
+  return (
+    <RelationTable orders={["sequence", "ASC"]} pageSize={10}>
+      <Field fieldName="sequence" />
+      <Field fieldName="itemCode" />
+      <Field fieldName="itemName" />
+      <Field fieldName="active" />
+    </RelationTable>
+  );
+}
 
-const multiSortTableView = (
-  <RelationTable
-    orders={[
-      ["sequence", "ASC"],
-      ["itemCode", "DESC"],
-    ]}
-    pageSize={20}
-  >
-    <Field fieldName="sequence" />
-    <Field fieldName="itemCode" />
-    <Field fieldName="itemName" />
-  </RelationTable>
-);
+function MultiSortTableView() {
+  return (
+    <RelationTable
+      orders={[
+        ["sequence", "ASC"],
+        ["itemCode", "DESC"],
+      ]}
+      pageSize={20}
+    >
+      <Field fieldName="sequence" />
+      <Field fieldName="itemCode" />
+      <Field fieldName="itemName" />
+    </RelationTable>
+  );
+}
 
 // Enable table-cell inline edit (recommended for local relation editing)
-<Field fieldName="optionItems" tableView={optionItemsTableView} />
+<Field fieldName="optionItems" tableView={OptionItemsTableView} />
 
 // Disable inline edit and use dialog editing
 <Field
   fieldName="optionItems"
-  tableView={optionItemsTableView}
+  tableView={OptionItemsTableView}
   formView={OptionItemsFormView}
 />
 
 // Paged relation table (pagination enabled; may switch to remote searchPage mode)
-<Field fieldName="optionItems" tableView={optionItemsTableView} isPaged />
+<Field fieldName="optionItems" tableView={OptionItemsTableView} isPaged />
 ```
 
 Submit payload shape:
@@ -528,14 +532,16 @@ OneToMany view binding example:
 ```tsx
 import { Field, RelationTable } from "@/components/fields";
 
-const optionItemsTableView = (
-  <RelationTable orders={["sequence", "ASC"]} pageSize={10}>
-    <Field fieldName="sequence" />
-    <Field fieldName="itemCode" />
-    <Field fieldName="itemName" readonly={[["active", "=", false]]} />
-    <Field fieldName="active" />
-  </RelationTable>
-);
+function OptionItemsTableView() {
+  return (
+    <RelationTable orders={["sequence", "ASC"]} pageSize={10}>
+      <Field fieldName="sequence" />
+      <Field fieldName="itemCode" />
+      <Field fieldName="itemName" readonly={[["active", "=", false]]} />
+      <Field fieldName="active" />
+    </RelationTable>
+  );
+}
 
 function OptionItemsFormView() {
   return (
@@ -570,7 +576,7 @@ export default function SysOptionSetFormPage() {
         <FormSection>
           <Field
             fieldName="optionItems"
-            tableView={optionItemsTableView}
+            tableView={OptionItemsTableView}
             formView={OptionItemsFormView}
           />
         </FormSection>
@@ -610,15 +616,17 @@ ManyToMany view binding example:
 ```tsx
 import { Field, RelationTable } from "@/components/fields";
 
-const userRoleUserIdsTableView = (
-  <RelationTable orders={["username", "ASC"]} pageSize={10}>
-    <Field fieldName="username" />
-    <Field fieldName="nickname" />
-    <Field fieldName="email" />
-    <Field fieldName="mobile" />
-    <Field fieldName="status" />
-  </RelationTable>
-);
+function UserRoleUserIdsTableView() {
+  return (
+    <RelationTable orders={["username", "ASC"]} pageSize={10}>
+      <Field fieldName="username" />
+      <Field fieldName="nickname" />
+      <Field fieldName="email" />
+      <Field fieldName="mobile" />
+      <Field fieldName="status" />
+    </RelationTable>
+  );
+}
 
 function UserRoleUserIdsFormView() {
   return (
@@ -650,7 +658,7 @@ export default function UserRoleFormPage() {
         <FormSection>
           <Field
             fieldName="userIds"
-            tableView={userRoleUserIdsTableView}
+            tableView={UserRoleUserIdsTableView}
             formView={UserRoleUserIdsFormView}
           />
         </FormSection>
@@ -662,7 +670,7 @@ export default function UserRoleFormPage() {
 
 Notes:
 
-- `tableView` controls relation-table columns through child `<Field />` declarations and optional `RelationTable.orders` / `RelationTable.pageSize`.
+- `tableView` controls relation-table columns through a zero-prop view component that returns `<RelationTable />` with child `<Field />` declarations plus optional `RelationTable.orders` / `RelationTable.pageSize`.
 - `RelationTable.orders` supports either a single tuple (`["username", "ASC"]`) or multiple tuples (`[["username", "ASC"], ["email", "DESC"]]`).
 - remote relation table and picker queries use the effective field filter (`Field.filters ?? metaField.filters`), relation-scoped filters, and runtime search / column filters.
 - `isPaged` (OneToMany/ManyToMany fields only):
