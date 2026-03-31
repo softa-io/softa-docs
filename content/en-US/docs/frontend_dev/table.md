@@ -9,6 +9,7 @@ Composable data table view with:
 
 ## Related Docs
 
+- [ModelCard](../card) — card grid view (shared toolbar dialogs, side panel, and data hooks)
 - [Dialog](./dialog)
 - [ModelForm](./form)
 - [Action](./action)
@@ -39,7 +40,6 @@ export default function UserAccountPage() {
         placement="more"
         confirmMessage="Lock this user account?"
         successMessage="User account locked."
-        errorMessage="Failed to lock user account."
       />
       <Action
         type="dialog"
@@ -47,7 +47,6 @@ export default function UserAccountPage() {
         operation="unlockAccount"
         placement="more"
         successMessage="User account unlocked."
-        errorMessage="Failed to unlock user account."
         component={UserAccountUnlockActionDialog}
       />
     </ModelTable>
@@ -298,29 +297,34 @@ type UserAccountRow = ModelTableRowWith<{
 }>;
 ```
 
-## Side Tree (Optional)
+## Side Panel (Optional)
 
-`ModelTable` can render a left side tree panel via `sideTree`.
+`ModelTable` supports a left side panel for filtering via `<SideTree>`, `<SideCard>`, or `<SideList>` children.
 
-This is the recommended developer-facing tree entry for list pages. The low-level tree primitives are internal; see [Tree](./tree).
+Side panel components are declared as direct children alongside `<Field />` and `<Action />`. Only one side panel element per `ModelTable` is supported.
+
+### `<SideTree>`
+
+Tree-based hierarchical filter panel. Recommended for parent-child data.
 
 ```tsx
-const sideTree: SideTree = {
-  title: "System Model",
-  modelName: "SysModel",
-  filterField: "modelId",
-  idKey: "id",
-  labelKey: "labelName",
-  parentKey: "parentId",
-  selectionMode: "single",
-  defaultExpandedLevel: 2,
-};
+import { SideTree } from "@/components/views/shared/side-panel/SideTree";
 
 <ModelTable
   modelName="SysField"
   orders={["modelName", "ASC"]}
-  sideTree={sideTree}
 >
+  <SideTree
+    title="System Model"
+    modelName="SysModel"
+    filterField="modelId"
+    labelField="labelName"
+    parentField="parentId"
+    sortField="modelName"
+    treeLimit={1000}
+    selectionMode="single"
+    defaultExpandedLevel={2}
+  />
   <Field fieldName="modelName" />
   <Field fieldName="fieldName" />
   <Field fieldName="labelName" />
@@ -328,36 +332,144 @@ const sideTree: SideTree = {
 </ModelTable>;
 ```
 
-`sideTree` only changes filter behavior and layout. Column declaration still comes from `<Field />` children.
+`SideTree` props:
 
-`SideTree` type:
+| Prop                   | Type                       | Required | Default    | Notes                                                                |
+| ---------------------- | -------------------------- | -------- | ---------- | -------------------------------------------------------------------- |
+| `filterField`          | `string`                   | Yes      | -          | Target field used to build table filters from selected tree node ids |
+| `labelField`           | `string`                   | Yes      | -          | Field name for tree node label                                       |
+| `parentField`          | `string`                   | Yes      | -          | Field name for tree parent id                                        |
+| `modelName`            | `string`                   | No       | parent's   | Tree model source. Falls back to ModelTable's `modelName`            |
+| `title`                | `string`                   | No       | -          | Side panel title                                                     |
+| `filterValueField`     | `string`                   | No       | `idField`  | Field name for extracting filter values from selected nodes          |
+| `filterOperator`       | `FilterOperator`           | No       | `"="`      | Operator used in the generated filter condition                      |
+| `treeFields`           | `string[]`                 | No       | -          | Extra fields to fetch for tree query mode                            |
+| `treeFilters`          | `FilterCondition`          | No       | -          | Extra filters for tree query mode                                    |
+| `treeLimit`            | `number`                   | No       | -          | Query limit for tree query mode                                      |
+| `idField`              | `string`                   | No       | `"id"`     | Field name for tree node id                                          |
+| `disabledField`        | `string`                   | No       | -          | Field name for tree disabled state                                   |
+| `sortField`            | `string`                   | No       | -          | Field name for tree sort order                                       |
+| `selectionMode`        | `"single" \| "multi"`      | No       | `"single"` | Tree selection mode                                                  |
+| `remoteSearch`         | `boolean`                  | No       | `false`    | When true, tree search triggers a remote API call (`searchMode="server"`) instead of client-side filtering |
+| `defaultExpandedLevel` | `number`                   | No       | -          | Initial tree open-state depth                                        |
+| `height`               | `number`                   | No       | `560`      | Tree viewport height                                                 |
+| `className`            | `string`                   | No       | -          | Side panel className                                                 |
 
-| Prop                   | Type                     | Required | Default      | Notes                                                                 |
-| ---------------------- | ------------------------ | -------- | ------------ | --------------------------------------------------------------------- |
-| `filterField`          | `string`                 | Yes      | -            | Target field used to build table filters from selected tree node ids. |
-| `title`                | `string`                 | No       | -            | Side panel title.                                                     |
-| `modelName`            | `string`                 | No       | -            | Tree model source (query mode).                                       |
-| `mockData`             | `FlatNode[]`             | No       | -            | Tree local data source.                                               |
-| `treeFilters`          | `FilterCondition`        | No       | -            | Extra filters for tree query mode.                                    |
-| `treeLimit`            | `number`                 | No       | -            | Query limit for tree query mode.                                      |
-| `idKey`                | `string`                 | No       | `"id"`       | Tree node id key.                                                     |
-| `labelKey`             | `string`                 | No       | `"name"`     | Tree node label key.                                                  |
-| `parentKey`            | `string`                 | No       | `"parentId"` | Tree parent id key.                                                   |
-| `disabledKey`          | `string`                 | No       | -            | Tree disabled-state field key.                                        |
-| `sortKey`              | `string`                 | No       | -            | Tree sort key.                                                        |
-| `selectionMode`        | `"single" \| "multiple"` | No       | `"single"`   | Side tree selection mode used by table filter integration.            |
-| `defaultExpandedLevel` | `number`                 | No       | `3`          | Initial tree open-state depth.                                        |
-| `height`               | `number`                 | No       | -            | Tree viewport height.                                                 |
-| `className`            | `string`                 | No       | -            | Side panel className.                                                 |
+### `<SideCard>`
 
-## Side Tree Standardization in `ModelTable`
+Card-based side panel with rich template layout. Uses `Field` children in display mode via `RecordContext`. Supports `Action` children for per-card operations.
 
-When `sideTree` is enabled, `ModelTable` enforces these `Tree` defaults internally:
+```tsx
+import { SideCard } from "@/components/views/shared/side-panel/SideCard";
+import { Group } from "@/components/fields/extend/Group";
+import { Action } from "@/components/actions/Action";
 
-- `searchMode = "local"`
-- `selectionMode` is normalized to `"single"` or `"multiple"` only
+<ModelTable modelName="DesignWorkItem">
+  <SideCard
+    modelName="DesignApp"
+    filterField="appId"
+    sortField="appName"
+    searchable
+  >
+    <SideCard.Header>
+      <Field fieldName="appName" />
+      <Field fieldName="status" />
+    </SideCard.Header>
+    <Group separator="-">
+      <Field fieldName="appCode" />
+      <Field fieldName="appType" />
+    </Group>
+    <SideCard.Footer>
+      <Field fieldName="updatedTime" />
+    </SideCard.Footer>
 
-This keeps behavior consistent across pages and prevents per-page drift.
+    {/* Actions — placement controls position within each card */}
+    <Action type="link" labelName="Edit" placement="header" href="/design/app/{id}" />
+    <Action type="custom" labelName="Copy" placement="inline" onClick={(ctx) => { /* ... */ }} />
+    <Action type="custom" labelName="Archive" placement="more" onClick={(ctx) => { /* ... */ }} />
+    <Action type="custom" labelName="Delete" placement="more" confirmMessage="Delete this app?"
+      onClick={(ctx) => { /* ... */ }} />
+  </SideCard>
+
+  <Field fieldName="name" />
+  <Field fieldName="status" />
+</ModelTable>;
+```
+
+`SideCard` props:
+
+| Prop            | Type              | Required | Default  | Notes                                                 |
+| --------------- | ----------------- | -------- | -------- | ----------------------------------------------------- |
+| `filterField`   | `string`          | Yes      | -        | Target field used to build table filters              |
+| `modelName`     | `string`          | No       | parent's | Data model. Falls back to ModelTable's `modelName`    |
+| `filters`       | `FilterCondition` | No       | -        | Fixed filter condition for card data query            |
+| `sortField`     | `string`          | No       | -        | Sort field for card list                              |
+| `limit`         | `number`          | No       | `200`    | Max records loaded                                    |
+| `searchable`    | `boolean`         | No       | `false`  | Enable keyword search                                 |
+| `remoteSearch`  | `boolean`         | No       | `false`  | When true, search triggers a remote API call (`["searchName", "CONTAINS", keyword]`) instead of client-side filtering. Input is debounced at 300ms |
+| `sortOptions`   | `SortOption[]`    | No       | -        | Sort dropdown options                                 |
+| `title`         | `string`          | No       | -        | Panel title                                           |
+| `children`      | `ReactNode`       | Yes      | -        | `SideCard.Header`, body, `SideCard.Footer`, and `Action` elements |
+
+#### SideCard Action Placement
+
+`Action` children inside `SideCard` are rendered per card. The `placement` prop controls position:
+
+| `placement` | Position                                     | Visibility       |
+| ----------- | -------------------------------------------- | ---------------- |
+| `header`    | In the card header row, beside header fields | Always visible   |
+| `inline`    | Below the card body                          | Always visible   |
+| `more`      | In a `...` dropdown menu (top-right corner)  | On hover / open  |
+
+- Default placement is `inline` if omitted.
+- Actions receive `ActionExecutionContext` with `id`, `row` (record data), and `modelName`.
+- Clicking an action does not trigger card selection.
+- `hidden` and `disabled` conditions are evaluated per card.
+
+### `<SideList>`
+
+Simple list-based side panel. Uses `Field` children in display mode.
+
+```tsx
+import { SideList } from "@/components/views/shared/side-panel/SideList";
+
+<ModelTable modelName="DesignField">
+  <SideList
+    modelName="DesignModel"
+    filterField="modelId"
+    searchable
+  >
+    <Field fieldName="modelName" />
+    <Field fieldName="labelName" />
+  </SideList>
+
+  <Field fieldName="fieldName" />
+  <Field fieldName="fieldType" />
+</ModelTable>;
+```
+
+`SideList` props:
+
+| Prop            | Type              | Required | Default  | Notes                                              |
+| --------------- | ----------------- | -------- | -------- | -------------------------------------------------- |
+| `filterField`   | `string`          | Yes      | -        | Target field used to build table filters           |
+| `modelName`     | `string`          | No       | parent's | Data model. Falls back to ModelTable's `modelName` |
+| `filters`       | `FilterCondition` | No       | -        | Fixed filter condition for list data query         |
+| `sortField`     | `string`          | No       | -        | Sort field for list                                |
+| `limit`         | `number`          | No       | `200`    | Max records loaded                                 |
+| `searchable`    | `boolean`         | No       | `false`  | Enable keyword search                              |
+| `remoteSearch`  | `boolean`         | No       | `false`  | When true, search triggers a remote API call (`["searchName", "CONTAINS", keyword]`) instead of client-side filtering. Input is debounced at 300ms |
+| `sortOptions`   | `SortOption[]`    | No       | -        | Sort dropdown options                              |
+| `children`      | `ReactNode`       | Yes      | -        | Row template with `Field` elements                 |
+
+### Side Panel Behavior
+
+- Side panel selection builds filter conditions that are merged with other active filters using `AND`
+- `SideCard` and `SideList` use `RecordContext` to provide data for each item, enabling `Field` components to auto-render in display mode
+- `SideTree` wraps the existing `TreePanel` component internally
+- Side panel width is fixed at 280px
+- `searchable` enables keyword filtering; by default this is client-side across all field values. Set `remoteSearch` to switch to server-side search via `["searchName", "CONTAINS", keyword]` (debounced 300ms)
+- Use [`Group`](../../fields/README.md#group) to compose multiple fields inline within `SideCard` body (e.g. `<Group separator="-"><Field .../><Field .../></Group>`)
 
 ## Unified Active Toolbar State
 
@@ -379,7 +491,7 @@ Toolbar active state area can show and clear:
 | `inlineEdit`       | `boolean`                  | No       | `false` | Enable row-click inline edit mode. When enabled, active-row editable cells render `Field` components instead of navigating to detail.      |
 | `orders`           | `OrderCondition`           | No       | -       | Recommended default sort entry. Supports a single tuple (`["createdTime", "DESC"]`) or multiple tuples.                                  |
 | `initialParams`    | `QueryParamsWithoutFields` | No       | -       | Advanced initial query settings such as `filters`, `pageSize`, `groupBy`, `effectiveDate`. Top-level `orders` takes precedence.          |
-| `children`         | `ReactNode`                | No       | -       | Ordered `<Field />` declarations plus optional `<Action />` and `<BulkAction />`. At least one visible `<Field />` is required at runtime. |
+| `children`         | `ReactNode`                | No       | -       | Ordered `<Field />` declarations plus optional `<Action />`, `<BulkAction />`, and one side panel (`<SideTree>`, `<SideCard>`, or `<SideList>`). At least one visible `<Field />` is required at runtime. |
 | `enableBulkDelete` | `boolean`                  | No       | `true`  | Enable built-in bulk delete entry.                                                                                                         |
 | `enableCreate`     | `boolean`                  | No       | `true`  | Enable built-in create button.                                                                                                             |
 | `enableImport`     | `boolean`                  | No       | `true`  | Enable built-in import dialog entry in More menu.                                                                                          |
@@ -388,7 +500,6 @@ Toolbar active state area can show and clear:
 | `excludeFields`    | `string[]`                 | No       | -       | Optional bulk-edit denylist. Always excluded from built-in Bulk Edit (in addition to reserved fields).                                     |
 | `tabs`             | `ModelTableTab[]`          | No       | -       | Optional tab filters at header level.                                                                                                      |
 | `freezeColumnIndex`| `number`                   | No       | `1`     | Initial count of left-side data columns kept frozen. The select column remains pinned ahead of the frozen range when enabled.             |
-| `sideTree`         | `SideTree`                 | No       | -       | Left tree filter panel config.                                                                                                             |
 
 ## Built-in Import / Export
 
@@ -445,10 +556,7 @@ Query bootstrap defaults:
 ### Minimal Example
 
 ```tsx
-<ModelTable
-  modelName="UserAccount"
-  orders={["updatedTime", "DESC"]}
->
+<ModelTable modelName="UserAccount" orders={["updatedTime", "DESC"]} >
   <Field fieldName="username" />
   <Field fieldName="email" />
   <Field fieldName="status" />
@@ -459,11 +567,10 @@ Query bootstrap defaults:
 ### Advanced Example
 
 ```tsx
-<ModelTable
-  modelName="UserAccount"
-  orders={["updatedTime", "DESC"]}
+<ModelTable modelName="UserAccount"
   initialParams={{
     filters: [["status", "!=", "Deleted"], "AND", ["locked", "=", false]],
+    orders: ["updatedTime", "DESC"],
     pageNumber: 1,
     pageSize: 50,
     effectiveDate: "2026-03-01",
@@ -594,7 +701,6 @@ function UnlockDialog() {
     operation="lockAccount"
     confirmMessage="Lock this account?"
     successMessage="Account locked."
-    errorMessage="Failed to lock account."
   />
 
   <Action
@@ -605,7 +711,6 @@ function UnlockDialog() {
     operation="unlockAccount"
     component={UnlockDialog}
     successMessage="Account unlocked."
-    errorMessage="Failed to unlock account."
   />
 
   <Action
@@ -658,10 +763,11 @@ Even when `bulkEditFields` is provided, excluded fields are still removed.
 Built-in reserved fields are always excluded:
 `id`, `createdTime`, `createdId`, `createdBy`, `updatedTime`, `updatedId`, `updatedBy`, `tenantId`.
 
-## SideTree Notes
+## Side Panel Notes
 
-- `filterField` is required and mapped to table query filters.
-- If multiple tree nodes are selected, table filter becomes `OR` over selected IDs.
-- Keep `idKey` values unique and stable.
-- `disabledKey` is optional (no implicit default field).
-- Side tree width is fixed by the shared table layout; there is no public width/min/max API.
+- `filterField` is required on all side panel components and is mapped to table query filters.
+- If multiple nodes/items are selected, table filter becomes `OR` over selected values.
+- Side panel width is fixed at 280px; there is no public width API.
+- `SideCard` / `SideList` `Field` children render in display mode via `RecordContext` — no `FieldPropsContext` is needed.
+- `SideTree` wraps the existing `TreePanel`; `searchMode` defaults to `"local"`, or `"server"` when `remoteSearch` is enabled.
+- `SideCard` and `SideList` can also be used inside `ModelSideForm` as the data source panel (see [ModelSideForm](../side-form)).

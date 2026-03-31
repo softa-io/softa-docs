@@ -25,10 +25,10 @@ import { BulkAction } from "@/components/actions/BulkAction";
 
 ## Choose The Right Component
 
-| Component    | Use when                                                | Typical scope             |
-| ------------ | ------------------------------------------------------- | ------------------------- |
-| `Action`     | Single-record action, row action, form action, or link  | `ModelForm`, `ModelTable` |
-| `BulkAction` | Selection-based action over multiple table rows         | `ModelTable` only         |
+| Component    | Use when                                               | Typical scope                          |
+| ------------ | ------------------------------------------------------ | -------------------------------------- |
+| `Action`     | Single-record action, row action, form action, or link | `ModelForm`, `ModelTable`, `ModelCard` |
+| `BulkAction` | Selection-based action over multiple table rows        | `ModelTable` only                      |
 
 ## `Action`
 
@@ -52,34 +52,85 @@ type ActionValue<T> =
 
 ### Shared Props
 
-| Prop             | Type                                           | Required | Default | Notes |
-| ---------------- | ---------------------------------------------- | -------- | ------- | ----- |
-| `type`           | `"default" \| "dialog" \| "link" \| "custom" \| "form"` | No       | `"default"` | Action behavior. Omit to use direct API invoke. |
-| `labelName`      | `ReactNode`                                    | Yes      | -       | Action label. |
-| `placement`      | `"toolbar" \| "more" \| "header" \| "inline"` | No       | container-dependent | Placement support depends on parent container. |
-| `confirmMessage` | `ActionValue<string>`                          | No       | -       | Optional confirmation prompt before action execution. |
-| `successMessage` | `ActionValue<string>`                          | No       | -       | Success toast message for `default` and `dialog` actions. |
-| `errorMessage`   | `ActionValue<string>`                          | No       | -       | Error toast message for `default` and `dialog` actions. |
-| `icon`           | `ComponentType<{ className?: string }>`        | No       | -       | Action icon. |
-| `disabled`       | `boolean \| FilterCondition \| dependsOn(...)` | No       | `false` | Disabled state. |
-| `hidden`         | `boolean \| FilterCondition \| dependsOn(...)` | No       | `false` | Hide the action when the condition resolves to `true`. |
+| Prop             | Type                                                    | Required | Default             | Notes                                                     |
+| ---------------- | ------------------------------------------------------- | -------- | ------------------- | --------------------------------------------------------- |
+| `type`           | `"default" \| "dialog" \| "link" \| "custom" \| "form"` | No       | `"default"`         | Action behavior. Omit to use direct API invoke.           |
+| `labelName`      | `ReactNode`                                             | Yes      | -                   | Action label.                                             |
+| `placement`      | `"toolbar" \| "more" \| "header" \| "inline"`           | No       | container-dependent | Placement support depends on parent container.            |
+| `confirmMessage` | `ActionValue<string>`                                   | No       | -                   | Optional confirmation prompt before action execution.     |
+| `successMessage` | `ActionValue<string>`                                   | No       | -                   | Success toast message for `default` and `dialog` actions. |
+| `icon`           | `ComponentType<{ className?: string }>`                 | No       | -                   | Action icon.                                              |
+| `disabled`       | `boolean \| FilterCondition \| dependsOn(...)`          | No       | `false`             | Disabled state.                                           |
+| `hidden`         | `boolean \| FilterCondition \| dependsOn(...)`          | No       | `false`             | Hide the action when the condition resolves to `true`.    |
 
 ### Behavior-Specific Props
 
-| Component                          | Required Behavior Props  | Default          | Notes |
-| ---------------------------------- | ------------------------ | ---------------- | ----- |
-| `type` omitted or `type="default"` | `operation`              | -                | Calls `POST /{modelName}/{operation}` with current record `id` in query params. |
-| `type="dialog"`                    | `operation`, `component` | -                | `component={MyDialogComponent}`. Open/close, operation, success/error messaging are injected from `Action`. |
-| `type="link"`                      | `href`                   | opens in new tab | `href` supports `string` or `({ id, modelName }) => string`. |
-| `type="custom"`                    | `onClick`                | -                | Use for pure UI/local behaviors. Signature: `onClick({ id, modelName, scope, mode, isDirty, values, row }) => void`. |
-| `type="form"`                      | `component`, `relatedField` | -             | Opens a dialog containing an independent `ModelForm`. `component` renders the child form view; `relatedField` names the child-model field that references the parent record. The parent `id` is automatically injected into `ModelForm.defaultValues` as `{ [relatedField]: parentId }` and included in the create/update API payload. |
+| Component                          | Required Behavior Props     | Default                                 | Notes                                                                                                                                                                                                                                                                                                                                  |
+| ---------------------------------- | --------------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `type` omitted or `type="default"` | `operation`                 | -                                       | Calls `POST /{modelName}/{operation}` with current record `id` in query params.                                                                                                                                                                                                                                                        |
+| `type="dialog"`                    | `operation`, `component`    | -                                       | `component={MyDialogComponent}`. Open/close, operation, and success messaging are injected from `Action`; failures use API response toasts.                                                                                                                                                                                            |
+| `type="link"`                      | `href`                      | opens in current tab (`target="_self"`) | `href` supports a template string (see below) or `({ id, modelName }) => string`. Use `target="_blank"` to open a new tab.                                                                                                                                                                                                             |
+| `type="custom"`                    | `onClick`                   | -                                       | Use for pure UI/local behaviors. Signature: `onClick({ id, modelName, scope, mode, isDirty, values, row }) => void`.                                                                                                                                                                                                                   |
+| `type="form"`                      | `component`, `relatedField` | -                                       | Opens a dialog containing an independent `ModelForm`. `component` renders the child form view; `relatedField` names the child-model field that references the parent record. The parent `id` is automatically injected into `ModelForm.defaultValues` as `{ [relatedField]: parentId }` and included in the create/update API payload. |
 
-Action condition notes:
+### Action Execution Context
 
-- `disabled` and `hidden` share the same runtime condition model as `Field`: `boolean`, `FilterCondition`, `dependsOn([...], evaluator)`
-- `FilterCondition` is evaluated against current scope values and automatically tracks `{{ fieldName }}` references
-- bare function conditions are not supported; wrap function logic with `dependsOn([...], evaluator)`
-- if there is no field dependency, prefer plain `boolean`
+Every `ActionValue<T>`, `disabled`, and `hidden` callback receives the same context object:
+
+| Property    | Type                           | Description                                                 |
+| ----------- | ------------------------------ | ----------------------------------------------------------- |
+| `id`        | `string \| null`               | Current record id (`null` in create mode).                  |
+| `modelName` | `string \| undefined`          | Model name of the host container.                           |
+| `scope`     | `"form" \| "model-table"`      | Which container the action lives in.                        |
+| `mode`      | `"create" \| "edit" \| "read"` | Current form/row lifecycle phase (see below).               |
+| `isDirty`   | `boolean`                      | Whether the form/row has unsaved changes.                   |
+| `values`    | `Record<string, unknown>`      | Current form values (form scope) or row data (table scope). |
+| `row`       | `Record<string, unknown>`      | Row data (table scope only, `undefined` in form scope).     |
+
+#### `mode` values
+
+| Mode       | Meaning                                       | When                                                                                          |
+| ---------- | --------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `"create"` | New record, form is editable, `id` is `null`. | Form is in create mode (no existing record).                                                  |
+| `"edit"`   | Existing record, form fields are editable.    | User clicked Edit on a read-only record, or form opened directly in edit mode.                |
+| `"read"`   | Existing record, form fields are read-only.   | Detail form with `detailStartsInReadOnly` before the user clicks Edit, or route `?mode=read`. |
+
+Key behavior: **business actions (toolbar `Action` components) are NOT automatically disabled in `read` mode.** Read mode only locks form fields — actions like status transitions remain clickable. If an action should be disabled in read mode, declare it explicitly via the `disabled` prop.
+
+### Condition props (`disabled` / `hidden`)
+
+`disabled` and `hidden` share the same runtime condition model as `Field`:
+
+- `boolean` — static value, no field dependency
+- `FilterCondition` — evaluated against current scope values, automatically tracks `{{ fieldName }}` references
+- `dependsOn([...], evaluator)` — explicit field dependencies with callback access to the full `ActionExecutionContext`
+
+Bare function conditions are not supported; wrap function logic with `dependsOn([...], evaluator)`.
+
+#### Common `disabled` / `hidden` patterns
+
+```tsx
+// Disabled in create mode (no id yet)
+disabled={dependsOn(["id"], ({ mode }) => mode === "create")}
+
+// Disabled in both create and read mode
+disabled={dependsOn(["id"], ({ mode }) => mode !== "edit")}
+
+// Hidden unless status is a specific value (FilterCondition shorthand)
+hidden={["status", "!=", "InProgress"]}
+
+// Hidden based on multiple status values
+hidden={dependsOn(["status"], ({ values }) => {
+  const code = getOptionCode(values?.status);
+  return code !== "InProgress" && code !== "Done";
+})}
+
+// Always disabled (static)
+disabled={true}
+
+// Disabled when form has unsaved changes
+disabled={dependsOn([], ({ isDirty }) => isDirty)}
+```
 
 ### Action Type Examples
 
@@ -91,7 +142,6 @@ Action condition notes:
   placement="more"
   confirmMessage="Lock this user account?"
   successMessage="User account locked."
-  errorMessage="Failed to lock user account."
 />
 
 // 2) dialog: open custom dialog component, operation injected into dialog runtime
@@ -102,10 +152,24 @@ Action condition notes:
   placement="more"
   component={UserAccountUnlockActionDialog}
   successMessage="User account unlocked."
-  errorMessage="Failed to unlock user account."
 />
 
-// 3) link: open URL
+// 3) link: open URL in current tab by default — string template or function
+<Action
+  type="link"
+  labelName="Open Audit"
+  placement="more"
+  href="/{modelName}/audit?id={id}"
+/>
+// Explicit new-tab behavior:
+<Action
+  type="link"
+  labelName="Open Docs"
+  placement="more"
+  href="https://docs.example.com"
+  target="_blank"
+/>
+// Function form (required when you need conditional logic):
 <Action
   type="link"
   labelName="Open Audit"
@@ -141,7 +205,7 @@ The `component` is a standard React component that renders a `ModelForm` with it
 - `relatedField` value is injected into `defaultValues` and included in the API payload, even if the field is not displayed
 
 ```tsx
-import { FormSection } from "@/components/common/form-section";
+import { FormSection } from "@/components/views/form/components/FormSection";
 import { Field } from "@/components/fields";
 import { FormBody } from "@/components/views/form/components/FormBody";
 import { FormToolbar } from "@/components/views/form/components/FormToolbar";
@@ -180,13 +244,13 @@ Supported behavior:
 
 - types: `default | dialog`
 - placements: `toolbar | more`
-- common visual props follow the same pattern as `Action`: `labelName`, `confirmMessage`, `successMessage`, `errorMessage`, `icon`, `disabled`
+- common visual props follow the same pattern as `Action`: `labelName`, `confirmMessage`, `successMessage`, `icon`, `disabled`
 
 Behavior-specific props:
 
-| Component                          | Required Behavior Props  | Notes |
-| ---------------------------------- | ------------------------ | ----- |
-| `type` omitted or `type="default"` | `operation`              | Executes the bulk operation with selected ids. |
+| Component                          | Required Behavior Props  | Notes                                                               |
+| ---------------------------------- | ------------------------ | ------------------------------------------------------------------- |
+| `type` omitted or `type="default"` | `operation`              | Executes the bulk operation with selected ids.                      |
 | `type="dialog"`                    | `operation`, `component` | Opens a dialog whose submit is bound to the bulk operation runtime. |
 
 ## Actions In `ModelForm`
@@ -203,6 +267,7 @@ Rules:
 - `FormToolbar` is the action area for page-level business actions
 - `FormSection` is a local UI action area and does not execute model API actions directly
 - for API actions (`default` / `dialog`), place actions in `FormToolbar`
+- built-in workflow/create/duplicate/delete toolbar behavior is configured on `ModelForm`/`ModelSideForm` props
 - edit mode with unsaved changes: clicking business actions asks whether to discard changes before continuing
 - create mode: built-in `Duplicate` / `Delete` remain visible but disabled
 
@@ -210,7 +275,7 @@ Complete example:
 
 ```tsx
 import { Action } from "@/components/actions/Action";
-import { FormSection } from "@/components/common/form-section";
+import { FormSection } from "@/components/views/form/components/FormSection";
 import { Field } from "@/components/fields";
 import { ActionDialog } from "@/components/views/dialogs";
 import { FormBody } from "@/components/views/form/components/FormBody";
@@ -253,6 +318,7 @@ function UnlockDialog() {
         placement="header"
         icon={ExternalLink}
         href="https://docs.example.com/credentials"
+        target="_blank"
       />
       <Action
         type="custom"
@@ -266,6 +332,61 @@ function UnlockDialog() {
     </FormSection>
   </FormBody>
 </ModelForm>;
+```
+
+## Actions In `ModelCard`
+
+Rules:
+
+- Placement is inferred from where `Action` is **declared in the JSX tree**, not the `placement` prop
+- `Action` inside `<ModelCard.Header>` → renders as an `outline` button in the card header
+- `Action` as a top-level body child → renders as an `outline` button to the right of the card body content
+- `<Action placement="more" />` → renders in the per-card `...` hover dropdown (merged with the built-in Delete option when `enableDelete` is set)
+- `hidden` / `disabled` are evaluated per-card using `RecordContext` values (same as ModelTable row actions)
+- All action types are supported: `default`, `dialog`, `link`, `custom`
+
+String `href` values support `{placeholder}` interpolation. Supported placeholders:
+
+| Placeholder      | Resolves to                         |
+| ---------------- | ----------------------------------- |
+| `{id}`           | Current record ID                   |
+| `{modelName}`    | Model name of the card              |
+| `{anyFieldName}` | Value of that field from the record |
+
+```tsx
+// Record ID
+<Action type="link" labelName="Edit" href="/studio/app/{id}/workbench" />
+
+// Any record field
+<Action type="link" labelName="Open" href="/studio/{appCode}/workbench" />
+
+// Multiple placeholders
+<Action type="link" labelName="Open" href="/studio/app/{id}/version/{currentVersion}" />
+
+// Function form (for conditional logic)
+<Action type="link" labelName="Edit" href={({ id }) => `/studio/app/${id}/workbench`} />
+```
+
+Complete example:
+
+```tsx
+<ModelCard modelName="DesignApp" enableDelete>
+  <ModelCard.Header>
+    <Field fieldName="appName" />
+    <Action type="link" labelName="Edit" href="/studio/app/{id}/workbench" />
+    <Action
+      type="default"
+      labelName="Archive"
+      operation="archive"
+      placement="more"
+    />
+  </ModelCard.Header>
+  <Field fieldName="status" />
+  <Action type="default" labelName="Publish" operation="publish" />
+  <ModelCard.Footer>
+    <Field fieldName="updatedTime" />
+  </ModelCard.Footer>
+</ModelCard>
 ```
 
 ## Actions In `ModelTable`

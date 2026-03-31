@@ -1,12 +1,12 @@
 # 字段
 
-供 `ModelForm`、关联对话框和内联编辑器使用的基于元数据驱动的字段系统。
+供 `ModelForm`、关联对话框、内联编辑器和展示场景使用的、基于元数据驱动的字段系统。
 
 `Field` 是应用代码中面向业务的主要入口。
 
 本文用于说明：
 
-- `Field` props 与覆盖方式
+- `Field` props 与覆盖方式，三种渲染模式（表单 / 展示 / 声明）
 - `required` / `readonly` / `hidden`
 - `dependsOn(...)`
 - 关联 `filters`
@@ -16,11 +16,12 @@
 
 相关文档：
 
-- [Relation fields](./relations)：`RelationTable`、`SelectTree`、`OneToMany`、`ManyToMany`
+- [关联字段](./relations)：`RelationTable`、`SelectTree`、`OneToMany`、`ManyToMany`
 - [Widgets](./widgets)：`FieldType -> WidgetType` 矩阵与 widget 专属示例
 - [ModelForm](../form)：页面壳层
-- [ModelTable](../table)：只读单元格与内联编辑
-- [Tree](../tree)：被 `sideTree` 和 `SelectTree` 使用的内部 tree 原语
+- [ModelTable](../table)：只读单元格、内联编辑与侧栏
+- [ModelSideForm](../side-form)：侧栏 + 内嵌表单视图
+- [Tree](../tree)：`SideTree` 与 `SelectTree` 使用的内部树形原语
 
 ## 导入
 
@@ -47,6 +48,101 @@ import {
 内部说明：
 
 - `ResolvedFields` 属于内部实现，应保留在基础设施代码之后，而不是成为面向业务的字段 API
+
+## 字段渲染模式
+
+`Field` 会根据 React 上下文自动判断渲染模式：
+
+| 模式 | 条件 | 行为 |
+| ---- | ---- | ---- |
+| **表单模式** | 存在 `FieldPropsContext` | 可编辑字段，含校验与条件 |
+| **展示模式** | 存在 `RecordContext`，且无 `FieldPropsContext` | 通过 `FieldDisplayValue` 只读展示行内值 |
+| **声明模式** | 上述上下文均不存在 | 返回 `null`；由父级通过 `children` 收集声明 |
+
+因此同一 `<Field fieldName="name" />` 无需 `mode` prop，即可在表单、侧栏、卡片模板和表格列声明中复用。
+
+### 展示模式
+
+当 `Field` 位于 `RecordContext` 内（例如 `SideCard`、`SideList` 或 `FormHeader` 的子节点），会渲染为 `FieldDisplayValue`——只读行内值，与表格列使用相同的单元格渲染器。
+
+```tsx
+import { RecordContextProvider } from "@/components/contexts/RecordContext";
+
+<RecordContextProvider record={data} metaModel={metaModel}>
+  <Field fieldName="name" />       {/* 展示为只读值 */}
+  <Field fieldName="status" />     {/* 展示为只读值 */}
+</RecordContextProvider>
+```
+
+### `FieldDisplayScope`
+
+在 `ModelForm` 中已提供 `FieldPropsContext`。若需将 `Field` 强制为展示模式（例如在 `FormHeader` 子节点中），请用 `FieldDisplayScope` 包裹：
+
+```tsx
+import { FieldDisplayScope } from "@/components/fields/FieldDisplayScope";
+
+<FieldDisplayScope>
+  <Field fieldName="status" />     {/* 虽在 ModelForm 内，仍以展示模式渲染 */}
+</FieldDisplayScope>
+```
+
+`FormHeader` 会用 `FieldDisplayScope` 自动包裹其 `children`。
+
+### `Group`
+
+用于在同一行内横向组合多个 `Field` 的行内 flex 容器。内部 Field 的标签一律隐藏——请改用 `Group` 的 `labelName`。
+
+**位置：** `@/components/fields/extend/Group`
+
+#### Group 属性
+
+| Prop | 类型 | 必填 | 默认值 | 说明 |
+| ---- | ---- | ---- | ------ | ---- |
+| `labelName` | `string` | 否 | - | 渲染在行内组合上方的标签，替代各 Field 独立标签 |
+| `separator` | `ReactNode` | 否 | - | 子节点之间的分隔符（如 `"-"`、`"·"`、`"/"`） |
+| `className` | `string` | 否 | - | flex 容器额外类名 |
+| `children` | `ReactNode` | 是 | - | 一般为 `Field` 元素 |
+
+#### 标签行为
+
+- **展示模式**（`FormHeader`、`SideCard` 等）：Field 仅渲染为值的 `<span>`，默认无标签。
+- **表单模式**（`FormBody` 内）：`Group` 会克隆子 `Field` 并设 `hideLabel={true}`。若提供 `labelName`，则在组合上方渲染单个 `FormLabel`。
+
+#### 示例
+
+**展示模式——在 FormHeader 中（无标签）：**
+
+```tsx
+<FormHeader>
+  <Group separator="·">
+    <Field fieldName="employeeCode" />
+    <Field fieldName="departmentName" />
+  </Group>
+</FormHeader>
+```
+
+**表单模式——共享标签：**
+
+```tsx
+import { Group } from "@/components/fields/extend/Group";
+
+<FormSection labelName="名称">
+  <Group labelName="姓名" separator="-">
+    <Field fieldName="firstName" />
+    <Field fieldName="lastName" />
+  </Group>
+</FormSection>
+```
+
+**表单模式——无标签（仅值）：**
+
+```tsx
+<Group separator="/">
+  <Field fieldName="countryCode" />
+  <Field fieldName="areaCode" />
+  <Field fieldName="phoneNumber" />
+</Group>
+```
 
 ## 推荐用法
 
@@ -432,11 +528,18 @@ companyId.cascadedField = "employeeId.department.companyId";
 - `CheckBox`
 - `Radio`
 - `StatusBar`
+- `Badge` — 只读徽章展示；将值渲染为带颜色的 `StatusBadge`
+
+表格只读行为：
+
+- 当 `OptionReference.itemColor` 有值时，`Option` 与 `MultiOption` 单元格会自动按 `StatusBadge` 渲染，无需 `widgetType="StatusBar"`
+- 完整颜色映射见 [Widgets — 选项颜色与徽章自动渲染](./widgets#option-color--badge-auto-rendering)
 
 ```tsx
 <Field fieldName="active" />
 <Field fieldName="active" widgetType="CheckBox" />
 <Field fieldName="status" widgetType="Radio" />
+<Field fieldName="status" widgetType="Badge" />
 ```
 
 ### 日期与时间类型

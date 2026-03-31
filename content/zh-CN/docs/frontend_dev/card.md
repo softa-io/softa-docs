@@ -13,8 +13,8 @@
 
 - [ModelTable](../table) — 表格网格视图（共用工具栏对话框、侧栏与数据钩子）
 - [ModelForm](../form) — 默认卡片点击打开的详情表单
-- [Action](../../actions) — 动作系统（侧栏中使用）
-- [Field](../../fields) — 通过 `RecordContext` 在卡片内渲染的字段控件
+- [Action](../action) — 动作系统（侧栏中使用）
+- [Field](../fields) — 通过 `RecordContext` 在卡片内渲染的字段控件
 
 ## 快速开始
 
@@ -24,7 +24,7 @@ import { ModelCard } from "@/components/views/card";
 
 export default function DesignAppPage() {
   return (
-    <ModelCard modelName="DesignApp" enableDelete href="/studio/workbench">
+    <ModelCard modelName="DesignApp" enableDelete href="/studio/app/123/workbench">
       <ModelCard.Header>
         <Field fieldName="appName" />
       </ModelCard.Header>
@@ -43,12 +43,13 @@ export default function DesignAppPage() {
 
 `ModelCard` 使用复合组件模式拆分插槽。直接子节点分为：
 
-| 插槽               | 组件           | 渲染位置              |
-| ------------------ | ------------------- | ----------------------- |
-| 头部             | `ModelCard.Header`  | 卡片头部区域        |
-| 主体（默认）     | `Field` / 任意子节点 | 卡片内容区域       |
-| 底部             | `ModelCard.Footer`  | 卡片底部区域        |
-| 侧栏         | `SideTree` / `SideCard` / `SideList` | 左侧侧栏 |
+| 插槽           | 组件                                | 渲染位置           |
+| -------------- | ----------------------------------- | ------------------ |
+| 头部           | `ModelCard.Header`                  | 卡片头部区域       |
+| 主体（默认）   | `Field` / 任意子节点                | 卡片内容区域       |
+| 底部           | `ModelCard.Footer`                  | 卡片底部区域       |
+| 动作           | `Action`                            | 由声明位置推断（见下文） |
+| 侧栏           | `SideTree` / `SideCard` / `SideList` | 左侧侧栏           |
 
 未包裹在 `ModelCard.Header` 或 `ModelCard.Footer` 中的子节点作为主体内容渲染。任意插槽内的 `Field` 通过 `RecordContext` 以展示模式渲染 —— 机制与 `SideCard` 相同。
 
@@ -68,6 +69,117 @@ export default function DesignAppPage() {
 </ModelCard>
 ```
 
+## 动作
+
+`ModelCard` 支持用 `Action` 做每张卡片的操作。**放置方式由 `Action` 在 JSX 中的定义位置推断**，不依赖 `placement` prop。
+
+| 定义位置 | 渲染位置 | 等效 placement |
+| -------- | -------- | -------------- |
+| `ModelCard.Header` 内 | 卡片头部右侧，始终可见 | `"header"` |
+| 主体顶层子节点 | 卡片正文内容右侧 | `"inline"` |
+| 上述任一且 `placement="more"` | `...` 下拉（与 Delete 合并） | `"more"` |
+
+只有检测到 `placement="more"` 时才参考该 prop；`"header"` / `"inline"` 以树形位置为准。
+
+### 头部动作
+
+```tsx
+<ModelCard modelName="DesignApp">
+  <ModelCard.Header>
+    <Field fieldName="appName" />
+    <Action
+      type="link"
+      labelName="Edit"
+      href="/studio/app/{id}/workbench"
+    />
+  </ModelCard.Header>
+</ModelCard>
+```
+
+位于 `ModelCard.Header` 的 `Action` 在头部右侧渲染为 `outline` 按钮。
+
+### 行内（正文）动作
+
+```tsx
+<ModelCard modelName="DesignApp">
+  <ModelCard.Header>
+    <Field fieldName="appName" />
+  </ModelCard.Header>
+  <Field fieldName="status" />
+  <Action
+    type="default"
+    labelName="Publish"
+    operation="publish"
+    confirmMessage="Publish this app?"
+  />
+</ModelCard>
+```
+
+顶层 `Action` 子节点（不在插槽包装内）渲染在正文区域右侧。
+
+### 下拉（更多）动作
+
+```tsx
+<ModelCard modelName="DesignApp" enableDelete>
+  <ModelCard.Header>
+    <Field fieldName="appName" />
+    <Action
+      type="default"
+      labelName="Archive"
+      operation="archive"
+      placement="more"
+    />
+  </ModelCard.Header>
+</ModelCard>
+```
+
+`placement="more"` 将动作放入 hover 时的 `...` 下拉。若同时 `enableDelete`，删除项会通过分隔条附在同一下拉底部。
+
+### 链接动作的字符串模板
+
+字符串 `href` 支持 `{placeholder}` 占位符：
+
+| 占位符 | 解析为 |
+| ------ | ------ |
+| `{id}` | 当前记录 ID |
+| `{modelName}` | 卡片模型名 |
+| `{任意字段名}` | 记录中该字段值 |
+
+```tsx
+<Action type="link" labelName="Edit" href="/studio/app/{id}/workbench" />
+<Action type="link" labelName="Open" href="/studio/{appCode}/workbench" />
+<Action type="link" labelName="Open" href="/studio/app/{id}/version/{currentVersion}" />
+```
+
+需要条件逻辑时使用函数形式：
+
+```tsx
+<Action
+  type="link"
+  labelName="Open"
+  href={({ id }) => `/studio/app/${id}/workbench`}
+/>
+```
+
+### 组合示例
+
+```tsx
+<ModelCard modelName="DesignApp" enableDelete>
+  <ModelCard.Header>
+    <Field fieldName="appName" />
+    <Action type="link" labelName="Edit" href="/studio/app/{id}/workbench" />
+    <Action type="default" labelName="Archive" operation="archive" placement="more" />
+  </ModelCard.Header>
+
+  <Field fieldName="status" />
+  <Action type="default" labelName="Publish" operation="publish" />
+
+  <ModelCard.Footer>
+    <Field fieldName="updatedTime" />
+  </ModelCard.Footer>
+</ModelCard>
+```
+
 ## 点击导航
 
 卡片点击行为按优先级解析：
@@ -81,7 +193,7 @@ export default function DesignAppPage() {
 所有卡片跳转到同一目标时使用普通字符串：
 
 ```tsx
-<ModelCard modelName="DesignApp" href="/studio/workbench">
+<ModelCard modelName="DesignApp" href="/studio/app/123/workbench">
   <ModelCard.Header>
     <Field fieldName="appName" />
   </ModelCard.Header>
@@ -94,7 +206,7 @@ export default function DesignAppPage() {
 路径依赖记录 id 时使用函数：
 
 ```tsx
-<ModelCard modelName="DesignApp" href={(id) => `/studio/design-app/${id}`}>
+<ModelCard modelName="DesignApp" href={({ id }) => `/studio/design-app/${id}`}>
   <ModelCard.Header>
     <Field fieldName="appName" />
   </ModelCard.Header>
@@ -185,6 +297,7 @@ import { SideTree } from "@/components/views/shared/side-panel/SideTree";
 - 固定宽度 280px
 - 支持 `SideTree`、`SideCard`、`SideList`
 - 激活的树筛选在工具栏激活状态栏中以徽章展示
+- 各侧栏组件均支持 `remoteSearch`，可从客户端筛选切换为服务端搜索
 
 完整侧栏 props 说明见 [ModelTable 侧栏（可选）](../table/README.md#side-panel-optional)。
 

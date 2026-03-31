@@ -24,7 +24,7 @@ import { ModelCard } from "@/components/views/card";
 
 export default function DesignAppPage() {
   return (
-    <ModelCard modelName="DesignApp" enableDelete href="/studio/workbench">
+    <ModelCard modelName="DesignApp" enableDelete href="/studio/app/123/workbench">
       <ModelCard.Header>
         <Field fieldName="appName" />
       </ModelCard.Header>
@@ -48,6 +48,7 @@ export default function DesignAppPage() {
 | Header             | `ModelCard.Header`  | Card header area        |
 | Body (default)     | `Field` / any child | Card content area       |
 | Footer             | `ModelCard.Footer`  | Card footer area        |
+| Actions            | `Action`            | Inferred from position (see below) |
 | Side Panel         | `SideTree` / `SideCard` / `SideList` | Left side panel |
 
 Children that are not wrapped in `ModelCard.Header` or `ModelCard.Footer` are rendered as body content. `Field` components inside any slot render in display mode via `RecordContext` — the same mechanism used by `SideCard`.
@@ -68,6 +69,125 @@ Example with all slots:
 </ModelCard>
 ```
 
+## Actions
+
+`ModelCard` supports `Action` components for per-card operations. Placement is inferred from **where the `Action` is defined** in the JSX tree — not from the `placement` prop.
+
+| Where defined              | Rendered at                                  | Effective placement |
+| -------------------------- | -------------------------------------------- | ------------------- |
+| Inside `ModelCard.Header`  | CardHeader right side, always visible        | `"header"`          |
+| Top-level body child       | CardContent right side                       | `"inline"`          |
+| Either, with `placement="more"` | `...` dropdown (merged with Delete)   | `"more"`            |
+
+The explicit `placement` prop is only consulted to detect `"more"`. For `"header"` and `"inline"`, position in the tree takes precedence.
+
+### Header actions
+
+```tsx
+<ModelCard modelName="DesignApp">
+  <ModelCard.Header>
+    <Field fieldName="appName" />
+    <Action
+      type="link"
+      labelName="Edit"
+      href="/studio/app/{id}/workbench"
+    />
+  </ModelCard.Header>
+</ModelCard>
+```
+
+`Action` components inside `ModelCard.Header` render as `outline` buttons in the card header, to the right of the slot content.
+
+### Inline (body) actions
+
+```tsx
+<ModelCard modelName="DesignApp">
+  <ModelCard.Header>
+    <Field fieldName="appName" />
+  </ModelCard.Header>
+  <Field fieldName="status" />
+  <Action
+    type="default"
+    labelName="Publish"
+    operation="publish"
+    confirmMessage="Publish this app?"
+  />
+</ModelCard>
+```
+
+Top-level `Action` children (not inside a slot wrapper) render to the right of the body content area.
+
+### Dropdown (more) actions
+
+```tsx
+<ModelCard modelName="DesignApp" enableDelete>
+  <ModelCard.Header>
+    <Field fieldName="appName" />
+    <Action
+      type="default"
+      labelName="Archive"
+      operation="archive"
+      placement="more"
+    />
+  </ModelCard.Header>
+</ModelCard>
+```
+
+`placement="more"` routes the action into the `...` hover dropdown. When `enableDelete` is also set, the Delete option is appended at the bottom of the same dropdown (with a separator).
+
+### Link actions with string template interpolation
+
+String `href` values support `{placeholder}` template variables. Supported placeholders:
+
+| Placeholder       | Resolves to                              |
+| ----------------- | ---------------------------------------- |
+| `{id}`            | Current record ID                        |
+| `{modelName}`     | Model name of the card                   |
+| `{anyFieldName}`  | Value of that field from the record      |
+
+```tsx
+// Record ID
+<Action type="link" labelName="Edit" href="/studio/app/{id}/workbench" />
+
+// Any record field
+<Action type="link" labelName="Open" href="/studio/{appCode}/workbench" />
+
+// Multiple placeholders
+<Action type="link" labelName="Open" href="/studio/app/{id}/version/{currentVersion}" />
+```
+
+Use the function form when you need conditional logic:
+
+```tsx
+<Action
+  type="link"
+  labelName="Open"
+  href={({ id }) => `/studio/app/${id}/workbench`}
+/>
+```
+
+### Combined example
+
+```tsx
+<ModelCard modelName="DesignApp" enableDelete>
+  <ModelCard.Header>
+    <Field fieldName="appName" />
+    {/* → outline button in CardHeader */}
+    <Action type="link" labelName="Edit" href="/studio/app/{id}/workbench" />
+    {/* → ... dropdown */}
+    <Action type="default" labelName="Archive" operation="archive" placement="more" />
+  </ModelCard.Header>
+
+  <Field fieldName="status" />
+  {/* → inline button in CardContent */}
+  <Action type="default" labelName="Publish" operation="publish" />
+
+  <ModelCard.Footer>
+    <Field fieldName="updatedTime" />
+  </ModelCard.Footer>
+</ModelCard>
+```
+
 ## Click Navigation
 
 Card click behavior is resolved in priority order:
@@ -81,7 +201,7 @@ Card click behavior is resolved in priority order:
 Use a plain string when all cards navigate to the same destination:
 
 ```tsx
-<ModelCard modelName="DesignApp" href="/studio/workbench">
+<ModelCard modelName="DesignApp" href="/studio/app/123/workbench">
   <ModelCard.Header>
     <Field fieldName="appName" />
   </ModelCard.Header>
@@ -94,7 +214,7 @@ Use a plain string when all cards navigate to the same destination:
 Use a function when the route depends on the record id:
 
 ```tsx
-<ModelCard modelName="DesignApp" href={(id) => `/studio/design-app/${id}`}>
+<ModelCard modelName="DesignApp" href={({ id }) => `/studio/design-app/${id}`}>
   <ModelCard.Header>
     <Field fieldName="appName" />
   </ModelCard.Header>
@@ -185,6 +305,7 @@ Side panel behavior is identical to `ModelTable`:
 - Fixed width 280px
 - Supports `SideTree`, `SideCard`, `SideList`
 - Active tree filter is shown as a badge in the toolbar active state bar
+- All side panel components support `remoteSearch` prop to switch from client-side filtering to server-side search
 
 See [ModelTable Side Panel](../table/README.md#side-panel-optional) for full side panel prop reference.
 

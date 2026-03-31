@@ -7,6 +7,7 @@ Metadata-driven create/edit form container based on `react-hook-form` and Zod.
 - [Fields](./fields/index)
 - [Relation fields](./fields/relations)
 - [Widget matrix](./fields/widgets)
+- [Group (inline field layout)](../../fields/README.md#group)
 - [Action](./action)
 - [Dialog](./dialog)
 - [ModelTable](./table)
@@ -24,7 +25,7 @@ Recommended usage in `src/app/**/[id]/page.tsx`:
 ```tsx
 import { UserAccountUnlockActionDialog } from "@/app/user/user-account/components/user-account-unlock-action-dialog";
 import { Action } from "@/components/actions/Action";
-import { FormSection } from "@/components/common/form-section";
+import { FormSection } from "@/components/views/form/components/FormSection";
 import { Field } from "@/components/fields";
 import { FormBody } from "@/components/views/form/components/FormBody";
 import { FormHeader } from "@/components/views/form/components/FormHeader";
@@ -42,7 +43,6 @@ export default function EditUserAccountPage() {
           placement="more"
           confirmMessage="Lock this user account?"
           successMessage="User account locked."
-          errorMessage="Failed to lock user account."
         />
         <Action
           type="dialog"
@@ -50,7 +50,6 @@ export default function EditUserAccountPage() {
           operation="unlockAccount"
           placement="more"
           successMessage="User account unlocked."
-          errorMessage="Failed to unlock user account."
           component={UserAccountUnlockActionDialog}
         />
       </FormToolbar>
@@ -433,6 +432,8 @@ Use `readOnly` and `disabled` with different intent:
 
 In HR SaaS forms, detail pages should generally prefer `readOnly` over `disabled`.
 
+For `widgetType="Code"` and `widgetType="Markdown"`, a read-only field whose value is empty shows the shared `CodeEditorEmptyState` hint instead of an empty CodeMirror (see `src/components/fields/widgets/README.md`).
+
 ## XToMany Fields (Incremental Submit by Default)
 
 `ReferenceField` now only handles:
@@ -761,7 +762,7 @@ Recommended default layout:
 
 - Header: title + description
 - Sticky toolbar:
-  - left: built-in `FormEditStatus + FormPrimaryActions` (+ `FormWorkflowActions` when `enableWorkflow=true`)
+  - left: built-in `FormEditStatus + FormPrimaryActions` (+ `FormWorkflowActions` when `ModelForm/ModelSideForm enableWorkflow=true`)
   - right: business actions area (custom actions + built-in Duplicate/Delete + More Actions)
 - Body: `FormBody` renders either stacked sections or true tabs, plus the built-in audit panel layout
 - Audit: `FormBody(enableAuditLog)` controls audit panel; right on large screens and bottom on small screens
@@ -777,6 +778,11 @@ Recommended default layout:
 | `schemaBuilder` | `(context) => ZodTypeAny` | No       | -                                     | Runtime schema extender. Receives `{ metaModel, baseSchema }` built from resolved metadata. |
 | `readOnly`      | `boolean`                 | No       | `false`                               | Force read-only mode.                                                                       |
 | `defaultValues` | `Record<string, unknown>` | No       | -                                     | Extra default values merged into metadata defaults. Useful for injecting parent context such as `relatedField` values. |
+| `enableWorkflow`       | `boolean`                 | No       | `false`                               | Show workflow action group in toolbar left area (edit mode only). |
+| `enableCreate`         | `boolean`                 | No       | auto                                  | Built-in `Create New` action switch. `false` disables. Omitted follows default behavior (read-only forms hide unless explicitly `true`). |
+| `enableDuplicate`      | `boolean`                 | No       | auto                                  | Built-in duplicate action switch. `false` disables. Omitted follows default behavior (read-only forms hide unless explicitly `true`). |
+| `enableDelete`         | `boolean`                 | No       | auto                                  | Built-in delete action switch. `false` disables. Omitted follows default behavior (read-only forms hide unless explicitly `true`). |
+| `confirmDeleteMessage` | `string`                  | No       | `Delete this {modelLabel}? This action cannot be undone.` | Confirm text for built-in delete action. |
 | `children`      | `ReactNode`               | Yes      | -                                     | Form page layout content (`FormHeader/FormToolbar/FormBody`).                               |
 
 Runtime field conditions:
@@ -808,6 +814,20 @@ Remote `Field.onChange` in `ModelForm`:
 | `title`       | `string`    | No       | `metaModel.labelName` (fallback `pageTitle`) | Optional override.                        |
 | `description` | `string`    | No       | `metaModel.description`                      | Optional override.                        |
 | `extras`      | `ReactNode` | No       | -                                            | Extra header content rendered near title. |
+| `children`    | `ReactNode` | No       | -                                            | Display-mode content below description. `Field` children render as read-only values via `FieldDisplayScope`. Use `Group` for inline layout. |
+
+**FormHeader with display-mode children:**
+
+```tsx
+import { Group } from "@/components/fields/extend/Group";
+
+<FormHeader>
+  <Group separator="·">
+    <Field fieldName="employeeCode" />
+    <Field fieldName="departmentName" />
+  </Group>
+</FormHeader>
+```
 
 ### FormBody Props
 
@@ -917,14 +937,10 @@ import { FormBody, FormTab } from "@/components/views/form/components/FormBody";
 
 ### FormToolbar Props
 
-| Prop                   | Type        | Required | Default                                                   | Notes                                                                                                                                                      |
-| ---------------------- | ----------- | -------- | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `children`             | `ReactNode` | No       | -                                                         | Custom actions. Recommended: `<Action type=\"...\" />`.                                                                                                    |
-| `enableWorkflow`       | `boolean`   | No       | `false`                                                   | Toggle workflow action group in toolbar left area. Only shown in edit mode and not read-only.                                                              |
-| `enableCreate`         | `boolean`   | No       | `true`                                                    | Built-in `Create New` action in the right toolbar group. Explicit prop value wins; when omitted, hard read-only forms hide it by default.                  |
-| `enableDuplicate`      | `boolean`   | No       | `true`                                                    | Built-in duplicate action. Explicit prop value wins; when omitted, hard read-only forms hide it by default. In create state it stays visible but disabled. |
-| `enableDelete`         | `boolean`   | No       | `true`                                                    | Built-in delete action. Explicit prop value wins; when omitted, hard read-only forms hide it by default. In create state it stays visible but disabled.    |
-| `confirmDeleteMessage` | `string`    | No       | `Delete this {modelLabel}? This action cannot be undone.` | Confirm text for built-in delete action.                                                                                                                   |
+| Prop        | Type        | Required | Default | Notes                                                |
+| ----------- | ----------- | -------- | ------- | ---------------------------------------------------- |
+| `children`  | `ReactNode` | No       | -       | Custom actions. Recommended: `<Action type="..." />`. |
+| `className` | `string`    | No       | -       | Extra wrapper class for toolbar container.           |
 
 ### Actions In `ModelForm`
 
@@ -943,6 +959,7 @@ Rules:
 - `FormToolbar` is the action area for page-level business actions
 - `FormSection` is a local UI action area and does not execute model API actions directly
 - for API actions (`default` / `dialog`), place actions in `FormToolbar`
+- built-in workflow/create/duplicate/delete toolbar behavior is configured on `ModelForm`/`ModelSideForm` props
 - edit mode with unsaved changes: clicking business actions asks whether to discard changes before continuing
 - create mode: built-in `Duplicate` / `Delete` remain visible but disabled
 - built-in `Duplicate` still uses backend `copyById`; exclusion of `BaseModel.reversedFields` is handled by backend duplicate semantics
@@ -951,7 +968,7 @@ Complete example:
 
 ```tsx
 import { Action } from "@/components/actions/Action";
-import { FormSection } from "@/components/common/form-section";
+import { FormSection } from "@/components/views/form/components/FormSection";
 import { Field } from "@/components/fields";
 import { ActionDialog } from "@/components/views/dialogs";
 import { FormBody } from "@/components/views/form/components/FormBody";

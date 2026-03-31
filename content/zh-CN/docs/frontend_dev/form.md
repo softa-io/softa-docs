@@ -7,6 +7,7 @@
 - [Fields](./fields/index)
 - [关联字段](./fields/relations)
 - [Widget 矩阵](./fields/widgets)
+- [Group（行内字段布局）](./fields/index#group)
 - [Action](./action)
 - [Dialog](./dialog)
 - [ModelTable](./table)
@@ -24,7 +25,7 @@ import { ModelForm } from "@/components/views/form/ModelForm";
 ```tsx
 import { UserAccountUnlockActionDialog } from "@/app/user/user-account/components/user-account-unlock-action-dialog";
 import { Action } from "@/components/actions/Action";
-import { FormSection } from "@/components/common/form-section";
+import { FormSection } from "@/components/views/form/components/FormSection";
 import { Field } from "@/components/fields";
 import { FormBody } from "@/components/views/form/components/FormBody";
 import { FormHeader } from "@/components/views/form/components/FormHeader";
@@ -42,7 +43,6 @@ export default function EditUserAccountPage() {
           placement="more"
           confirmMessage="Lock this user account?"
           successMessage="User account locked."
-          errorMessage="Failed to lock user account."
         />
         <Action
           type="dialog"
@@ -50,7 +50,6 @@ export default function EditUserAccountPage() {
           operation="unlockAccount"
           placement="more"
           successMessage="User account unlocked."
-          errorMessage="Failed to unlock user account."
           component={UserAccountUnlockActionDialog}
         />
       </FormToolbar>
@@ -433,6 +432,8 @@ import { dependsOn, Field } from "@/components/fields";
 
 在人力资源 SaaS 表单中，详情页通常应优先使用 `readOnly`，而不是 `disabled`。
 
+对于 `widgetType="Code"` 与 `widgetType="Markdown"`，只读且值为空时会显示共用的 `CodeEditorEmptyState` 提示，而不是空白 CodeMirror（参见 `src/components/fields/widgets/README.md`）。
+
 ## XToMany 字段（默认增量提交）
 
 `ReferenceField` 现在只负责：
@@ -808,6 +809,20 @@ export default function UserProfileFormPage() {
 | `title`       | `string`    | 否   | `metaModel.labelName`（回退到 `pageTitle`） | 可选覆盖。 |
 | `description` | `string`    | 否   | `metaModel.description`                      | 可选覆盖。 |
 | `extras`      | `ReactNode` | 否   | -                                            | 在标题附近渲染的额外头部内容。 |
+| `children`    | `ReactNode` | 否   | -                                            | 描述下方的展示模式内容。子级 `Field` 通过 `FieldDisplayScope` 以只读值渲染。行内排版请使用 `Group`。 |
+
+**带展示模式子节点的 FormHeader：**
+
+```tsx
+import { Group } from "@/components/fields/extend/Group";
+
+<FormHeader>
+  <Group separator="·">
+    <Field fieldName="employeeCode" />
+    <Field fieldName="departmentName" />
+  </Group>
+</FormHeader>
+```
 
 ### FormBody Props
 
@@ -917,14 +932,10 @@ import { FormBody, FormTab } from "@/components/views/form/components/FormBody";
 
 ### FormToolbar Props
 
-| Prop                   | 类型        | 必填 | 默认值                                                    | 说明 |
-| ---------------------- | ----------- | ---- | --------------------------------------------------------- | ---- |
-| `children`             | `ReactNode` | 否   | -                                                         | 自定义动作。推荐写法：`<Action type="..." />`。 |
-| `enableWorkflow`       | `boolean`   | 否   | `false`                                                   | 是否在工具栏左侧启用工作流动作组。仅在编辑模式且非只读时显示。 |
-| `enableCreate`         | `boolean`   | 否   | `true`                                                    | 是否启用右侧工具栏中的内置 `Create New` 动作。显式传值优先；未传时，硬只读表单默认隐藏。 |
-| `enableDuplicate`      | `boolean`   | 否   | `true`                                                    | 是否启用内置 duplicate 动作。显式传值优先；未传时，硬只读表单默认隐藏。创建态保持可见但禁用。 |
-| `enableDelete`         | `boolean`   | 否   | `true`                                                    | 是否启用内置 delete 动作。显式传值优先；未传时，硬只读表单默认隐藏。创建态保持可见但禁用。 |
-| `confirmDeleteMessage` | `string`    | 否   | `Delete this {modelLabel}? This action cannot be undone.` | 内置删除动作的确认文案。 |
+| Prop        | 类型        | 必填 | 默认值 | 说明 |
+| ----------- | ----------- | ---- | ------ | ---- |
+| `children`  | `ReactNode` | 否   | -      | 自定义动作。推荐：`<Action type="..." />`。 |
+| `className` | `string`    | 否   | -      | 工具栏容器额外 class。 |
 
 ### `ModelForm` 中的动作
 
@@ -935,7 +946,7 @@ import { FormBody, FormTab } from "@/components/views/form/components/FormBody";
 
 | 容器          | 支持的 Action 类型                     | 支持的位置          |
 | ------------- | -------------------------------------- | ------------------- |
-| `FormToolbar` | `default`, `dialog`, `link`, `custom`, `form`  | `toolbar`, `more`   |
+| `FormToolbar` | `default`, `dialog`, `link`, `custom` | `toolbar`, `more`   |
 | `FormSection` | `link`, `custom`                       | `header`, `inline`  |
 
 规则：
@@ -943,7 +954,7 @@ import { FormBody, FormTab } from "@/components/views/form/components/FormBody";
 - `FormToolbar` 是页面级业务动作区域
 - `FormSection` 是局部 UI 动作区域，不直接执行模型 API 动作
 - 对于 API 动作（`default` / `dialog`），请放在 `FormToolbar`
-- 编辑模式且有未保存修改时，点击业务动作会先询问是否丢弃修改
+- 编辑模式且有未保存修改时，点击业务动作会先询问是否丢弃修改再继续
 - 创建模式下，内置 `Duplicate` / `Delete` 会保持可见，但处于禁用状态
 - 内置 `Duplicate` 仍调用后端 `copyById`；`BaseModel.reversedFields` 的排除由后端 duplicate 语义负责处理
 
@@ -951,7 +962,7 @@ import { FormBody, FormTab } from "@/components/views/form/components/FormBody";
 
 ```tsx
 import { Action } from "@/components/actions/Action";
-import { FormSection } from "@/components/common/form-section";
+import { FormSection } from "@/components/views/form/components/FormSection";
 import { Field } from "@/components/fields";
 import { ActionDialog } from "@/components/views/dialogs";
 import { FormBody } from "@/components/views/form/components/FormBody";
@@ -994,6 +1005,7 @@ function UnlockDialog() {
         placement="header"
         icon={ExternalLink}
         href="https://docs.example.com/credentials"
+        target="_blank"
       />
       <Action
         type="custom"

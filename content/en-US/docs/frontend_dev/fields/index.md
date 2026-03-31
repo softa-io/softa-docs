@@ -1,12 +1,12 @@
 # Fields
 
-Metadata-driven field system used by `ModelForm`, relation dialogs, and inline editors.
+Metadata-driven field system used by `ModelForm`, relation dialogs, inline editors, and display contexts.
 
 `Field` is the main business-facing entry for app code.
 
 Use this README for:
 
-- `Field` props and overrides
+- `Field` props and overrides, three rendering modes (form / display / declaration)
 - `required` / `readonly` / `hidden`
 - `dependsOn(...)`
 - relation `filters`
@@ -19,8 +19,9 @@ Related docs:
 - [Relation Fields](./relations): `RelationTable`, `SelectTree`, `OneToMany`, `ManyToMany`
 - [Widgets](./widgets): `FieldType -> WidgetType` matrix and widget-specific examples
 - [ModelForm](../form): page shell
-- [ModelTable](../table): read cells and inline edit
-- [Tree](../tree): internal tree primitives used by `sideTree` and `SelectTree`
+- [ModelTable](../table): read cells, inline edit, and side panels
+- [ModelSideForm](../side-form): side panel + embedded form view
+- [Tree](../tree): internal tree primitives used by `SideTree` and `SelectTree`
 
 ## Import
 
@@ -47,6 +48,101 @@ import {
 Internal note:
 
 - `ResolvedFields` is internal and should stay behind infrastructure code rather than becoming a business-facing field API
+
+## Field Rendering Modes
+
+`Field` automatically detects its rendering mode based on React context:
+
+| Mode            | Condition                                             | Behavior                                         |
+| --------------- | ----------------------------------------------------- | ------------------------------------------------ |
+| **Form mode**   | `FieldPropsContext` present                            | Full editable field with validation, conditions  |
+| **Display mode**| `RecordContext` present, no `FieldPropsContext`         | Read-only inline value via `FieldDisplayValue`   |
+| **Declaration mode** | Neither context present                           | Returns `null`; parent collects via `children`   |
+
+This means the same `<Field fieldName="name" />` JSX works across forms, side panels, card templates, and table column declarations without any mode prop.
+
+### Display Mode
+
+When `Field` is inside a `RecordContext` (e.g. inside `SideCard`, `SideList`, or `FormHeader` children), it renders as `FieldDisplayValue` — a read-only inline value using the same cell renderers as table columns.
+
+```tsx
+import { RecordContextProvider } from "@/components/contexts/RecordContext";
+
+<RecordContextProvider record={data} metaModel={metaModel}>
+  <Field fieldName="name" />       {/* renders as display value */}
+  <Field fieldName="status" />     {/* renders as display value */}
+</RecordContextProvider>
+```
+
+### `FieldDisplayScope`
+
+Inside `ModelForm`, `FieldPropsContext` is already provided. To force `Field` into display mode (e.g. in `FormHeader` children), wrap with `FieldDisplayScope`:
+
+```tsx
+import { FieldDisplayScope } from "@/components/fields/FieldDisplayScope";
+
+<FieldDisplayScope>
+  <Field fieldName="status" />     {/* display mode despite being inside ModelForm */}
+</FieldDisplayScope>
+```
+
+`FormHeader` automatically wraps its `children` in `FieldDisplayScope`.
+
+### `Group`
+
+Inline flex container that groups multiple `Field` elements on a single line. Inner Field labels are always suppressed — use `labelName` on `Group` instead.
+
+**Location:** `@/components/fields/extend/Group`
+
+#### Group Props
+
+| Prop        | Type        | Required | Default | Notes                                                      |
+| ----------- | ----------- | -------- | ------- | ---------------------------------------------------------- |
+| `labelName` | `string`    | No       | -       | Label rendered above the inline group. Replaces individual Field labels. |
+| `separator` | `ReactNode` | No       | -       | Separator rendered between children (e.g. `"-"`, `"·"`, `"/"`). |
+| `className` | `string`    | No       | -       | Additional CSS classes for the flex container.              |
+| `children`  | `ReactNode` | Yes      | -       | Typically `Field` elements.                                 |
+
+#### Label Behavior
+
+- **Display mode** (inside `FormHeader`, `SideCard`, etc.): Fields render as value-only `<span>` — no labels by default.
+- **Form mode** (inside `FormBody`): Group clones child Fields with `hideLabel={true}` to suppress individual labels. If `labelName` is provided, it renders as a single `FormLabel` above the group.
+
+#### Examples
+
+**Display mode — in FormHeader (no label):**
+
+```tsx
+<FormHeader>
+  <Group separator="·">
+    <Field fieldName="employeeCode" />
+    <Field fieldName="departmentName" />
+  </Group>
+</FormHeader>
+```
+
+**Form mode — with shared label:**
+
+```tsx
+import { Group } from "@/components/fields/extend/Group";
+
+<FormSection labelName="Name">
+  <Group labelName="Full Name" separator="-">
+    <Field fieldName="firstName" />
+    <Field fieldName="lastName" />
+  </Group>
+</FormSection>
+```
+
+**Form mode — no label (values only):**
+
+```tsx
+<Group separator="/">
+  <Field fieldName="countryCode" />
+  <Field fieldName="areaCode" />
+  <Field fieldName="phoneNumber" />
+</Group>
+```
 
 ## Recommended Usage
 
@@ -432,11 +528,18 @@ Common widget variants:
 - `CheckBox`
 - `Radio`
 - `StatusBar`
+- `Badge` — read-only badge display; renders value(s) as colored `StatusBadge`(s)
+
+Table read behavior:
+
+- when `OptionReference.itemColor` has a value, `Option` and `MultiOption` cells auto-render as `StatusBadge` without requiring `widgetType="StatusBar"`
+- see [Widgets — Option Color → Badge Auto-Rendering](./widgets#option-color--badge-auto-rendering) for the full color mapping
 
 ```tsx
 <Field fieldName="active" />
 <Field fieldName="active" widgetType="CheckBox" />
 <Field fieldName="status" widgetType="Radio" />
+<Field fieldName="status" widgetType="Badge" />
 ```
 
 ### Date And Time Types

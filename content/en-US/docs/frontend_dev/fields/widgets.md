@@ -25,8 +25,8 @@ Related docs:
 | `Date`        | date picker                    | `yyyy-MM`, `MM-dd`                                              |
 | `DateTime`    | datetime input                 | -                                                               |
 | `Time`        | time input                     | `HH:mm:ss`, `HH:mm`                                             |
-| `Option`      | single select                  | `Radio`, `StatusBar`                                            |
-| `MultiOption` | checkbox group                 | `CheckBox`                                                      |
+| `Option`      | single select                  | `Radio`, `StatusBar`, `Badge`                                   |
+| `MultiOption` | checkbox group                 | `CheckBox`, `Badge`                                             |
 | `ManyToOne`   | reference select               | `SelectTree`                                                    |
 | `OneToOne`    | reference select               | `SelectTree`                                                    |
 | `ManyToMany`  | relation table + picker dialog | `SelectTree`, `TagList`                                         |
@@ -134,6 +134,14 @@ If `modelName` is omitted, falls back to the field's own `metaField.modelName`.
 | `tabSize`      | `number`                         | `2`       | Editor indentation size.                                                    |
 | `autoFocus`    | `boolean`                        | `false`   | Focus editor after mount.                                                   |
 
+Editor toolbar (shown in `edit` and `split` modes):
+
+- **Line count** — displays total line count (visible when `lineNumbers` is `true`)
+- **Search** — opens CodeMirror search panel (also available via `Ctrl/Cmd+F`)
+- **Copy** — copies full editor content to clipboard
+
+When the field is read-only and the value is empty (or whitespace only), the editor body shows `CodeEditorEmptyState` (`shared/code-editor-empty-state.tsx`) with UI caption styling instead of an empty CodeMirror; default copy: “No content to display.” Custom hosts (for example Studio preview dialogs) can pass `emptyMessage` on `CodeEditorEmptyState` when composing it directly.
+
 Preview is rendered by `react-markdown` with `remark-gfm` enabled by default.
 
 ### `Code`
@@ -158,6 +166,17 @@ Preview is rendered by `react-markdown` with `remark-gfm` enabled by default.
 | `lineWrapping` | `boolean`                                                                                          | `true`    | Wrap long lines.              |
 | `tabSize`      | `number`                                                                                           | `2`       | Editor indentation size.      |
 | `autoFocus`    | `boolean`                                                                                          | `false`   | Focus editor after mount.     |
+| `showDownload` | `boolean`                                                                                          | `true`    | Toolbar **Download** control. Set `false` to hide. Hidden while the form is submitting (`isSubmitting`). |
+| `downloadFileName` | `string`                                                                                       | -         | Suggested download file name. Defaults to a sanitized `fieldName` plus an extension inferred from `language` (for example `script.sql`). |
+
+Editor toolbar:
+
+- **Line count** — displays total line count (visible when `lineNumbers` is `true`)
+- **Search** — opens CodeMirror search panel (also available via `Ctrl/Cmd+F`)
+- **Copy** — copies full editor content to clipboard
+- **Download** — saves the current value as a text file in the browser (client-side Blob; no server call). Still available when the field is read-only.
+
+When read-only and the value is empty (or whitespace only), the editor body shows `CodeEditorEmptyState` instead of an empty CodeMirror (same behavior and defaults as the `Markdown` widget section above).
 
 ## `MultiString`
 
@@ -228,6 +247,45 @@ Preview is rendered by `react-markdown` with `remark-gfm` enabled by default.
 | Prop   | Type      | Default | Notes                       |
 | ------ | --------- | ------- | --------------------------- |
 | `wrap` | `boolean` | `true`  | Allow status items to wrap. |
+
+### `Badge`
+
+Read-only badge display for `Option` and `MultiOption` fields. Renders the current value as colored `StatusBadge`(s) using `getOptionStatusBadgeVariant` — the same color logic as table cell auto-rendering.
+
+- **`Option`** — renders a single badge for the selected value.
+- **`MultiOption`** — renders one badge per selected value.
+
+```tsx
+<Field fieldName="status" widgetType="Badge" />
+<Field fieldName="tags" widgetType="Badge" />
+```
+
+No widget props. Badge variant is derived from `itemColor` / text patterns (see table below).
+
+### Option Color → Badge Auto-Rendering
+
+When `OptionReference.itemColor` has a value, `Option` and `MultiOption` table cells automatically render as `StatusBadge` — no `widgetType="StatusBar"` required.
+
+Supported `itemColor` values and their badge variants:
+
+| `itemColor` keyword | Badge variant | Visual                                        |
+| ------------------- | ------------- | --------------------------------------------- |
+| `green`             | `success`     | green border / background / text              |
+| `yellow`, `orange`  | `warning`     | amber border / background / text              |
+| `red`               | `error`       | red border / background / text                |
+| `blue`              | `info`        | blue border / background / text               |
+| _(other / empty)_   | `neutral`     | slate border / background / text              |
+
+Color matching is case-insensitive and uses `includes`, so values like `"Green"`, `"light-green"`, or `"#green-500"` all match.
+
+When `itemColor` is empty, the mapper also falls back to `itemName` / `itemCode` text pattern matching:
+
+| Text pattern (in `itemName` or `itemCode`)      | Badge variant |
+| ------------------------------------------------ | ------------- |
+| `success`, `active`, `enabled`, `approved`       | `success`     |
+| `pending`, `warning`, `draft`                    | `warning`     |
+| `error`, `failed`, `inactive`, `disabled`, `rejected` | `error`  |
+| `processing`, `running`, `published`             | `info`        |
 
 ## Date And Time Widgets
 

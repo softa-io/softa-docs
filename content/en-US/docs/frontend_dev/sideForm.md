@@ -52,16 +52,28 @@ export default function SettingPage() {
 1. **Children are split** into one side panel element (`SideTree`, `SideCard`, or `SideList`) and form content (everything else).
 2. The side panel is wrapped in `SidePanelContainerProvider` so its selection events flow back to `ModelSideForm`.
 3. When a record is selected, a `ModelForm` is mounted with that record's `id`. The form supports full read/edit lifecycle — the same `ModelForm` used in standalone `[id]/page.tsx` routes.
-4. Switching records **re-mounts** the form (via a key change), giving each record a fresh form state.
-5. If the form has **unsaved changes**, a confirmation dialog asks whether to discard before switching.
-6. When no record is selected, a placeholder message is shown.
+4. Selection can be internal or controlled from the outside. In route-driven detail pages, pass `selectedRecordId` and handle `onSelectedRecordChange` to keep the URL in sync.
+5. Switching records **re-mounts** the form (via a key change), giving each record a fresh form state.
+6. If the form has **unsaved changes**, a confirmation dialog asks whether to discard before switching.
+7. When no record is selected, a placeholder message is shown.
 
 ## Props
 
-| Prop        | Type        | Required | Default | Notes                                              |
-| ----------- | ----------- | -------- | ------- | -------------------------------------------------- |
-| `modelName` | `string`    | Yes      | -       | The model to load into `ModelForm`.                |
-| `children`  | `ReactNode` | Yes      | -       | One side panel element + standard form components. |
+| Prop                   | Type        | Required | Default                                                   | Notes                                                                                                   |
+| ---------------------- | ----------- | -------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `modelName`            | `string`    | Yes      | -                                                         | The model to load into `ModelForm`.                                                                     |
+| `enableWorkflow`       | `boolean`   | No       | `false`                                                   | Show workflow action group in right-side form toolbar (edit mode only).                                |
+| `enableCreate`         | `boolean`   | No       | `true`                                                    | Master switch for create entry points (side panel + empty state + toolbar Create New).                 |
+| `enableDuplicate`      | `boolean`   | No       | auto                                                      | Built-in duplicate action switch in right-side toolbar. `false` disables.                               |
+| `enableDelete`         | `boolean`   | No       | auto                                                      | Built-in delete action switch in right-side toolbar. `false` disables.                                  |
+| `confirmDeleteMessage` | `string`    | No       | `Delete this {modelLabel}? This action cannot be undone.` | Confirm text for built-in delete action in right-side toolbar.                                          |
+| `selectedRecordId`     | `string \| null` | No   | uncontrolled                                              | Controlled record id for detail-route variants of the same side-form page.                              |
+| `onSelectedRecordChange` | `(id: string \| null, record?: Record<string, unknown>) => void` | No | - | Fired when the side panel selects a different record in controlled mode.                                |
+| `children`             | `ReactNode` | Yes      | -                                                         | One side panel element + standard form components.                                                       |
+
+`ModelSideForm` forwards toolbar-related props to its internal `ModelForm`. `FormToolbar` itself only needs to render custom actions.
+
+If `selectedRecordId` is omitted, `ModelSideForm` manages selection internally. If it is provided, the right-side form always follows that id, while the side panel simply reflects whatever records are present in the current list.
 
 ## Children Structure
 
@@ -140,6 +152,7 @@ Any side panel component can be used. The component determines the record select
     filterField="id"
     filters={[["status", "=", "IN_PROGRESS"], "OR", ["status", "=", "READY"]]}
     searchable
+    remoteSearch
   >
     <WorkItemListItem />
   </SideList>
@@ -294,6 +307,64 @@ import { CheckCircle, XCircle } from "lucide-react";
 </ModelSideForm>
 ```
 
+## Controlled Detail Routes
+
+Use controlled mode when the selected record belongs in the URL:
+
+```tsx
+"use client";
+
+import { routes } from "@/app/studio/routes";
+import { Field } from "@/components/fields";
+import { FormBody } from "@/components/views/form/components/FormBody";
+import { FormHeader } from "@/components/views/form/components/FormHeader";
+import { FormToolbar } from "@/components/views/form/components/FormToolbar";
+import { SideList } from "@/components/views/shared/side-panel/SideList";
+import { ModelSideForm } from "@/components/views/side-form/ModelSideForm";
+import { fillRouteTemplate } from "@/navigation";
+import { useParams, useRouter } from "next/navigation";
+
+export default function WorkbenchDetailPage() {
+  const router = useRouter();
+  const params = useParams<{ appId: string; workItemId: string }>();
+
+  return (
+    <ModelSideForm
+      modelName="DesignWorkItem"
+      selectedRecordId={params.workItemId}
+      onSelectedRecordChange={(nextId) => {
+        if (!nextId) {
+          router.push(fillRouteTemplate(routes.workbench, { appId: params.appId })!);
+          return;
+        }
+        router.push(
+          fillRouteTemplate(routes.workbenchDetail, {
+            appId: params.appId,
+            workItemId: nextId,
+          })!,
+        );
+      }}
+    >
+      <SideList modelName="DesignWorkItem" filterField="id" searchable remoteSearch>
+        <WorkItemListItem />
+      </SideList>
+
+      <FormHeader />
+      <FormToolbar />
+      <FormBody>
+        <Field fieldName="name" />
+      </FormBody>
+    </ModelSideForm>
+  );
+}
+```
+
+Notes:
+
+- The right-side form can open a record from the route even when the current side-panel query does not contain that id.
+- In that case, the side panel shows no highlighted row, but the form still loads the detail record via `getById`.
+- This is useful for browse/detail route pairs such as `/workbench` and `/workbench/[workItemId]`.
+
 ## Dirty State & Record Switching
 
 `ModelSideForm` automatically tracks whether the form has unsaved changes. When you click a different record in the side panel while the form is dirty:
@@ -303,6 +374,8 @@ import { CheckCircle, XCircle } from "lucide-react";
 3. **Keep editing** → stays on the current record, side panel selection is not changed
 
 This prevents accidental data loss. The form is fully re-mounted on each record switch (via React key), so each record gets a clean form state.
+
+In controlled mode, choosing a different record calls `onSelectedRecordChange`; the parent page is responsible for updating the route or external state that feeds `selectedRecordId`.
 
 ## Comparison with Other Views
 
@@ -315,3 +388,4 @@ This prevents accidental data loss. The form is fully re-mounted on each record 
 | Dirty state guard   | Yes                    | Inline edit only        | -                      |
 | Search/Filter/Sort  | Side panel only        | Full toolbar            | Simplified toolbar     |
 | Pagination          | Side panel (client)    | Server-side             | Server-side            |
+| Remote search       | `remoteSearch` prop    | Built-in                | Built-in               |

@@ -1,4 +1,4 @@
-# 组件矩阵
+# Widget 矩阵
 
 本文用于说明：
 
@@ -25,8 +25,8 @@
 | `Date`        | 日期选择器               | `yyyy-MM`, `MM-dd`                                            |
 | `DateTime`    | 日期时间输入             | -                                                             |
 | `Time`        | 时间输入                 | `HH:mm:ss`, `HH:mm`                                           |
-| `Option`      | 单选下拉                 | `Radio`, `StatusBar`                                          |
-| `MultiOption` | 复选框组                 | `CheckBox`                                                    |
+| `Option`      | 单选下拉                 | `Radio`, `StatusBar`, `Badge`                                 |
+| `MultiOption` | 复选框组                 | `CheckBox`, `Badge`                                           |
 | `ManyToOne`   | 关联选择                 | `SelectTree`                                                  |
 | `OneToOne`    | 关联选择                 | `SelectTree`                                                  |
 | `ManyToMany`  | 关联表格 + 选择器对话框  | `SelectTree`, `TagList`                                       |
@@ -83,7 +83,7 @@
 - **字段占位符** — 以行内芯片形式插入模型字段。HTML 输出：`<span data-tpl-field="fieldPath" data-tpl-label="label">{{fieldPath}}</span>`
 - **关联字段展开** — 将 `ManyToOne` / `OneToOne` 关联展开一层，插入嵌套路径（如 `department.name`）
 - **循环表格** — 将 `OneToMany` / `ManyToMany` 关联以可选列的循环表格插入。HTML 输出：`<table data-tpl-loop="relationField" data-tpl-model="RelatedModel">` 及 `<th data-tpl-field="col">` 表头
-- **字段选择器** — 工具栏「插入字段」按钮打开弹层，按直接字段 / 关联 / 集合分组展示可插入字段
+- **字段选择器** — 工具栏「插入字段」按钮打开浮层，列出按直接字段 / 关联 / 集合分组的字段
 - **两级懒加载** — 与 `RichText` 相同：只读时仅渲染 HTML 不加载 Tiptap；编辑时懒加载完整编辑器
 
 ```tsx
@@ -134,6 +134,14 @@
 | `tabSize`      | `number`                         | `2`       | 编辑器缩进大小。                                                          |
 | `autoFocus`    | `boolean`                        | `false`   | 挂载后自动聚焦编辑器。                                                    |
 
+编辑器工具栏（在 `edit` 与 `split` 模式下显示）：
+
+- **行数** — 显示总行数（当 `lineNumbers` 为 `true` 时可见）
+- **搜索** — 打开 CodeMirror 搜索面板（也可用 `Ctrl/Cmd+F`）
+- **复制** — 将编辑器全文复制到剪贴板
+
+字段只读且值为空（或仅空白）时，编辑器主体显示 `CodeEditorEmptyState`（`shared/code-editor-empty-state.tsx`），使用 UI 说明样式而非空 CodeMirror；默认文案为 “No content to display.”。在 Studio 等自定义宿主中若直接组合该组件，可传入 `emptyMessage`。
+
 预览由 `react-markdown` 渲染，并默认启用 `remark-gfm`。
 
 ### `Code`
@@ -158,6 +166,17 @@
 | `lineWrapping` | `boolean`                                                                                          | `true`    | 是否折行。             |
 | `tabSize`      | `number`                                                                                           | `2`       | 编辑器缩进大小。       |
 | `autoFocus`    | `boolean`                                                                                          | `false`   | 挂载后自动聚焦编辑器。 |
+| `showDownload` | `boolean`                                                                                          | `true`    | 工具栏 **下载** 控件。设为 `false` 可隐藏。表单提交中（`isSubmitting`）时也会隐藏。 |
+| `downloadFileName` | `string`                                                                                       | -         | 建议的下载文件名。默认由净化后的 `fieldName` 加上根据 `language` 推断的扩展名（如 `script.sql`）。 |
+
+编辑器工具栏：
+
+- **行数** — 显示总行数（当 `lineNumbers` 为 `true` 时可见）
+- **搜索** — 打开 CodeMirror 搜索面板（也可用 `Ctrl/Cmd+F`）
+- **复制** — 将编辑器全文复制到剪贴板
+- **下载** — 在浏览器中将当前值保存为文本文件（客户端 Blob，无服务端请求）。字段只读时仍可使用。
+
+只读且值为空（或仅空白）时，编辑器主体显示 `CodeEditorEmptyState`，行为与上文 `Markdown` 小节一致。
 
 ## `MultiString`
 
@@ -228,6 +247,45 @@
 | Prop   | 类型      | 默认值 | 说明                     |
 | ------ | --------- | ------ | ------------------------ |
 | `wrap` | `boolean` | `true` | 是否允许状态项换行。     |
+
+### `Badge`
+
+用于 `Option`、`MultiOption` 的只读徽章展示。使用 `getOptionStatusBadgeVariant` 将当前值渲染为彩色 `StatusBadge`，与表格单元格自动渲染使用同一套颜色逻辑。
+
+- **`Option`** — 为当前选中值渲染单个徽章。
+- **`MultiOption`** — 为每个选中值各渲染一个徽章。
+
+```tsx
+<Field fieldName="status" widgetType="Badge" />
+<Field fieldName="tags" widgetType="Badge" />
+```
+
+无 widget props。徽章变体由 `itemColor` / 文本规则推导（见下表）。
+
+### 选项颜色 → 徽章自动渲染 {#option-color--badge-auto-rendering}
+
+当 `OptionReference.itemColor` 有值时，`Option` 与 `MultiOption` 表格单元格会自动渲染为 `StatusBadge`，无需 `widgetType="StatusBar"`。
+
+支持的 `itemColor` 关键字与徽章变体：
+
+| `itemColor` 关键字 | 徽章变体 | 视觉 |
+| ------------------- | -------- | ---- |
+| `green`             | `success` | 绿色描边 / 背景 / 文字 |
+| `yellow`、`orange`  | `warning` | 琥珀色描边 / 背景 / 文字 |
+| `red`               | `error`   | 红色描边 / 背景 / 文字 |
+| `blue`              | `info`    | 蓝色描边 / 背景 / 文字 |
+| _（其他 / 空）_     | `neutral` | 石板色描边 / 背景 / 文字 |
+
+颜色匹配不区分大小写，且使用 `includes`，故 `"Green"`、`"light-green"`、`"#green-500"` 等均能匹配。
+
+当 `itemColor` 为空时，映射器会回退到对 `itemName` / `itemCode` 的文本模式匹配：
+
+| `itemName` 或 `itemCode` 中的文本模式 | 徽章变体 |
+| ------------------------------------- | -------- |
+| `success`、`active`、`enabled`、`approved` | `success` |
+| `pending`、`warning`、`draft` | `warning` |
+| `error`、`failed`、`inactive`、`disabled`、`rejected` | `error` |
+| `processing`、`running`、`published` | `info` |
 
 ## 日期与时间类 Widgets
 
