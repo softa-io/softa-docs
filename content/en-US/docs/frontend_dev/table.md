@@ -488,6 +488,8 @@ Toolbar active state area can show and clear:
 | Prop               | Type                       | Required | Default | Notes                                                                                                                                      |
 | ------------------ | -------------------------- | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | `modelName`        | `string`                   | Yes      | -       | Used to fetch metadata API.                                                                                                                |
+| `labelName`        | `string`                   | No       | -       | Overrides the page title shown in the table header. Defaults to `metaModel.labelName` when omitted.                                        |
+| `description`      | `string`                   | No       | -       | Overrides the subtitle shown in the table header. Defaults to `metaModel.description` when omitted.                                        |
 | `inlineEdit`       | `boolean`                  | No       | `false` | Enable row-click inline edit mode. When enabled, active-row editable cells render `Field` components instead of navigating to detail.      |
 | `orders`           | `OrderCondition`           | No       | -       | Recommended default sort entry. Supports a single tuple (`["createdTime", "DESC"]`) or multiple tuples.                                  |
 | `initialParams`    | `QueryParamsWithoutFields` | No       | -       | Advanced initial query settings such as `filters`, `pageSize`, `groupBy`, `effectiveDate`. Top-level `orders` takes precedence.          |
@@ -771,3 +773,7 @@ Built-in reserved fields are always excluded:
 - `SideCard` / `SideList` `Field` children render in display mode via `RecordContext` — no `FieldPropsContext` is needed.
 - `SideTree` wraps the existing `TreePanel`; `searchMode` defaults to `"local"`, or `"server"` when `remoteSearch` is enabled.
 - `SideCard` and `SideList` can also be used inside `ModelSideForm` as the data source panel (see [ModelSideForm](../side-form)).
+
+## ModelTab
+
+For placing multiple views (different models or view types) under a shared tab bar, see [ModelTab](../modelTab/README.md).

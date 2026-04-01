@@ -62,6 +62,7 @@ export default function SettingPage() {
 | Prop                   | 类型        | 必填 | 默认值 | 说明 |
 | ---------------------- | ----------- | ---- | ------ | ---- |
 | `modelName`            | `string`    | 是   | -      | 加载到 `ModelForm` 的模型名。 |
+| `labelName`            | `string`    | 否   | -      | 覆盖「未选中 X」/「创建 X」等文案以及 `FormHeader` 使用的模型标签。默认 `metaModel.labelName`。 |
 | `enableWorkflow`       | `boolean`   | 否   | `false` | 右侧表单工具栏在编辑模式下显示工作流动作组。 |
 | `enableCreate`         | `boolean`   | 否   | `true` | 创建入口总开关（侧栏 + 空状态 + 工具栏「新建」）。 |
 | `enableDuplicate`      | `boolean`   | 否   | auto   | 右侧工具栏内置复制动作。`false` 关闭。 |

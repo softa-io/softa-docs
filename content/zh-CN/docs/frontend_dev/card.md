@@ -299,7 +299,7 @@ import { SideTree } from "@/components/views/shared/side-panel/SideTree";
 - 激活的树筛选在工具栏激活状态栏中以徽章展示
 - 各侧栏组件均支持 `remoteSearch`，可从客户端筛选切换为服务端搜索
 
-完整侧栏 props 说明见 [ModelTable 侧栏（可选）](../table/README.md#side-panel-optional)。
+完整侧栏 props 说明见 [ModelTable 侧栏（可选）](../table#side-panel-optional)。
 
 ## 标签页
 
@@ -364,6 +364,8 @@ const tabs: ModelTableTab[] = [
 | Prop          | Type                                                          | Required | Default | 说明                                                                                                        |
 | ------------- | ------------------------------------------------------------- | -------- | ------- | ------------------------------------------------------------------------------------------------------------ |
 | `modelName`   | `string`                                                      | 是      | -       | 元数据与数据 API 使用的模型名。                                                                        |
+| `labelName`   | `string`                                                      | 否       | -       | 覆盖页头标题。默认 `metaModel.labelName`。                                                                   |
+| `description` | `string`                                                      | 否       | -       | 覆盖页头副标题。默认 `metaModel.description`。                                                               |
 | `orders`      | `OrderCondition`                                              | 否       | -       | 默认排序。支持单条 `["field", "DESC"]` 或多条 `[["a", "ASC"], ["b", "DESC"]]`。                 |
 | `initialParams` | `QueryParamsWithoutFields`                                  | 否       | -       | 高级初始查询（`filters`、`pageSize` 等）。                                               |
 | `children`    | `ReactNode`                                                   | 否       | -       | `ModelCard.Header`、`Field`、`ModelCard.Footer`，以及可选的一个侧栏。                                |

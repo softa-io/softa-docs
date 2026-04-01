@@ -350,7 +350,7 @@ import { SideTree } from "@/components/views/shared/side-panel/SideTree";
 | `disabledField`        | `string`                   | 否   | -         | 树节点禁用状态字段 |
 | `sortField`            | `string`                   | 否   | -         | 树排序字段 |
 | `selectionMode`        | `"single" \| "multi"`      | 否   | `"single"` | 树选择模式 |
-| `remoteSearch`         | `boolean`                  | 否   | `false`   | 为 `true` 时，搜索走远程接口（`searchMode="server"`），而非仅客户端筛选 |
+| `remoteSearch`         | `boolean`                  | 否   | `false`   | 为 `true` 时，树搜索会触发远程 API（`searchMode="server"`），而不是只做客户端筛选 |
 | `defaultExpandedLevel` | `number`                   | 否   | -         | 初始展开深度 |
 | `height`               | `number`                   | 否   | `560`     | 树视口高度 |
 | `className`            | `string`                   | 否   | -         | 侧栏 `className` |
@@ -487,6 +487,8 @@ import { SideList } from "@/components/views/shared/side-panel/SideList";
 | Prop                | 类型                       | 必填 | 默认值  | 说明 |
 | ------------------- | -------------------------- | ---- | ------- | ---- |
 | `modelName`         | `string`                   | 是   | -       | 用于拉取元数据 API。 |
+| `labelName`         | `string`                   | 否   | -       | 覆盖表格头部主标题。省略时默认 `metaModel.labelName`。 |
+| `description`       | `string`                   | 否   | -       | 覆盖表格头部副标题。省略时默认 `metaModel.description`。 |
 | `inlineEdit`        | `boolean`                  | 否   | `false` | 启用按行点击的内联编辑模式。启用后，活跃行的可编辑单元格会渲染 `Field`，而不是跳转详情页。 |
 | `orders`            | `OrderCondition`           | 否   | -       | 推荐的默认排序入口。支持单个元组（`["createdTime", "DESC"]`）或多个元组。 |
 | `initialParams`     | `QueryParamsWithoutFields` | 否   | -       | 高级初始查询设置，例如 `filters`、`pageSize`、`groupBy`、`effectiveDate`。顶层 `orders` 优先级更高。 |
@@ -774,3 +776,7 @@ function UnlockDialog() {
 - `SideCard` / `SideList` 中的 `Field` 子节点通过 `RecordContext` 以展示模式渲染，无需 `FieldPropsContext`
 - `SideTree` 封装 `TreePanel`；`searchMode` 默认 `"local"`，启用 `remoteSearch` 时为 `"server"`
 - `SideCard` 与 `SideList` 也可用于 `ModelSideForm` 作为数据源面板（参见 [ModelSideForm](../side-form)）
+
+## ModelTab
+
+若要在同一组标签栏下放置多个视图（不同模型或不同视图类型），请参见 [ModelTab](../modelTab)。

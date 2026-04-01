@@ -80,11 +80,14 @@
 
 功能：
 
-- **字段占位符** — 以行内芯片形式插入模型字段。HTML 输出：`<span data-tpl-field="fieldPath" data-tpl-label="label">{{fieldPath}}</span>`
+- **字段占位符** — 以行内芯片插入模型字段。HTML 输出：`<span data-tpl-field="fieldPath" data-tpl-label="label">{{fieldPath}}</span>`
+- **自定义变量** — 以行内芯片插入一次性变量。HTML 输出：`<span data-tpl-variable="employee_name" data-tpl-label="Employee Name" data-tpl-value-type="String" data-tpl-required="true">{{employee_name}}</span>`
+- **签名占位** — 插入固定尺寸的流式签名占位，可在同一段文字中多个签名并排，签名之间可留间距或文字。HTML 输出：`<span data-tpl-signature="signature_1" data-tpl-label="Signature 1"></span>`
 - **关联字段展开** — 将 `ManyToOne` / `OneToOne` 关联展开一层，插入嵌套路径（如 `department.name`）
 - **循环表格** — 将 `OneToMany` / `ManyToMany` 关联以可选列的循环表格插入。HTML 输出：`<table data-tpl-loop="relationField" data-tpl-model="RelatedModel">` 及 `<th data-tpl-field="col">` 表头
-- **字段选择器** — 工具栏「插入字段」按钮打开浮层，列出按直接字段 / 关联 / 集合分组的字段
-- **两级懒加载** — 与 `RichText` 相同：只读时仅渲染 HTML 不加载 Tiptap；编辑时懒加载完整编辑器
+- **工具栏动作** — 「插入字段」「插入变量」「插入签名」可按 widget props 分别开关
+- **两级懒加载** — 与 `RichText` 相同：只读仅渲染 HTML；编辑时再懒加载完整编辑器
+- **已保存记录预览** — `DocumentTemplate` 富文本记录可在新标签打开 `/admin/document-template/[id]/preview`，左侧大纲可在变量与签名占位之间跳转，文档预览中高亮占位可填写自定义变量并在本地采集签名
 
 ```tsx
 <Field
@@ -104,12 +107,40 @@
 
 `TemplateEditor` widget props：
 
-| Prop        | 类型               | 默认值  | 说明                                                                                    |
-| ----------- | ------------------ | ------- | --------------------------------------------------------------------------------------- |
-| `modelName` | `string`           | -       | 可供插入的字段所属模型。支持静态值如 `"Employee"` 或字段引用如 `"{{ modelName }}"`。     |
-| `minHeight` | `number \| string` | `320px` | 编辑器最小高度。                                                                        |
+| Prop | 类型 | 默认值 | 说明 |
+| ---- | ---- | ------ | ---- |
+| `modelName` | `string` | - | 可供插入字段的模型。支持 `"Employee"` 等静态值，或 `"{{ modelName }}"` 等字段引用。 |
+| `minHeight` | `number \| string` | `320px` | 编辑器最小高度。 |
+| `enableInsertField` | `boolean` | `true` | 工具栏是否显示「插入字段」。 |
+| `enableInsertVariable` | `boolean` | `true` | 工具栏是否显示「插入变量」。 |
+| `enableInsertSignature` | `boolean` | `true` | 工具栏是否显示「插入签名」。 |
 
 若未提供 `modelName`，会回退到字段自身的 `metaField.modelName`。
+
+自定义变量 schema：
+
+| 属性 | 类型 | 说明 |
+| ---- | ---- | ---- |
+| `code` | `string` | 必填。必须以字母开头，其余仅字母、数字或下划线；在模板内唯一。 |
+| `label` | `string` | 必填，编辑器与只读预览中的展示标签。 |
+| `valueType` | `"String" \| "Date" \| "DateTime" \| "Boolean"` | 控制预览中的输入类型与格式化。 |
+| `required` | `boolean` | 必填变量在预览页填完前会显示校验反馈。 |
+
+自定义变量行为：
+
+- 「插入变量」会打开对话框填写 `code`、`label`、`valueType`、`required`
+- `code` 必填且在模板内唯一
+- 编辑器内可编辑已有变量芯片以更新 `code`、`label`、`valueType`、`required`
+
+签名占位行为：
+
+- 「插入签名」打开对话框，预填下一个 `signature_n` 的 code 与 label；插入前可自定义两者
+- `code` 必填且在模板内唯一
+- 存储为固定尺寸行内占位，尺寸为 `240 x 120`
+- 同一行可插入多个签名占位
+- 相邻签名占位可同处一行，中间可插入普通文字或间距
+- 编辑器内可编辑已有签名占位以更新 `code`、`label`
+- 预览页支持手绘签名与本地上传签名图
 
 ### `Markdown`
 

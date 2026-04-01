@@ -5,6 +5,7 @@ export default {
   form: "ModelForm",
   card: "ModelCard",
   sideForm: "ModelSideForm",
+  modelTab: "ModelTab",
   action: "Action",
   fields: "Field & Widget",
   dialog: "Dialog",

@@ -81,10 +81,13 @@ Storage format: HTML with `data-tpl-*` attributes for template-specific nodes. T
 Features:
 
 - **Field placeholders** — insert model fields as inline chips. HTML output: `<span data-tpl-field="fieldPath" data-tpl-label="label">{{fieldPath}}</span>`
+- **Custom variables** — insert single-use variables as inline chips. HTML output: `<span data-tpl-variable="employee_name" data-tpl-label="Employee Name" data-tpl-value-type="String" data-tpl-required="true">{{employee_name}}</span>`
+- **Signature slots** — insert fixed-size inline signature placeholders that can live inside text flow. Multiple signature slots can be inserted on the same line, sit side by side, and leave room for typed spacing or text between slots. HTML output: `<span data-tpl-signature="signature_1" data-tpl-label="Signature 1"></span>`
 - **Relation field expansion** — expand `ManyToOne` / `OneToOne` relations one level to insert nested paths (e.g. `department.name`)
 - **Loop tables** — insert `OneToMany` / `ManyToMany` relations as loop tables with selectable columns. HTML output: `<table data-tpl-loop="relationField" data-tpl-model="RelatedModel">` with `<th data-tpl-field="col">` headers
-- **Field picker** — toolbar "Insert Field" button opens a popover listing fields grouped by direct / relation / collection
+- **Toolbar actions** — `Insert Field`, `Insert Variable`, and `Insert Signature`, each individually configurable via widget props
 - **Two-level lazy loading** — same as `RichText`: read-only renders HTML without Tiptap; edit mode lazy-loads the full editor
+- **Saved-record preview** — `DocumentTemplate` RichText records can open `/admin/document-template/[id]/preview` in a new tab, use the left-side outline to jump between variables and signature slots, and click highlighted placeholders in the document preview to fill custom variables and capture signatures locally
 
 ```tsx
 <Field
@@ -104,12 +107,40 @@ Features:
 
 `TemplateEditor` widget props:
 
-| Prop        | Type               | Default  | Notes                                                    |
-| ----------- | ------------------ | -------- | -------------------------------------------------------- |
-| `modelName` | `string`           | -        | Model whose fields are available for insertion. Supports static values like `"Employee"` and field references like `"{{ modelName }}"`. |
-| `minHeight` | `number \| string` | `320px`  | Minimum editor height.                                   |
+| Prop | Type | Default | Notes |
+| ---- | ---- | ------- | ----- |
+| `modelName` | `string` | - | Model whose fields are available for insertion. Supports static values like `"Employee"` and field references like `"{{ modelName }}"`. |
+| `minHeight` | `number \| string` | `320px` | Minimum editor height. |
+| `enableInsertField` | `boolean` | `true` | Whether the toolbar shows `Insert Field`. |
+| `enableInsertVariable` | `boolean` | `true` | Whether the toolbar shows `Insert Variable`. |
+| `enableInsertSignature` | `boolean` | `true` | Whether the toolbar shows `Insert Signature`. |
 
 If `modelName` is omitted, falls back to the field's own `metaField.modelName`.
+
+Custom variable schema:
+
+| Attribute | Type | Notes |
+| --------- | ---- | ----- |
+| `code` | `string` | Required. Must start with a letter and then use only letters, numbers, or underscores. Unique within the template. |
+| `label` | `string` | Required display label for editor/read-only preview. |
+| `valueType` | `"String" \| "Date" \| "DateTime" \| "Boolean"` | Drives preview input type and formatting. |
+| `required` | `boolean` | Required variables show validation feedback in the preview page until filled. |
+
+Custom variable behavior:
+
+- `Insert Variable` opens a dialog for `code`, `label`, `valueType`, and `required`
+- `code` is required and must be unique within the template
+- existing variable chips can be edited in the editor to update `code`, `label`, `valueType`, and `required`
+
+Signature slot behavior:
+
+- `Insert Signature` opens a dialog prefilled with the next `signature_n` code and label; both fields can be customized before insertion
+- `code` is required and must be unique within the template
+- stored as fixed-size inline placeholders sized to `240 x 120`
+- multiple signature slots can be inserted on the same line
+- adjacent signature slots can share the same row, with normal text or spacing inserted between them
+- existing signature slots can be edited in the editor to update their `code` and `label`
+- preview page supports hand-drawn signatures and local uploaded signature images
 
 ### `Markdown`
 

@@ -967,6 +967,7 @@ import { FormBody, FormTab } from "@/components/views/form/components/FormBody";
 - `FormToolbar` 是页面级业务动作区域
 - `FormSection` 是局部 UI 动作区域，不直接执行模型 API 动作
 - 对于 API 动作（`default` / `dialog`），请放在 `FormToolbar`
+- 内置工作流 / 新建 / 复制 / 删除等工具栏行为由 `ModelForm` / `ModelSideForm` 的 props 配置
 - 编辑模式且有未保存修改时，点击业务动作会先询问是否丢弃修改再继续
 - 创建模式下，内置 `Duplicate` / `Delete` 会保持可见，但处于禁用状态
 - 内置 `Duplicate` 仍调用后端 `copyById`；`BaseModel.reversedFields` 的排除由后端 duplicate 语义负责处理
