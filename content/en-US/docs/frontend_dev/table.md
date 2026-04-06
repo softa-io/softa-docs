@@ -774,6 +774,6 @@ Built-in reserved fields are always excluded:
 - `SideTree` wraps the existing `TreePanel`; `searchMode` defaults to `"local"`, or `"server"` when `remoteSearch` is enabled.
 - `SideCard` and `SideList` can also be used inside `ModelSideForm` as the data source panel (see [ModelSideForm](../side-form)).
 
-## ModelTab
+## PageTabs
 
-For placing multiple views (different models or view types) under a shared tab bar, see [ModelTab](../modelTab/README.md).
+For placing multiple routed views under a shared tab bar, see [PageTabs](./components#pagetabs).

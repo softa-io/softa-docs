@@ -383,6 +383,7 @@ import { Action } from "@/components/actions/Action";
       <Field fieldName="updatedTime" />
     </SideCard.Footer>
 
+    {/* 动作 — placement 控制每张卡片内的位置 */}
     <Action type="link" labelName="Edit" placement="header" href="/design/app/{id}" />
     <Action type="custom" labelName="Copy" placement="inline" onClick={(ctx) => { /* ... */ }} />
     <Action type="custom" labelName="Archive" placement="more" onClick={(ctx) => { /* ... */ }} />
@@ -405,7 +406,7 @@ import { Action } from "@/components/actions/Action";
 | `sortField`    | `string`          | 否   | -        | 卡片列表排序字段 |
 | `limit`        | `number`          | 否   | `200`    | 最大加载条数 |
 | `searchable`   | `boolean`         | 否   | `false`  | 是否启用关键词搜索 |
-| `remoteSearch` | `boolean`         | 否   | `false`  | 为 `true` 时使用远程搜索（`["searchName", "CONTAINS", keyword]`），输入 300ms 防抖 |
+| `remoteSearch` | `boolean`         | 否   | `false`  | 为 `true` 时，搜索会触发远程 API（`["searchName", "CONTAINS", keyword]`），而不是只做客户端筛选；输入 300ms 防抖 |
 | `sortOptions`  | `SortOption[]`    | 否   | -        | 排序下拉选项 |
 | `title`        | `string`          | 否   | -        | 面板标题 |
 | `children`     | `ReactNode`       | 是   | -        | `SideCard.Header`、正文、`SideCard.Footer` 与 `Action` |
@@ -457,7 +458,7 @@ import { SideList } from "@/components/views/shared/side-panel/SideList";
 | `sortField`    | `string`          | 否   | -        | 列表排序字段 |
 | `limit`        | `number`          | 否   | `200`    | 最大加载条数 |
 | `searchable`   | `boolean`         | 否   | `false`  | 关键词搜索 |
-| `remoteSearch` | `boolean`         | 否   | `false`  | 为 `true` 时远程搜索，300ms 防抖 |
+| `remoteSearch` | `boolean`         | 否   | `false`  | 为 `true` 时，搜索会触发远程 API（`["searchName", "CONTAINS", keyword]`），而不是只做客户端筛选；输入 300ms 防抖 |
 | `sortOptions`  | `SortOption[]`    | 否   | -        | 排序下拉 |
 | `children`     | `ReactNode`       | 是   | -        | 含 `Field` 的行模板 |
 
@@ -777,6 +778,6 @@ function UnlockDialog() {
 - `SideTree` 封装 `TreePanel`；`searchMode` 默认 `"local"`，启用 `remoteSearch` 时为 `"server"`
 - `SideCard` 与 `SideList` 也可用于 `ModelSideForm` 作为数据源面板（参见 [ModelSideForm](../side-form)）
 
-## ModelTab
+## PageTabs
 
-若要在同一组标签栏下放置多个视图（不同模型或不同视图类型），请参见 [ModelTab](../modelTab)。
+若要在**共享标签栏**下放置多个**有独立路由**的视图，请参见 [PageTabs](./components#pagetabs)。
