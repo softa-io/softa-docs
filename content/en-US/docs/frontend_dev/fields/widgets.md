@@ -13,30 +13,30 @@ Related docs:
 
 ## FieldType -> WidgetType Matrix
 
-| FieldType     | Default behavior               | Supported WidgetType                                            |
-| ------------- | ------------------------------ | --------------------------------------------------------------- |
-| `String`      | single-line input              | `URL`, `Email`, `Text`, `RichText`, `TemplateEditor`, `Markdown`, `Code`, `Color` |
-| `MultiString` | tag-style comma/enter input    | -                                                               |
-| `Integer`     | numeric input                  | `Monetary`, `Percentage`, `Slider`                              |
-| `Long`        | numeric input                  | `Monetary`, `Percentage`, `Slider`                              |
-| `Double`      | numeric input                  | `Monetary`, `Percentage`, `Slider`                              |
-| `BigDecimal`  | decimal string input           | `Monetary`, `Percentage`, `Slider`                              |
-| `Boolean`     | switch                         | `CheckBox`                                                      |
-| `Date`        | date picker                    | `yyyy-MM`, `MM-dd`                                              |
-| `DateTime`    | datetime input                 | -                                                               |
-| `Time`        | time input                     | `HH:mm:ss`, `HH:mm`                                             |
-| `Option`      | single select                  | `Radio`, `StatusBar`, `Badge`                                   |
-| `MultiOption` | checkbox group                 | `CheckBox`, `Badge`                                             |
-| `ManyToOne`   | reference select               | `SelectTree`                                                    |
-| `OneToOne`    | reference select               | `SelectTree`                                                    |
-| `ManyToMany`  | relation table + picker dialog | `SelectTree`, `TagList`                                         |
-| `OneToMany`   | relation table                 | -                                                               |
-| `File`        | file upload                    | `Image`                                                         |
-| `MultiFile`   | multi-file upload              | `MultiImage`                                                    |
-| `JSON`        | CodeMirror JSON editor         | `JsonTree`                                                      |
-| `Filters`     | filter builder                 | -                                                               |
-| `Orders`      | order builder                  | -                                                               |
-| `DTO`         | CodeMirror JSON editor         | `JsonTree`                                                      |
+| FieldType     | Default behavior               | Supported WidgetType                                                              |
+| ------------- | ------------------------------ | --------------------------------------------------------------------------------- |
+| `String`      | single-line input              | `URL`, `Email`, `Text`, `RichText`, `TemplateEditor`, `Markdown`, `Code`, `Color`, `yyyy-MM`, `MM-dd` |
+| `MultiString` | tag-style comma/enter input    | -                                                                                 |
+| `Integer`     | numeric input                  | `Monetary`, `Percentage`, `Slider`                                                |
+| `Long`        | numeric input                  | `Monetary`, `Percentage`, `Slider`                                                |
+| `Double`      | numeric input                  | `Monetary`, `Percentage`, `Slider`                                                |
+| `BigDecimal`  | decimal string input           | `Monetary`, `Percentage`, `Slider`                                                |
+| `Boolean`     | switch                         | `CheckBox`                                                                        |
+| `Date`        | date picker                    | -                                                                                 |
+| `DateTime`    | datetime input                 | -                                                                                 |
+| `Time`        | time input                     | `HH:mm:ss`, `HH:mm`                                                               |
+| `Option`      | single select                  | `Radio`, `StatusBar`, `Badge`                                                     |
+| `MultiOption` | checkbox group                 | `CheckBox`, `Badge`                                                               |
+| `ManyToOne`   | reference select               | `SelectTree`                                                                      |
+| `OneToOne`    | reference select               | `SelectTree`                                                                      |
+| `ManyToMany`  | relation table + picker dialog | `SelectTree`, `TagList`                                                           |
+| `OneToMany`   | relation table                 | -                                                                                 |
+| `File`        | file upload                    | `Image`                                                                           |
+| `MultiFile`   | multi-file upload              | `MultiImage`                                                                      |
+| `JSON`        | CodeMirror JSON editor         | `JsonTree`                                                                        |
+| `Filters`     | filter builder                 | -                                                                                 |
+| `Orders`      | order builder                  | -                                                                                 |
+| `DTO`         | CodeMirror JSON editor         | `JsonTree`                                                                        |
 
 ## String Widgets
 
@@ -82,12 +82,12 @@ Features:
 
 - **Field placeholders** — insert model fields as inline chips. HTML output: `<span data-tpl-field="fieldPath" data-tpl-label="label">{{fieldPath}}</span>`
 - **Custom variables** — insert single-use variables as inline chips. HTML output: `<span data-tpl-variable="employee_name" data-tpl-label="Employee Name" data-tpl-value-type="String" data-tpl-required="true">{{employee_name}}</span>`
-- **Signature slots** — insert fixed-size inline signature placeholders that can live inside text flow. Multiple signature slots can be inserted on the same line, sit side by side, and leave room for typed spacing or text between slots. HTML output: `<span data-tpl-signature="signature_1" data-tpl-label="Signature 1"></span>`
+- **Signature slots** — insert fixed-size inline signature placeholders that can live inside text flow. Multiple signature slots can be inserted on the same line, sit side by side, and leave room for typed spacing or text between slots. Default toolbar presets map to signing-party slots such as `Sender` and `Receiver`. HTML output: `<span data-tpl-signature="Sender" data-tpl-label="Sender Signature"></span>`
 - **Relation field expansion** — expand `ManyToOne` / `OneToOne` relations one level to insert nested paths (e.g. `department.name`)
 - **Loop tables** — insert `OneToMany` / `ManyToMany` relations as loop tables with selectable columns. HTML output: `<table data-tpl-loop="relationField" data-tpl-model="RelatedModel">` with `<th data-tpl-field="col">` headers
 - **Toolbar actions** — `Insert Field`, `Insert Variable`, and `Insert Signature`, each individually configurable via widget props
 - **Two-level lazy loading** — same as `RichText`: read-only renders HTML without Tiptap; edit mode lazy-loads the full editor
-- **Saved-record preview** — `DocumentTemplate` RichText records can open `/admin/document-template/[id]/preview` in a new tab, use the left-side outline to jump between variables and signature slots, and click highlighted placeholders in the document preview to fill custom variables and capture signatures locally
+- **Saved-record preview** — `DocumentTemplate` RichText records can open `/admin/document-template/[id]/preview` in a new tab, use the left-side outline to jump between variables and signature slots, switch `Preview As` between `All`, `Sender`, and `Receiver`, and click highlighted placeholders in the document preview to fill custom variables and capture signatures locally
 
 ```tsx
 <Field
@@ -107,24 +107,24 @@ Features:
 
 `TemplateEditor` widget props:
 
-| Prop | Type | Default | Notes |
-| ---- | ---- | ------- | ----- |
-| `modelName` | `string` | - | Model whose fields are available for insertion. Supports static values like `"Employee"` and field references like `"{{ modelName }}"`. |
-| `minHeight` | `number \| string` | `320px` | Minimum editor height. |
-| `enableInsertField` | `boolean` | `true` | Whether the toolbar shows `Insert Field`. |
-| `enableInsertVariable` | `boolean` | `true` | Whether the toolbar shows `Insert Variable`. |
-| `enableInsertSignature` | `boolean` | `true` | Whether the toolbar shows `Insert Signature`. |
+| Prop                    | Type               | Default | Notes                                                                                                                                   |
+| ----------------------- | ------------------ | ------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `modelName`             | `string`           | -       | Model whose fields are available for insertion. Supports static values like `"Employee"` and field references like `"{{ modelName }}"`. |
+| `minHeight`             | `number \| string` | `320px` | Minimum editor height.                                                                                                                  |
+| `enableInsertField`     | `boolean`          | `true`  | Whether the toolbar shows `Insert Field`.                                                                                               |
+| `enableInsertVariable`  | `boolean`          | `true`  | Whether the toolbar shows `Insert Variable`.                                                                                            |
+| `enableInsertSignature` | `boolean`          | `true`  | Whether the toolbar shows `Insert Signature`.                                                                                           |
 
 If `modelName` is omitted, falls back to the field's own `metaField.modelName`.
 
 Custom variable schema:
 
-| Attribute | Type | Notes |
-| --------- | ---- | ----- |
-| `code` | `string` | Required. Must start with a letter and then use only letters, numbers, or underscores. Unique within the template. |
-| `label` | `string` | Required display label for editor/read-only preview. |
-| `valueType` | `"String" \| "Date" \| "DateTime" \| "Boolean"` | Drives preview input type and formatting. |
-| `required` | `boolean` | Required variables show validation feedback in the preview page until filled. |
+| Attribute   | Type                                            | Notes                                                                                                              |
+| ----------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `code`      | `string`                                        | Required. Must start with a letter and then use only letters, numbers, or underscores. Unique within the template. |
+| `label`     | `string`                                        | Required display label for editor/read-only preview.                                                               |
+| `valueType` | `"String" \| "Date" \| "DateTime" \| "Boolean"` | Drives preview input type and formatting.                                                                          |
+| `required`  | `boolean`                                       | Required variables show validation feedback in the preview page until filled.                                      |
 
 Custom variable behavior:
 
@@ -134,13 +134,46 @@ Custom variable behavior:
 
 Signature slot behavior:
 
-- `Insert Signature` opens a dialog prefilled with the next `signature_n` code and label; both fields can be customized before insertion
+- `Insert Signature` opens a dropdown with `Sender Signature` and `Receiver Signature`
+- selecting `Sender Signature` inserts a signature slot with `code="Sender"`
+- selecting `Receiver Signature` inserts a signature slot with `code="Receiver"`
 - `code` is required and must be unique within the template
 - stored as fixed-size inline placeholders sized to `240 x 120`
 - multiple signature slots can be inserted on the same line
 - adjacent signature slots can share the same row, with normal text or spacing inserted between them
 - existing signature slots can be edited in the editor to update their `code` and `label`
 - preview page supports hand-drawn signatures and local uploaded signature images
+
+Role-aware preview and signing behavior:
+
+- `/admin/document-template/[id]/preview` includes a `Preview As` selector with `All`, `Sender`, and `Receiver`
+- `Preview As = All` keeps every signature slot editable for admin/template testing workflows
+- `Preview As = Sender` only allows the `Sender` signature slot to open the signature dialog; other signature slots render as locked/read-only
+- `Preview As = Receiver` only allows the `Receiver` signature slot to open the signature dialog; other signature slots render as locked/read-only
+- the preview outline mirrors this state by marking the active party slot as editable and the other slot as locked
+- `/admin/signing-document/[id]/sign` is the focused signing workspace for a single assigned slot and displays the resolved signing party label from `SigningDocument.signSlotCode`
+- the signing workspace only submits the assigned `signSlotCode`; if no slot is assigned, signing is blocked and the page shows an empty-state warning instead of the signature capture workflow
+- current preset role labels are `Sender` and `Receiver`; if additional parties are introduced later, update the shared signature preset definitions before extending template or signing flows
+
+### `yyyy-MM`
+
+Month-year picker stored as a `"yyyy-MM"` string (e.g. `"2024-03"`). Renders a popover panel with year navigation (arrows) and a month grid. Clicking the year label switches to a year-grid page view; clicking a year returns to the month grid.
+
+```tsx
+<Field fieldName="period" widgetType="yyyy-MM" />
+```
+
+Value contract: `string` in `"yyyy-MM"` format, or `undefined` when cleared.
+
+### `MM-dd`
+
+Month-day picker stored as a `"MM-dd"` string (e.g. `"03-15"`). Renders a popover panel with a day-grid calendar. Clicking the month label in the header switches to a month-grid view; clicking a month returns to the day grid for that month. February 29 is always selectable (year-independent field).
+
+```tsx
+<Field fieldName="anniversary" widgetType="MM-dd" />
+```
+
+Value contract: `string` in `"MM-dd"` format, or `undefined` when cleared.
 
 ### `Markdown`
 
@@ -187,18 +220,18 @@ Preview is rendered by `react-markdown` with `remark-gfm` enabled by default.
 
 `Code` widget props:
 
-| Prop           | Type                                                                                               | Default   | Notes                         |
-| -------------- | -------------------------------------------------------------------------------------------------- | --------- | ----------------------------- |
-| `language`     | `"plain" \| "java" \| "html" \| "json" \| "markdown" \| "python" \| "sql" \| "yaml" \| "yml"`   | `"plain"` | Syntax highlighting language. |
-| `height`       | `number \| string`                                                                                 | -         | Fixed editor height.          |
-| `minHeight`    | `number \| string`                                                                                 | `240px`   | Minimum editor height.        |
-| `maxHeight`    | `number \| string`                                                                                 | -         | Maximum editor height.        |
-| `lineNumbers`  | `boolean`                                                                                          | `true`    | Editor gutter line numbers.   |
-| `lineWrapping` | `boolean`                                                                                          | `true`    | Wrap long lines.              |
-| `tabSize`      | `number`                                                                                           | `2`       | Editor indentation size.      |
-| `autoFocus`    | `boolean`                                                                                          | `false`   | Focus editor after mount.     |
-| `showDownload` | `boolean`                                                                                          | `true`    | Toolbar **Download** control. Set `false` to hide. Hidden while the form is submitting (`isSubmitting`). |
-| `downloadFileName` | `string`                                                                                       | -         | Suggested download file name. Defaults to a sanitized `fieldName` plus an extension inferred from `language` (for example `script.sql`). |
+| Prop               | Type                                                                                          | Default   | Notes                                                                                                                                    |
+| ------------------ | --------------------------------------------------------------------------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `language`         | `"plain" \| "java" \| "html" \| "json" \| "markdown" \| "python" \| "sql" \| "yaml" \| "yml"` | `"plain"` | Syntax highlighting language.                                                                                                            |
+| `height`           | `number \| string`                                                                            | -         | Fixed editor height.                                                                                                                     |
+| `minHeight`        | `number \| string`                                                                            | `240px`   | Minimum editor height.                                                                                                                   |
+| `maxHeight`        | `number \| string`                                                                            | -         | Maximum editor height.                                                                                                                   |
+| `lineNumbers`      | `boolean`                                                                                     | `true`    | Editor gutter line numbers.                                                                                                              |
+| `lineWrapping`     | `boolean`                                                                                     | `true`    | Wrap long lines.                                                                                                                         |
+| `tabSize`          | `number`                                                                                      | `2`       | Editor indentation size.                                                                                                                 |
+| `autoFocus`        | `boolean`                                                                                     | `false`   | Focus editor after mount.                                                                                                                |
+| `showDownload`     | `boolean`                                                                                     | `true`    | Toolbar **Download** control. Set `false` to hide. Hidden while the form is submitting (`isSubmitting`).                                 |
+| `downloadFileName` | `string`                                                                                      | -         | Suggested download file name. Defaults to a sanitized `fieldName` plus an extension inferred from `language` (for example `script.sql`). |
 
 Editor toolbar:
 
@@ -299,30 +332,28 @@ When `OptionReference.itemColor` has a value, `Option` and `MultiOption` table c
 
 Supported `itemColor` values and their badge variants:
 
-| `itemColor` keyword | Badge variant | Visual                                        |
-| ------------------- | ------------- | --------------------------------------------- |
-| `green`             | `success`     | green border / background / text              |
-| `yellow`, `orange`  | `warning`     | amber border / background / text              |
-| `red`               | `error`       | red border / background / text                |
-| `blue`              | `info`        | blue border / background / text               |
-| _(other / empty)_   | `neutral`     | slate border / background / text              |
+| `itemColor` keyword | Badge variant | Visual                           |
+| ------------------- | ------------- | -------------------------------- |
+| `green`             | `success`     | green border / background / text |
+| `yellow`, `orange`  | `warning`     | amber border / background / text |
+| `red`               | `error`       | red border / background / text   |
+| `blue`              | `info`        | blue border / background / text  |
+| _(other / empty)_   | `neutral`     | slate border / background / text |
 
 Color matching is case-insensitive and uses `includes`, so values like `"Green"`, `"light-green"`, or `"#green-500"` all match.
 
 When `itemColor` is empty, the mapper also falls back to `itemName` / `itemCode` text pattern matching:
 
-| Text pattern (in `itemName` or `itemCode`)      | Badge variant |
-| ------------------------------------------------ | ------------- |
-| `success`, `active`, `enabled`, `approved`       | `success`     |
-| `pending`, `warning`, `draft`                    | `warning`     |
-| `error`, `failed`, `inactive`, `disabled`, `rejected` | `error`  |
-| `processing`, `running`, `published`             | `info`        |
+| Text pattern (in `itemName` or `itemCode`)            | Badge variant |
+| ----------------------------------------------------- | ------------- |
+| `success`, `active`, `enabled`, `approved`            | `success`     |
+| `pending`, `warning`, `draft`                         | `warning`     |
+| `error`, `failed`, `inactive`, `disabled`, `rejected` | `error`       |
+| `processing`, `running`, `published`                  | `info`        |
 
 ## Date And Time Widgets
 
 ```tsx
-<Field fieldName="period" widgetType="yyyy-MM" />
-<Field fieldName="anniversary" widgetType="MM-dd" />
 <Field fieldName="startTime" widgetType="HH:mm" />
 <Field fieldName="startTime" widgetType="HH:mm:ss" />
 ```
@@ -423,10 +454,10 @@ JSON editor widget props:
 
 `Filters` widget props:
 
-| Prop            | Type       | Default | Notes                        |
-| --------------- | ---------- | ------- | ---------------------------- |
-| `allowedFields` | `string[]` | -       | Whitelist searchable fields. |
-| `excludeFields` | `string[]` | -       | Hide fields from the builder.|
+| Prop            | Type       | Default | Notes                         |
+| --------------- | ---------- | ------- | ----------------------------- |
+| `allowedFields` | `string[]` | -       | Whitelist searchable fields.  |
+| `excludeFields` | `string[]` | -       | Hide fields from the builder. |
 
 ### `Orders`
 
@@ -436,7 +467,7 @@ JSON editor widget props:
 
 `Orders` widget props:
 
-| Prop            | Type       | Default | Notes                     |
-| --------------- | ---------- | ------- | ------------------------- |
-| `allowedFields` | `string[]` | -       | Whitelist sortable fields.|
-| `excludeFields` | `string[]` | -       | Hide fields from builder. |
+| Prop            | Type       | Default | Notes                      |
+| --------------- | ---------- | ------- | -------------------------- |
+| `allowedFields` | `string[]` | -       | Whitelist sortable fields. |
+| `excludeFields` | `string[]` | -       | Hide fields from builder.  |

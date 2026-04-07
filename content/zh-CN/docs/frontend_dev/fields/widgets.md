@@ -13,30 +13,30 @@
 
 ## FieldType -> WidgetType 矩阵
 
-| FieldType     | 默认行为                 | 支持的 WidgetType                                             |
-| ------------- | ------------------------ | ------------------------------------------------------------- |
-| `String`      | 单行输入                 | `URL`, `Email`, `Text`, `RichText`, `TemplateEditor`, `Markdown`, `Code`, `Color` |
-| `MultiString` | 逗号 / 回车提交的标签式输入 | -                                                             |
-| `Integer`     | 数字输入                 | `Monetary`, `Percentage`, `Slider`                            |
-| `Long`        | 数字输入                 | `Monetary`, `Percentage`, `Slider`                            |
-| `Double`      | 数字输入                 | `Monetary`, `Percentage`, `Slider`                            |
-| `BigDecimal`  | 保留小数字符串语义的输入 | `Monetary`, `Percentage`, `Slider`                            |
-| `Boolean`     | 开关                     | `CheckBox`                                                    |
-| `Date`        | 日期选择器               | `yyyy-MM`, `MM-dd`                                            |
-| `DateTime`    | 日期时间输入             | -                                                             |
-| `Time`        | 时间输入                 | `HH:mm:ss`, `HH:mm`                                           |
-| `Option`      | 单选下拉                 | `Radio`, `StatusBar`, `Badge`                                 |
-| `MultiOption` | 复选框组                 | `CheckBox`, `Badge`                                           |
-| `ManyToOne`   | 关联选择                 | `SelectTree`                                                  |
-| `OneToOne`    | 关联选择                 | `SelectTree`                                                  |
-| `ManyToMany`  | 关联表格 + 选择器对话框  | `SelectTree`, `TagList`                                       |
-| `OneToMany`   | 关联表格                 | -                                                             |
-| `File`        | 文件上传                 | `Image`                                                       |
-| `MultiFile`   | 多文件上传               | `MultiImage`                                                  |
-| `JSON`        | CodeMirror JSON 编辑器   | `JsonTree`                                                    |
-| `Filters`     | 过滤构建器               | -                                                             |
-| `Orders`      | 排序构建器               | -                                                             |
-| `DTO`         | CodeMirror JSON 编辑器   | `JsonTree`                                                    |
+| FieldType     | 默认行为                   | 支持的 WidgetType                                                                                   |
+| ------------- | -------------------------- | --------------------------------------------------------------------------------------------------- |
+| `String`      | 单行输入                   | `URL`, `Email`, `Text`, `RichText`, `TemplateEditor`, `Markdown`, `Code`, `Color`, `yyyy-MM`, `MM-dd` |
+| `MultiString` | 逗号 / 回车提交的标签式输入 | -                                                                                                   |
+| `Integer`     | 数字输入                   | `Monetary`, `Percentage`, `Slider`                                                                  |
+| `Long`        | 数字输入                   | `Monetary`, `Percentage`, `Slider`                                                                  |
+| `Double`      | 数字输入                   | `Monetary`, `Percentage`, `Slider`                                                                  |
+| `BigDecimal`  | 保留小数字符串语义的输入   | `Monetary`, `Percentage`, `Slider`                                                                  |
+| `Boolean`     | 开关                       | `CheckBox`                                                                                          |
+| `Date`        | 日期选择器                 | -                                                                                                   |
+| `DateTime`    | 日期时间输入               | -                                                                                                   |
+| `Time`        | 时间输入                   | `HH:mm:ss`, `HH:mm`                                                                                 |
+| `Option`      | 单选                       | `Radio`, `StatusBar`, `Badge`                                                                       |
+| `MultiOption` | 复选框组                   | `CheckBox`, `Badge`                                                                                 |
+| `ManyToOne`   | 关联选择                   | `SelectTree`                                                                                        |
+| `OneToOne`    | 关联选择                   | `SelectTree`                                                                                        |
+| `ManyToMany`  | 关联表格 + 选择器对话框    | `SelectTree`, `TagList`                                                                             |
+| `OneToMany`   | 关联表格                   | -                                                                                                   |
+| `File`        | 文件上传                   | `Image`                                                                                             |
+| `MultiFile`   | 多文件上传                 | `MultiImage`                                                                                        |
+| `JSON`        | CodeMirror JSON 编辑器     | `JsonTree`                                                                                          |
+| `Filters`     | 过滤构建器                 | -                                                                                                   |
+| `Orders`      | 排序构建器                 | -                                                                                                   |
+| `DTO`         | CodeMirror JSON 编辑器     | `JsonTree`                                                                                          |
 
 ## 字符串类 Widgets
 
@@ -82,12 +82,12 @@
 
 - **字段占位符** — 以行内芯片插入模型字段。HTML 输出：`<span data-tpl-field="fieldPath" data-tpl-label="label">{{fieldPath}}</span>`
 - **自定义变量** — 以行内芯片插入一次性变量。HTML 输出：`<span data-tpl-variable="employee_name" data-tpl-label="Employee Name" data-tpl-value-type="String" data-tpl-required="true">{{employee_name}}</span>`
-- **签名占位** — 插入固定尺寸的流式签名占位，可在同一段文字中多个签名并排，签名之间可留间距或文字。HTML 输出：`<span data-tpl-signature="signature_1" data-tpl-label="Signature 1"></span>`
+- **签名槽** — 插入固定尺寸、可内联于文字流中的签名占位。同一行可插入多个签名槽，并排显示，槽之间可留打字间距或文字。默认工具栏预设对应签署方槽位（如 `Sender` 与 `Receiver`）。HTML 输出：`<span data-tpl-signature="Sender" data-tpl-label="Sender Signature"></span>`
 - **关联字段展开** — 将 `ManyToOne` / `OneToOne` 关联展开一层，插入嵌套路径（如 `department.name`）
 - **循环表格** — 将 `OneToMany` / `ManyToMany` 关联以可选列的循环表格插入。HTML 输出：`<table data-tpl-loop="relationField" data-tpl-model="RelatedModel">` 及 `<th data-tpl-field="col">` 表头
-- **工具栏动作** — 「插入字段」「插入变量」「插入签名」可按 widget props 分别开关
+- **工具栏动作** — 「插入字段」「插入变量」「插入签名」可按 widget props 分别配置
 - **两级懒加载** — 与 `RichText` 相同：只读仅渲染 HTML；编辑时再懒加载完整编辑器
-- **已保存记录预览** — `DocumentTemplate` 富文本记录可在新标签打开 `/admin/document-template/[id]/preview`，左侧大纲可在变量与签名占位之间跳转，文档预览中高亮占位可填写自定义变量并在本地采集签名
+- **已保存记录预览** — `DocumentTemplate` 富文本记录可在新标签打开 `/admin/document-template/[id]/preview`，左侧大纲可在变量与签名槽之间跳转，`Preview As` 可在 `All`、`Sender`、`Receiver` 间切换，点击文档预览中的高亮占位可填写自定义变量并在本地采集签名
 
 ```tsx
 <Field
@@ -107,40 +107,73 @@
 
 `TemplateEditor` widget props：
 
-| Prop | 类型 | 默认值 | 说明 |
-| ---- | ---- | ------ | ---- |
-| `modelName` | `string` | - | 可供插入字段的模型。支持 `"Employee"` 等静态值，或 `"{{ modelName }}"` 等字段引用。 |
-| `minHeight` | `number \| string` | `320px` | 编辑器最小高度。 |
-| `enableInsertField` | `boolean` | `true` | 工具栏是否显示「插入字段」。 |
-| `enableInsertVariable` | `boolean` | `true` | 工具栏是否显示「插入变量」。 |
-| `enableInsertSignature` | `boolean` | `true` | 工具栏是否显示「插入签名」。 |
+| Prop                    | 类型               | 默认值  | 说明                                                                                                                                    |
+| ----------------------- | ------------------ | ------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `modelName`             | `string`           | -       | 可供插入字段的模型。支持 `"Employee"` 等静态值，或 `"{{ modelName }}"` 等字段引用。                                                     |
+| `minHeight`             | `number \| string` | `320px` | 编辑器最小高度。                                                                                                                        |
+| `enableInsertField`     | `boolean`          | `true`  | 工具栏是否显示 `Insert Field`。                                                                                                         |
+| `enableInsertVariable`  | `boolean`          | `true`  | 工具栏是否显示 `Insert Variable`。                                                                                                     |
+| `enableInsertSignature` | `boolean`          | `true`  | 工具栏是否显示 `Insert Signature`。                                                                                                    |
 
 若未提供 `modelName`，会回退到字段自身的 `metaField.modelName`。
 
 自定义变量 schema：
 
-| 属性 | 类型 | 说明 |
-| ---- | ---- | ---- |
-| `code` | `string` | 必填。必须以字母开头，其余仅字母、数字或下划线；在模板内唯一。 |
-| `label` | `string` | 必填，编辑器与只读预览中的展示标签。 |
-| `valueType` | `"String" \| "Date" \| "DateTime" \| "Boolean"` | 控制预览中的输入类型与格式化。 |
-| `required` | `boolean` | 必填变量在预览页填完前会显示校验反馈。 |
+| 属性        | 类型                                            | 说明                                                                                                              |
+| ----------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `code`      | `string`                                        | 必填。必须以字母开头，其余仅字母、数字或下划线；在模板内唯一。                                                     |
+| `label`     | `string`                                        | 必填，编辑器与只读预览中的展示标签。                                                                             |
+| `valueType` | `"String" \| "Date" \| "DateTime" \| "Boolean"` | 控制预览中的输入类型与格式化。                                                                                   |
+| `required`  | `boolean`                                       | 必填变量在预览页填完前会显示校验反馈。                                                                           |
 
 自定义变量行为：
 
-- 「插入变量」会打开对话框填写 `code`、`label`、`valueType`、`required`
+- `Insert Variable` 会打开对话框填写 `code`、`label`、`valueType`、`required`
 - `code` 必填且在模板内唯一
 - 编辑器内可编辑已有变量芯片以更新 `code`、`label`、`valueType`、`required`
 
-签名占位行为：
+签名槽行为：
 
-- 「插入签名」打开对话框，预填下一个 `signature_n` 的 code 与 label；插入前可自定义两者
+- `Insert Signature` 打开下拉菜单，包含 `Sender Signature` 与 `Receiver Signature`
+- 选择 `Sender Signature` 会插入 `code="Sender"` 的签名槽
+- 选择 `Receiver Signature` 会插入 `code="Receiver"` 的签名槽
 - `code` 必填且在模板内唯一
 - 存储为固定尺寸行内占位，尺寸为 `240 x 120`
-- 同一行可插入多个签名占位
-- 相邻签名占位可同处一行，中间可插入普通文字或间距
-- 编辑器内可编辑已有签名占位以更新 `code`、`label`
+- 同一行可插入多个签名槽
+- 相邻签名槽可同处一行，中间可插入普通文字或间距
+- 编辑器内可编辑已有签名槽以更新其 `code` 与 `label`
 - 预览页支持手绘签名与本地上传签名图
+
+与角色相关的预览与签署行为：
+
+- `/admin/document-template/[id]/preview` 提供 `Preview As` 选择器，可选 `All`、`Sender`、`Receiver`
+- `Preview As = All` 时，所有签名槽均可编辑，适用于管理员 / 模板测试流程
+- `Preview As = Sender` 时，仅允许 `Sender` 签名槽打开签名对话框；其余签名槽为锁定 / 只读
+- `Preview As = Receiver` 时，仅允许 `Receiver` 签名槽打开签名对话框；其余签名槽为锁定 / 只读
+- 预览左侧大纲同步该状态：当前参与方槽位标为可编辑，另一方为锁定
+- `/admin/signing-document/[id]/sign` 为单一已分配槽位的专注签署工作区，签署方展示标签由 `SigningDocument.signSlotCode` 解析得到
+- 签署工作区仅提交已分配的 `signSlotCode`；若未分配槽位，则阻止签署，页面显示空状态警告而非签名采集流程
+- 当前预设角色标签为 `Sender` 与 `Receiver`；若后续引入其他参与方，需先更新共享的签名预设定义，再扩展模板或签署流程
+
+### `yyyy-MM`
+
+以 `"yyyy-MM"` 字符串存储的年月选择器（例如 `"2024-03"`）。弹出面板含年份导航（箭头）与月份网格。点击年份标签进入年份网格视图；点击某年回到该年的月份网格。
+
+```tsx
+<Field fieldName="period" widgetType="yyyy-MM" />
+```
+
+值契约：`"yyyy-MM"` 格式的 `string`，清空时为 `undefined`。
+
+### `MM-dd`
+
+以 `"MM-dd"` 字符串存储的月日选择器（例如 `"03-15"`）。弹出面板为日期网格日历。点击表头月份标签进入月份网格；点击某月回到该月的日期网格。2 月 29 日始终可选（与年份无关的字段）。
+
+```tsx
+<Field fieldName="anniversary" widgetType="MM-dd" />
+```
+
+值契约：`"MM-dd"` 格式的 `string`，清空时为 `undefined`。
 
 ### `Markdown`
 
@@ -158,12 +191,12 @@
 | -------------- | -------------------------------- | --------- | ------------------------------------------------------------------------ |
 | `mode`         | `"split" \| "edit" \| "preview"` | `"split"` | `split` 同时显示编辑器和预览；`edit` 仅编辑器；`preview` 仅预览。       |
 | `height`       | `number \| string`               | -         | 编辑器 / 预览面板的固定高度。                                            |
-| `minHeight`    | `number \| string`               | `320px`   | 面板最小高度。                                                            |
-| `maxHeight`    | `number \| string`               | -         | 面板最大高度。                                                            |
-| `lineNumbers`  | `boolean`                        | `true`    | 编辑器行号。                                                              |
+| `minHeight`    | `number \| string`               | `320px`   | 面板最小高度。                                                           |
+| `maxHeight`    | `number \| string`               | -         | 面板最大高度。                                                           |
+| `lineNumbers`  | `boolean`                        | `true`    | 编辑器行号。                                                             |
 | `lineWrapping` | `boolean`                        | `true`    | 是否折行显示较长的 Markdown 行。                                         |
-| `tabSize`      | `number`                         | `2`       | 编辑器缩进大小。                                                          |
-| `autoFocus`    | `boolean`                        | `false`   | 挂载后自动聚焦编辑器。                                                    |
+| `tabSize`      | `number`                         | `2`       | 编辑器缩进大小。                                                         |
+| `autoFocus`    | `boolean`                        | `false`   | 挂载后自动聚焦编辑器。                                                   |
 
 编辑器工具栏（在 `edit` 与 `split` 模式下显示）：
 
@@ -187,18 +220,18 @@
 
 `Code` widget props：
 
-| Prop           | 类型                                                                                               | 默认值    | 说明                   |
-| -------------- | -------------------------------------------------------------------------------------------------- | --------- | ---------------------- |
-| `language`     | `"plain" \| "java" \| "html" \| "json" \| "markdown" \| "python" \| "sql" \| "yaml" \| "yml"`   | `"plain"` | 语法高亮语言。         |
-| `height`       | `number \| string`                                                                                 | -         | 编辑器固定高度。       |
-| `minHeight`    | `number \| string`                                                                                 | `240px`   | 编辑器最小高度。       |
-| `maxHeight`    | `number \| string`                                                                                 | -         | 编辑器最大高度。       |
-| `lineNumbers`  | `boolean`                                                                                          | `true`    | 编辑器行号。           |
-| `lineWrapping` | `boolean`                                                                                          | `true`    | 是否折行。             |
-| `tabSize`      | `number`                                                                                           | `2`       | 编辑器缩进大小。       |
-| `autoFocus`    | `boolean`                                                                                          | `false`   | 挂载后自动聚焦编辑器。 |
-| `showDownload` | `boolean`                                                                                          | `true`    | 工具栏 **下载** 控件。设为 `false` 可隐藏。表单提交中（`isSubmitting`）时也会隐藏。 |
-| `downloadFileName` | `string`                                                                                       | -         | 建议的下载文件名。默认由净化后的 `fieldName` 加上根据 `language` 推断的扩展名（如 `script.sql`）。 |
+| Prop               | 类型                                                                                          | 默认值    | 说明                                                                                                                                     |
+| ------------------ | --------------------------------------------------------------------------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `language`         | `"plain" \| "java" \| "html" \| "json" \| "markdown" \| "python" \| "sql" \| "yaml" \| "yml"` | `"plain"` | 语法高亮语言。                                                                                                                           |
+| `height`           | `number \| string`                                                                            | -         | 编辑器固定高度。                                                                                                                         |
+| `minHeight`        | `number \| string`                                                                            | `240px`   | 编辑器最小高度。                                                                                                                         |
+| `maxHeight`        | `number \| string`                                                                            | -         | 编辑器最大高度。                                                                                                                         |
+| `lineNumbers`      | `boolean`                                                                                     | `true`    | 编辑器行号。                                                                                                                             |
+| `lineWrapping`     | `boolean`                                                                                     | `true`    | 是否折行。                                                                                                                               |
+| `tabSize`          | `number`                                                                                      | `2`       | 编辑器缩进大小。                                                                                                                         |
+| `autoFocus`        | `boolean`                                                                                     | `false`   | 挂载后自动聚焦编辑器。                                                                                                                   |
+| `showDownload`     | `boolean`                                                                                     | `true`    | 工具栏 **下载** 控件。设为 `false` 可隐藏。表单提交中（`isSubmitting`）时也会隐藏。                                                     |
+| `downloadFileName` | `string`                                                                                      | -         | 建议的下载文件名。默认由净化后的 `fieldName` 加上根据 `language` 推断的扩展名（如 `script.sql`）。                                       |
 
 编辑器工具栏：
 
@@ -263,9 +296,9 @@
 
 `Radio` widget props：
 
-| Prop        | 类型                         | 默认值       | 说明                 |
-| ----------- | ---------------------------- | ------------ | -------------------- |
-| `direction` | `"horizontal" \| "vertical"` | `"vertical"` | 单选项的布局方向。   |
+| Prop        | 类型                         | 默认值       | 说明               |
+| ----------- | ---------------------------- | ------------ | ------------------ |
+| `direction` | `"horizontal" \| "vertical"` | `"vertical"` | 单选项的布局方向。 |
 
 ### `StatusBar`
 
@@ -275,9 +308,9 @@
 
 `StatusBar` widget props：
 
-| Prop   | 类型      | 默认值 | 说明                     |
-| ------ | --------- | ------ | ------------------------ |
-| `wrap` | `boolean` | `true` | 是否允许状态项换行。     |
+| Prop   | 类型      | 默认值 | 说明                 |
+| ------ | --------- | ------ | -------------------- |
+| `wrap` | `boolean` | `true` | 是否允许状态项换行。 |
 
 ### `Badge`
 
@@ -293,36 +326,34 @@
 
 无 widget props。徽章变体由 `itemColor` / 文本规则推导（见下表）。
 
-### 选项颜色 → 徽章自动渲染 {#option-color--badge-auto-rendering}
+### 选项颜色 → 徽章自动渲染
 
 当 `OptionReference.itemColor` 有值时，`Option` 与 `MultiOption` 表格单元格会自动渲染为 `StatusBadge`，无需 `widgetType="StatusBar"`。
 
 支持的 `itemColor` 关键字与徽章变体：
 
-| `itemColor` 关键字 | 徽章变体 | 视觉 |
-| ------------------- | -------- | ---- |
-| `green`             | `success` | 绿色描边 / 背景 / 文字 |
-| `yellow`、`orange`  | `warning` | 琥珀色描边 / 背景 / 文字 |
-| `red`               | `error`   | 红色描边 / 背景 / 文字 |
-| `blue`              | `info`    | 蓝色描边 / 背景 / 文字 |
-| _（其他 / 空）_     | `neutral` | 石板色描边 / 背景 / 文字 |
+| `itemColor` 关键字 | 徽章变体  | 视觉                               |
+| ------------------ | --------- | ---------------------------------- |
+| `green`            | `success` | 绿色描边 / 背景 / 文字             |
+| `yellow`、`orange` | `warning` | 琥珀色描边 / 背景 / 文字           |
+| `red`              | `error`   | 红色描边 / 背景 / 文字             |
+| `blue`             | `info`    | 蓝色描边 / 背景 / 文字             |
+| _（其他 / 空）_    | `neutral` | 石板色描边 / 背景 / 文字           |
 
 颜色匹配不区分大小写，且使用 `includes`，故 `"Green"`、`"light-green"`、`"#green-500"` 等均能匹配。
 
 当 `itemColor` 为空时，映射器会回退到对 `itemName` / `itemCode` 的文本模式匹配：
 
-| `itemName` 或 `itemCode` 中的文本模式 | 徽章变体 |
-| ------------------------------------- | -------- |
-| `success`、`active`、`enabled`、`approved` | `success` |
-| `pending`、`warning`、`draft` | `warning` |
-| `error`、`failed`、`inactive`、`disabled`、`rejected` | `error` |
-| `processing`、`running`、`published` | `info` |
+| `itemName` 或 `itemCode` 中的文本模式                 | 徽章变体  |
+| ----------------------------------------------------- | --------- |
+| `success`、`active`、`enabled`、`approved`            | `success` |
+| `pending`、`warning`、`draft`                         | `warning` |
+| `error`、`failed`、`inactive`、`disabled`、`rejected` | `error`   |
+| `processing`、`running`、`published`                  | `info`    |
 
 ## 日期与时间类 Widgets
 
 ```tsx
-<Field fieldName="period" widgetType="yyyy-MM" />
-<Field fieldName="anniversary" widgetType="MM-dd" />
 <Field fieldName="startTime" widgetType="HH:mm" />
 <Field fieldName="startTime" widgetType="HH:mm:ss" />
 ```
@@ -366,20 +397,20 @@
 
 | Prop           | 类型                           | 默认值                                                                   | 说明                                                                     |
 | -------------- | ------------------------------ | ------------------------------------------------------------------------ | ------------------------------------------------------------------------ |
-| `accept`       | `string`                       | `"image/*"`                                                              | 原生文件输入的 `accept` 字符串。                                         |
-| `aspectRatio`  | `number \| string`             | -                                                                        | 仅影响预览比例。                                                          |
-| `objectFit`    | `"cover" \| "contain"`         | `"cover"`                                                                | 预览图的填充模式。                                                        |
-| `uploadText`   | `string`                       | `"Upload image"` 或 `"Upload photo"`                                     | 空状态上传文案。                                                          |
-| `helperText`   | `string`                       | -                                                                        | widget 局部帮助文案。                                                     |
-| `display`      | `"card" \| "avatar"`           | `"card"`                                                                 | `avatar` 为紧凑的头像布局。                                               |
-| `avatarSize`   | `"sm" \| "md" \| "lg" \| "xl"` | `"lg"`                                                                   | 仅在 `display="avatar"` 时生效。                                          |
+| `accept`       | `string`                       | `"image/*"`                                                              | 原生文件输入的 `accept` 字符串。                                       |
+| `aspectRatio`  | `number \| string`             | -                                                                        | 仅影响预览比例。                                                        |
+| `objectFit`    | `"cover" \| "contain"`         | `"cover"`                                                                | 预览图的填充模式。                                                      |
+| `uploadText`   | `string`                       | `"Upload image"` 或 `"Upload photo"`                                     | 空状态上传文案。                                                        |
+| `helperText`   | `string`                       | -                                                                        | widget 局部帮助文案。                                                   |
+| `display`      | `"card" \| "avatar"`           | `"card"`                                                                 | `avatar` 为紧凑的头像布局。                                             |
+| `avatarSize`   | `"sm" \| "md" \| "lg" \| "xl"` | `"lg"`                                                                   | 仅在 `display="avatar"` 时生效。                                        |
 | `previewUrl`   | `string`                       | -                                                                        | 当字段值仍是已保存文件 id 字符串时，用于显示已有图片的 URL。            |
-| `crop.enabled` | `boolean`                      | `false`                                                                  | 是否在上传前启用裁剪流程。                                                |
-| `crop.aspect`  | `number`                       | `avatar` 模式下为 `1`；否则取 `aspectRatio`，若仍为空则为 `4 / 3`        | 裁剪比例，`1` 表示正方形。                                                |
-| `crop.shape`   | `"rect" \| "round"`            | `"rect"`                                                                 | 裁剪形状。                                                                |
-| `crop.zoom`    | `boolean`                      | `true`                                                                   | 是否启用缩放控制。                                                        |
-| `crop.minZoom` | `number`                       | `1`                                                                      | 最小缩放值。                                                              |
-| `crop.maxZoom` | `number`                       | `3`                                                                      | 最大缩放值。                                                              |
+| `crop.enabled` | `boolean`                      | `false`                                                                  | 是否在上传前启用裁剪流程。                                              |
+| `crop.aspect`  | `number`                       | `avatar` 模式下为 `1`；否则取 `aspectRatio`，若仍为空则为 `4 / 3`      | 裁剪比例，`1` 表示正方形。                                              |
+| `crop.shape`   | `"rect" \| "round"`            | `"rect"`                                                                 | 裁剪形状。                                                              |
+| `crop.zoom`    | `boolean`                      | `true`                                                                   | 是否启用缩放控制。                                                      |
+| `crop.minZoom` | `number`                       | `1`                                                                      | 最小缩放值。                                                            |
+| `crop.maxZoom` | `number`                       | `3`                                                                      | 最大缩放值。                                                            |
 
 ### `MultiImage`
 
@@ -404,16 +435,16 @@
 
 JSON 编辑器 widget props：
 
-| Prop           | 类型               | 默认值 | 说明                   |
-| -------------- | ------------------ | ------ | ---------------------- |
-| `height`       | `number \| string` | -      | 编辑器固定高度。       |
-| `minHeight`    | `number \| string` | `240px` | 编辑器最小高度。      |
-| `maxHeight`    | `number \| string` | -      | 编辑器最大高度。       |
-| `lineNumbers`  | `boolean`          | `true` | 编辑器行号。           |
-| `lineWrapping` | `boolean`          | `true` | 是否折行。             |
-| `tabSize`      | `number`           | `2`    | 缩进大小。             |
-| `formatOnBlur` | `boolean`          | `true` | 失焦时重新格式化合法 JSON。 |
-| `autoFocus`    | `boolean`          | `false` | 挂载后自动聚焦编辑器。 |
+| Prop           | 类型               | 默认值  | 说明                     |
+| -------------- | ------------------ | ------- | ------------------------ |
+| `height`       | `number \| string` | -       | 编辑器固定高度。         |
+| `minHeight`    | `number \| string` | `240px` | 编辑器最小高度。         |
+| `maxHeight`    | `number \| string` | -       | 编辑器最大高度。         |
+| `lineNumbers`  | `boolean`          | `true`  | 编辑器行号。             |
+| `lineWrapping` | `boolean`          | `true`  | 是否折行。               |
+| `tabSize`      | `number`           | `2`     | 缩进大小。               |
+| `formatOnBlur` | `boolean`          | `true`  | 失焦时重新格式化合法 JSON。 |
+| `autoFocus`    | `boolean`          | `false` | 挂载后自动聚焦编辑器。   |
 
 ### `Filters`
 
@@ -436,7 +467,7 @@ JSON 编辑器 widget props：
 
 `Orders` widget props：
 
-| Prop            | 类型       | 默认值 | 说明                 |
-| --------------- | ---------- | ------ | -------------------- |
-| `allowedFields` | `string[]` | -      | 可排序字段白名单。   |
+| Prop            | 类型       | 默认值 | 说明                   |
+| --------------- | ---------- | ------ | ---------------------- |
+| `allowedFields` | `string[]` | -      | 可排序字段白名单。     |
 | `excludeFields` | `string[]` | -      | 在构建器中隐藏的字段。 |
