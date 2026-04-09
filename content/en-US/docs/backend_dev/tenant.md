@@ -92,3 +92,79 @@ The operations platform should deploy separate front-end and back-end services w
 
 ### 5.2 Tenant Properties in the Operations Platform
 In the operations platform, tenants are treated as an attribute of data authorization. The `tenantId` field in data models serves only as a cross-tenant data authorization condition. Even if the data model includes a `tenantId` field, it is not subject to multi-tenancy restrictions enforced by the ORM layer.
+
+
+## 6. Multi-Tenancy Development
+### 6.1 Runtime Preconditions
+To use shared-db multi-tenancy correctly:
+- set `system.enable-multi-tenancy=true`
+- mark the model metadata with `multiTenant=true`
+- ensure the model contains a `tenantId` field
+
+Startup validation:
+- `ModelManager` validates that every `multiTenant=true` model contains `tenantId`
+- otherwise startup fails with: `The multi-tenant model {modelName} must contain the tenantId field`
+
+### 6.2 Default ORM Behavior
+When multi-tenancy is enabled and the current context is not cross-tenant:
+- reads automatically append `tenant_id = Context.tenantId` for multi-tenant models
+- inserts automatically fill `tenantId` from the current context
+- non-multi-tenant models are not affected
+
+When `Context.crossTenant=true`:
+- tenant filtering is skipped
+- tenant auto-fill on insert is skipped
+
+This means cross-tenant writes must set `tenantId` explicitly if you still want to write tenant-owned rows.
+
+### 6.3 `@CrossTenant`
+Use this when a method must run once and see data across all tenants.
+
+Behavior:
+- clones the current context
+- sets `crossTenant=true`
+- sets `skipPermissionCheck=true`
+- runs the method once
+
+Typical usage:
+```java
+@CrossTenant
+public void rebuildGlobalStatistics() {
+    // ORM reads are not restricted by tenant_id here
+}
+```
+
+Use cases:
+- global reconciliation
+- data migration
+- admin-wide reporting
+
+### 6.4 `@PerTenant`
+Use this when one method invocation should be expanded into one execution per active tenant.
+
+Behavior:
+- requires `TenantInfoService`, which means multi-tenancy must be enabled
+- method return type must be `void`
+- queries active tenant IDs from `TenantInfoService`
+- runs once per active tenant
+- sets `tenantId` for each invocation
+- sets `skipPermissionCheck=true` for each invocation
+- uses virtual threads with max concurrency `100`
+- waits for all tenant executions and throws after collecting failures
+
+Typical usage:
+```java
+@PerTenant
+public void syncTenantCache() {
+    // Runs once per active tenant with that tenant's context
+}
+```
+
+Use cases:
+- per-tenant scheduled jobs
+- tenant-local cache refresh
+- tenant-local reconciliation
+
+Important rule:
+- Do not combine `@PerTenant` with upstream fan-out that already split work per tenant
+  (for example, `cron-starter` with `SysCron.tenantJobMode=PerTenant`), otherwise the job is expanded twice.
