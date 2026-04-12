@@ -5,6 +5,7 @@ export default {
   studio: "Studio 设计时",
   flow: "Flow",
   security: "安全",
+  message: "消息通知",
   integration: "数据集成",
   timeline: "时间轴模型",
   i18n: "多语言",

@@ -15,7 +15,7 @@
 
 | FieldType     | 默认行为                   | 支持的 WidgetType                                                                                   |
 | ------------- | -------------------------- | --------------------------------------------------------------------------------------------------- |
-| `String`      | 单行输入                   | `URL`, `Email`, `Text`, `RichText`, `TemplateEditor`, `Markdown`, `Code`, `Color`, `yyyy-MM`, `MM-dd` |
+| `String`      | 单行输入                   | `URL`, `Email`, `Text`, `RichText`, `TemplateEditor`, `Markdown`, `Code`, `Color`, `yyyy-MM`, `MM-dd`, `CronEditor` |
 | `MultiString` | 逗号 / 回车提交的标签式输入 | -                                                                                                   |
 | `Integer`     | 数字输入                   | `Monetary`, `Percentage`, `Slider`                                                                  |
 | `Long`        | 数字输入                   | `Monetary`, `Percentage`, `Slider`                                                                  |
@@ -174,6 +174,32 @@
 ```
 
 值契约：`"MM-dd"` 格式的 `string`，清空时为 `undefined`。
+
+### `CronEditor`
+
+可视化 Cron 表达式编辑器。存储标准 cron 字符串（5 段或 6 段）。打开弹出面板，各 cron 位置（秒、分、时、日、月、周）为分标签页编辑。每个标签支持四种模式：Every（通配符）、Specific values（多选网格）、Range（起止区间）、Interval（从 X 起每 N）。面板显示实时表达式预览与后续若干次计划执行时间。
+
+```tsx
+<Field fieldName="cronExpression" widgetType="CronEditor" />
+```
+
+```tsx
+<Field
+  fieldName="schedule"
+  widgetType="CronEditor"
+  widgetProps={{ format: "5-part" }}
+/>
+```
+
+`CronEditor` widget props：
+
+| Prop           | 类型                   | 默认值   | 说明                                           |
+| -------------- | ---------------------- | -------- | ---------------------------------------------- |
+| `format`       | `"6-part" \| "5-part"` | `"6-part"` | 6 段包含「秒」标签；5 段隐藏「秒」标签。     |
+| `showPreview`  | `boolean`              | `true`   | 是否在面板中显示后续执行时间预览。             |
+| `previewCount` | `number`               | `5`      | 展示的后续执行时间条数。                       |
+
+值契约：标准 cron 格式的 `string`（例如 6 段 `"0 30 9 * * *"`，5 段 `"30 9 * * *"`），清空时为空字符串。
 
 ### `Markdown`
 

@@ -30,21 +30,21 @@ templateType = RICH_TEXT
   1. 通过 PlaceholderUtils 从 htmlTemplate（HTML）提取 {{ }} 变量
   2. 为 OneToMany 字段构建 SubQueries
   3. 拉取数据：modelService.getById(modelName, rowId, fields, subQueries, ConvertType.DISPLAY)
-  4. 将 {{ }} 转为 ${} 并通过 FreeMarker 渲染 HTML（PdfFileGenerator）
+  4. 通过 Pebble 将 {{ }} 渲染为最终 HTML
   5. 通过 OpenPDF 将 HTML 转为 PDF
   6. 上传至 OSS -> 返回 FileInfo
 ```
 
 ### WORD 模板语法
 
-- 使用 `{{ variable }}` 占位符语法，支持 Spring EL。
+- 使用 `{{ variable }}` 占位符语法。
 - 对通过 `LoopRowTableRenderPolicy` 以循环表格行渲染的 OneToMany 字段，使用 `{{#fieldName}}`。
 - OneToMany 字段由模型元数据自动识别；SubQueries 会自动构建以加载关联数据。
 
 ### RICH_TEXT 模板
 
 - `htmlTemplate` 存储带 `{{ variable }}` 占位符的 HTML。
-- 渲染前将占位符转换为 FreeMarker 的 `${}` 语法。
+- 占位符通过 Pebble 渲染为最终 HTML。
 - 渲染后的 HTML 通过 OpenPDF 转为 PDF。
 
 ### 接口

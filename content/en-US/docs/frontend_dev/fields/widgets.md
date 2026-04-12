@@ -15,7 +15,7 @@ Related docs:
 
 | FieldType     | Default behavior               | Supported WidgetType                                                              |
 | ------------- | ------------------------------ | --------------------------------------------------------------------------------- |
-| `String`      | single-line input              | `URL`, `Email`, `Text`, `RichText`, `TemplateEditor`, `Markdown`, `Code`, `Color`, `yyyy-MM`, `MM-dd` |
+| `String`      | single-line input              | `URL`, `Email`, `Text`, `RichText`, `TemplateEditor`, `Markdown`, `Code`, `Color`, `yyyy-MM`, `MM-dd`, `CronEditor` |
 | `MultiString` | tag-style comma/enter input    | -                                                                                 |
 | `Integer`     | numeric input                  | `Monetary`, `Percentage`, `Slider`                                                |
 | `Long`        | numeric input                  | `Monetary`, `Percentage`, `Slider`                                                |
@@ -174,6 +174,32 @@ Month-day picker stored as a `"MM-dd"` string (e.g. `"03-15"`). Renders a popove
 ```
 
 Value contract: `string` in `"MM-dd"` format, or `undefined` when cleared.
+
+### `CronEditor`
+
+Visual cron expression editor. Stores a standard cron string (5-part or 6-part). Opens a popover panel with tabbed editors for each cron position (Seconds, Minutes, Hours, Day, Month, Week). Each tab supports four modes: Every (wildcard), Specific values (multi-select grid), Range (from–to), and Interval (every N starting at X). The panel shows a live expression preview and the next scheduled run times.
+
+```tsx
+<Field fieldName="cronExpression" widgetType="CronEditor" />
+```
+
+```tsx
+<Field
+  fieldName="schedule"
+  widgetType="CronEditor"
+  widgetProps={{ format: "5-part" }}
+/>
+```
+
+`CronEditor` widget props:
+
+| Prop           | Type                   | Default  | Notes                                                  |
+| -------------- | ---------------------- | -------- | ------------------------------------------------------ |
+| `format`       | `"6-part" \| "5-part"` | `"6-part"` | 6-part includes seconds tab; 5-part hides it.        |
+| `showPreview`  | `boolean`              | `true`   | Show next run times preview in the panel.              |
+| `previewCount` | `number`               | `5`      | Number of next run times to display.                   |
+
+Value contract: `string` in standard cron format (e.g. `"0 30 9 * * *"` for 6-part, `"30 9 * * *"` for 5-part), or empty string when cleared.
 
 ### `Markdown`
 
