@@ -20,15 +20,15 @@
 | `Integer`     | 数字输入                   | `Monetary`, `Percentage`, `Slider`                                                                  |
 | `Long`        | 数字输入                   | `Monetary`, `Percentage`, `Slider`                                                                  |
 | `Double`      | 数字输入                   | `Monetary`, `Percentage`, `Slider`                                                                  |
-| `BigDecimal`  | 保留小数字符串语义的输入   | `Monetary`, `Percentage`, `Slider`                                                                  |
+| `BigDecimal`  | 十进制字符串输入           | `Monetary`, `Percentage`, `Slider`                                                                  |
 | `Boolean`     | 开关                       | `CheckBox`                                                                                          |
 | `Date`        | 日期选择器                 | -                                                                                                   |
 | `DateTime`    | 日期时间输入               | -                                                                                                   |
 | `Time`        | 时间输入                   | `HH:mm:ss`, `HH:mm`                                                                                 |
 | `Option`      | 单选                       | `Radio`, `StatusBar`, `Badge`                                                                       |
 | `MultiOption` | 复选框组                   | `CheckBox`, `Badge`                                                                                 |
-| `ManyToOne`   | 关联选择                   | `SelectTree`                                                                                        |
-| `OneToOne`    | 关联选择                   | `SelectTree`                                                                                        |
+| `ManyToOne`   | 引用选择                   | `SelectTree`                                                                                        |
+| `OneToOne`    | 引用选择                   | `SelectTree`                                                                                        |
 | `ManyToMany`  | 关联表格 + 选择器对话框    | `SelectTree`, `TagList`                                                                             |
 | `OneToMany`   | 关联表格                   | -                                                                                                   |
 | `File`        | 文件上传                   | `Image`                                                                                             |
@@ -64,7 +64,13 @@
 
 基于 Tiptap 的所见即所得富文本编辑器，存储和读取 HTML 字符串。
 
-工具栏：加粗、斜体、下划线、删除线、标题（H1–H4）、无序/有序列表、缩进/反缩进、对齐、链接、图片、表格、分割线、高亮、撤销/重做。
+工具栏：加粗、斜体、下划线、删除线、标题（H1–H4）、无序/有序列表、缩进/反缩进、文本对齐、链接、图片上传、表格、分割线、高亮、撤销/重做。
+
+图片处理：
+
+- **上传** — 工具栏图片按钮打开系统文件选择器；所选图片以 base64 data URL 读入并内联插入。不提供外部 URL 输入。
+- **缩放** — 点击图片选中后，可拖动四角任一控制点调整大小。宽度保存在节点上；高度通过 `height: auto` 等比缩放。
+- **序列化** — 图片在 HTML 中使用内联样式以便携带：`<img src="..." width="400" style="width: 400px; max-width: 100%; height: auto;">`。未显式指定宽度的图片使用 `style="max-width: 100%; height: auto;"`。
 
 两级懒加载：只读模式直接渲染原始 HTML，不加载编辑器；编辑模式再懒加载完整 Tiptap 编辑器。
 
@@ -80,8 +86,8 @@
 
 功能：
 
-- **字段占位符** — 以行内芯片插入模型字段。HTML 输出：`<span data-tpl-field="fieldPath" data-tpl-label="label">{{fieldPath}}</span>`
-- **自定义变量** — 以行内芯片插入一次性变量。HTML 输出：`<span data-tpl-variable="employee_name" data-tpl-label="Employee Name" data-tpl-value-type="String" data-tpl-required="true">{{employee_name}}</span>`
+- **字段占位符** — 以行内标签块插入模型字段。HTML 输出：`<span data-tpl-field="fieldPath" data-tpl-label="label">{{fieldPath}}</span>`。「插入字段」选择器（含关联一层路径与循环表列选项）会排除 `@/types/BaseModel` 中的 `reversedFields`（如 `id`、`tenantId`、`version`、审计时间戳与用户引用等），与其他将这些视为系统托管字段的流程一致。
+- **自定义变量** — 以行内标签块插入一次性变量。HTML 输出：`<span data-tpl-variable="employee_name" data-tpl-label="Employee Name" data-tpl-value-type="String" data-tpl-required="true">{{employee_name}}</span>`
 - **签名槽** — 插入固定尺寸、可内联于文字流中的签名占位。同一行可插入多个签名槽，并排显示，槽之间可留打字间距或文字。默认工具栏预设对应签署方槽位（如 `Sender` 与 `Receiver`）。HTML 输出：`<span data-tpl-signature="Sender" data-tpl-label="Sender Signature"></span>`
 - **关联字段展开** — 将 `ManyToOne` / `OneToOne` 关联展开一层，插入嵌套路径（如 `department.name`）
 - **循环表格** — 将 `OneToMany` / `ManyToMany` 关联以可选列的循环表格插入。HTML 输出：`<table data-tpl-loop="relationField" data-tpl-model="RelatedModel">` 及 `<th data-tpl-field="col">` 表头
@@ -130,7 +136,7 @@
 
 - `Insert Variable` 会打开对话框填写 `code`、`label`、`valueType`、`required`
 - `code` 必填且在模板内唯一
-- 编辑器内可编辑已有变量芯片以更新 `code`、`label`、`valueType`、`required`
+- 编辑器内可编辑已有变量的行内标签块以更新 `code`、`label`、`valueType`、`required`
 
 签名槽行为：
 
@@ -138,7 +144,8 @@
 - 选择 `Sender Signature` 会插入 `code="Sender"` 的签名槽
 - 选择 `Receiver Signature` 会插入 `code="Receiver"` 的签名槽
 - `code` 必填且在模板内唯一
-- 存储为固定尺寸行内占位，尺寸为 `240 x 120`
+- 默认槽位尺寸为 `240 x 120`；点击槽位选中后，可拖动任意角控制点自由调整宽高（最小 `120 x 60`）
+- 调整后的尺寸保存在节点的 `data-tpl-width` / `data-tpl-height` 属性及内联 `style` 中；槽内签名图通过 `width: 100%; height: 100%; object-fit: contain` 填满槽位
 - 同一行可插入多个签名槽
 - 相邻签名槽可同处一行，中间可插入普通文字或间距
 - 编辑器内可编辑已有签名槽以更新其 `code` 与 `label`

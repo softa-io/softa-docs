@@ -64,7 +64,13 @@ Related docs:
 
 Tiptap-based WYSIWYG rich text editor. Stores and reads HTML strings.
 
-Toolbar: bold, italic, underline, strikethrough, headings (H1–H4), bullet/ordered lists, indent/outdent, text alignment, link, image, table, horizontal rule, highlight, undo/redo.
+Toolbar: bold, italic, underline, strikethrough, headings (H1–H4), bullet/ordered lists, indent/outdent, text alignment, link, image upload, table, horizontal rule, highlight, undo/redo.
+
+Image handling:
+
+- **Upload** — toolbar image button opens a native file picker; the selected image is read as a base64 data URL and inserted inline. No external URL input.
+- **Resize** — click an image to select it, then drag any of the four corner handles to resize. Width is stored on the node; height scales proportionally via `height: auto`.
+- **Serialization** — images are stored in HTML with inline styles for portability: `<img src="..." width="400" style="width: 400px; max-width: 100%; height: auto;">`. Images without an explicit width get `style="max-width: 100%; height: auto;"`.
 
 Two-level lazy loading: read-only mode renders raw HTML without loading the editor; edit mode lazy-loads the full Tiptap editor.
 
@@ -80,7 +86,7 @@ Storage format: HTML with `data-tpl-*` attributes for template-specific nodes. T
 
 Features:
 
-- **Field placeholders** — insert model fields as inline chips. HTML output: `<span data-tpl-field="fieldPath" data-tpl-label="label">{{fieldPath}}</span>`
+- **Field placeholders** — insert model fields as inline chips. HTML output: `<span data-tpl-field="fieldPath" data-tpl-label="label">{{fieldPath}}</span>`. The Insert Field picker (including related one-level paths and loop-table column choices) excludes `reversedFields` from `@/types/BaseModel` (e.g. `id`, `tenantId`, `version`, audit timestamps and user references), matching other flows that treat these as system-managed.
 - **Custom variables** — insert single-use variables as inline chips. HTML output: `<span data-tpl-variable="employee_name" data-tpl-label="Employee Name" data-tpl-value-type="String" data-tpl-required="true">{{employee_name}}</span>`
 - **Signature slots** — insert fixed-size inline signature placeholders that can live inside text flow. Multiple signature slots can be inserted on the same line, sit side by side, and leave room for typed spacing or text between slots. Default toolbar presets map to signing-party slots such as `Sender` and `Receiver`. HTML output: `<span data-tpl-signature="Sender" data-tpl-label="Sender Signature"></span>`
 - **Relation field expansion** — expand `ManyToOne` / `OneToOne` relations one level to insert nested paths (e.g. `department.name`)
@@ -138,7 +144,8 @@ Signature slot behavior:
 - selecting `Sender Signature` inserts a signature slot with `code="Sender"`
 - selecting `Receiver Signature` inserts a signature slot with `code="Receiver"`
 - `code` is required and must be unique within the template
-- stored as fixed-size inline placeholders sized to `240 x 120`
+- default slot size is `240 x 120`; click a slot to select it and drag any corner handle to resize both width and height freely (min `120 x 60`)
+- resized dimensions are stored on the node as `data-tpl-width` / `data-tpl-height` attributes and inline `style`; the signed image inside fills the slot via `width: 100%; height: 100%; object-fit: contain`
 - multiple signature slots can be inserted on the same line
 - adjacent signature slots can share the same row, with normal text or spacing inserted between them
 - existing signature slots can be edited in the editor to update their `code` and `label`
