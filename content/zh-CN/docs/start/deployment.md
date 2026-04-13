@@ -1,3 +1,4 @@
+
 # 1. 构建多平台镜像
 
 ## 1.1 通过 GitHub Actions 构建并推送
@@ -6,9 +7,16 @@
 更多细节请参考 `.github/workflows/build-and-push.yml` 文件。
 当推送以 "v" 开头的 tag 时触发构建，例如 `v1.0.0`。
 
-`./deploy/Dockerfile` 是一个通用的多阶段 Dockerfile，可用于构建应用镜像。
+`./deploy/Dockerfile` 为多阶段 Dockerfile，共三个阶段：
+
+1. **fonts** — 通过 `deploy/install-font.sh` 下载 Noto 字体文件（缓存层，很少变更）
+2. **build_stage** — 使用 Maven 编译应用 jar
+3. **final image** — 将字体与 jar 复制到精简 JRE 镜像中
+
 在 GitHub Actions 工作流中，会通过 build args 传入 `APP_PATH`、`APP_NAME` 参数。
 镜像的 `version` 会从 tag 名中提取，例如 `v1.0.0` -> `1.0.0`。
+
+`./deploy/Dockerfile.ci` 为 CI 流水线使用的两阶段变体（jar 已预先构建），包含相同的字体安装阶段。
 
 ## 1.2 本地脚本手动构建并推送
 构建镜像并推送到 Docker 镜像仓库。
@@ -28,19 +36,37 @@
 ./deploy/build.sh apps/demo-app 1.0.3
 ```
 
-# 2. 通过 Docker Compose 启动 EFK（可选）
+# 2. 安装 Noto 字体（PDF 生成）
+
+配合 `file-starter` 生成 PDF（RICH_TEXT 文档模板）时需要 Noto 字体。
+Docker 镜像内已自动安装（见上文）。本地开发请执行：
+
+```bash
+sh deploy/install-font.sh
+```
+
+脚本会自动检测操作系统字体目录（macOS 为 `~/Library/Fonts`，Linux 为 `~/.local/share/fonts`）。
+也可显式指定目标目录：
+
+```bash
+sh deploy/install-font.sh /path/to/fonts
+```
+
+# 3. 通过 Docker Compose 启动 EFK（可选）
 ```bash
 docker-compose -f deploy/efk/docker-compose.yml up -d
 ```
-通过 `http://localhost:5601` 访问 Kibana 控制台。
+通过 http://localhost:5601 访问 Kibana 控制台。
 
 或者你也可以通过配置 `spring.elasticsearch.uris` 属性，连接到你自己的 Elasticsearch 集群。
 
-# 3. 通过 Docker Compose 启动 Pulsar（可选）
+然后使用 `demo-app/init_es/create_index` 创建索引。
+
+# 4. 通过 Docker Compose 启动 Pulsar（可选）
 ```bash
 docker-compose -f deploy/pulsar/docker-compose.yml up -d
 ```
-通过 `http://localhost:8080` 访问 Pulsar 控制台。
+通过 http://localhost:8080 访问 Pulsar 控制台。
 
 或者你也可以通过配置 `spring.pulsar.client.service-url` 属性，连接到你自己的 Pulsar 集群。
 
@@ -49,23 +75,23 @@ docker-compose -f deploy/pulsar/docker-compose.yml up -d
 另一方面，如果你还没准备好搭建 Pulsar 服务，也可以选择不配置，
 或注释掉 `mq.topics.xxx` 相关 topics，以避免因无法启动而阻塞。
 
-# 4. 通过 Docker Compose 启动 Minio（可选）
+# 5. 通过 Docker Compose 启动 Minio（可选）
 ```bash
 docker-compose -f deploy/minio/docker-compose.yml up -d
 ```
 ### Minio API 地址
-`http://localhost:9000`
+http://localhost:9000
 
 ### Minio Web UI 控制台
-`http://localhost:9001`
+http://localhost:9001
 Username: minioadmin
 Password: minioadmin
 
-# 5. 通过 Docker Compose 启动 Demo 应用
+# 6. 通过 Docker Compose 启动 Demo 应用
 ```bash
 docker-compose -f ./deploy/demo-app/docker-compose.yml up -d
 ```
 创建数据库实例，并执行 `deploy/demo-app/init_mysql` 中的 SQL 脚本。
 
-# 6. 生产环境
+# 7. 生产环境
 强烈建议生产环境通过流水线，并使用 Kubernetes 进行容器化部署。

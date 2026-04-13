@@ -14,7 +14,8 @@ This document focuses on developer usage and API-level examples.
 - `excel/export/support`: shared export support components such as data fetch, template resolve, writer, upload, and custom export hooks
 - `excel/imports`: import pipeline, handler factory, failure collection, persistence, and custom import hook
 - `excel/style`: shared Excel style handlers
-- `file/`: document file generators and PDF signing helpers (Word, PDF, signing)
+- `pdf/`: PDF document generators, Noto font provider, and PDF signing helpers (Word, PDF, signing)
+- `word/`: Word document generator
 
 
 ## Dependency
@@ -29,6 +30,7 @@ This document focuses on developer usage and API-level examples.
 ## Requirements
 - OSS storage (Minio or other supported providers) for template files and generated files.
 - Pulsar is required if you use async import.
+- Noto fonts are required for PDF generation (RICH_TEXT templates). Run `sh deploy/install-font.sh` to install.
 - Database contains file metadata tables and file-starter tables:
   - Import: ImportTemplate, ImportTemplateField, ImportHistory,
   - Export: ExportTemplate, ExportTemplateField, ExportHistory,

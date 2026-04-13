@@ -1,4 +1,3 @@
-
 ## 文档导出（Word/PDF）
 
 文档模板存储在 `DocumentTemplate` 中，可渲染为 Word 或 PDF。
@@ -31,7 +30,7 @@ templateType = RICH_TEXT
   2. 为 OneToMany 字段构建 SubQueries
   3. 拉取数据：modelService.getById(modelName, rowId, fields, subQueries, ConvertType.DISPLAY)
   4. 通过 Pebble 将 {{ }} 渲染为最终 HTML
-  5. 通过 OpenPDF 将 HTML 转为 PDF
+  5. 通过 OpenHTMLToPDF 将 HTML 转为 PDF
   6. 上传至 OSS -> 返回 FileInfo
 ```
 
@@ -45,7 +44,7 @@ templateType = RICH_TEXT
 
 - `htmlTemplate` 存储带 `{{ variable }}` 占位符的 HTML。
 - 占位符通过 Pebble 渲染为最终 HTML。
-- 渲染后的 HTML 通过 OpenPDF 转为 PDF。
+- 渲染后的 HTML 通过 OpenHTMLToPDF 转为 PDF。
 
 ### 接口
 

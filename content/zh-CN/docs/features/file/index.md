@@ -15,7 +15,8 @@ File Starter 为开发者提供四项核心能力：
 - `excel/export/support`：导出共享支撑组件，如数据获取、模板解析、写出、上传与自定义导出钩子
 - `excel/imports`：导入流水线、处理器工厂、失败收集、持久化与自定义导入钩子
 - `excel/style`：共享的 Excel 样式处理器
-- `file/`：文档文件生成器与 PDF 签名辅助能力（Word、PDF、签名）
+- `pdf/`：PDF 文档生成、Noto 字体提供，以及 PDF 签名相关辅助能力（Word、PDF、签名）
+- `word/`：Word 文档生成
 
 ## 依赖
 
@@ -31,6 +32,7 @@ File Starter 为开发者提供四项核心能力：
 
 - 需要对象存储（Minio 或其它受支持的 OSS）用于存放模板文件和生成文件。
 - 使用异步导入时需接入 Pulsar。
+- PDF 生成（RICH_TEXT 文档模板）需要 Noto 字体。本地可执行 `sh deploy/install-font.sh` 安装。
 - 数据库中需包含文件元数据表及 file-starter 表：
   - 导入：`ImportTemplate`、`ImportTemplateField`、`ImportHistory`
   - 导出：`ExportTemplate`、`ExportTemplateField`、`ExportHistory`

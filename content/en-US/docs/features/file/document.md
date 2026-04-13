@@ -28,7 +28,7 @@ templateType = RICH_TEXT
   2. Build SubQueries for OneToMany fields
   3. Fetch data: modelService.getById(modelName, rowId, fields, subQueries, ConvertType.DISPLAY)
   4. Convert {{ }} are rendered to the final HTML via Pebble
-  5. Convert HTML to PDF via OpenPDF
+  5. Convert HTML to PDF via OpenHTMLToPDF
   6. Upload to OSS -> return FileInfo
 ```
 
@@ -40,7 +40,7 @@ templateType = RICH_TEXT
 ### RICH_TEXT Template
 - `htmlTemplate` stores HTML with `{{ variable }}` placeholders.
 - Placeholders are rendered to the final HTML via Pebble.
-- The rendered HTML is converted to PDF via OpenPDF.
+- The rendered HTML is converted to PDF via OpenHTMLToPDF.
 
 ### Endpoint
 - `GET /DocumentTemplate/generateDocument?templateId={id}&rowId={rowId}`

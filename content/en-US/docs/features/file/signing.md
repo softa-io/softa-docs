@@ -121,8 +121,23 @@ The current `sign` flow completes the following steps in one request:
 7. Persist `signatureEvidence`, `evidenceId`, signer info, and sign timestamp.
 8. Update `SigningDocument.status` and refresh `SigningRequest.status`.
 
+### DocumentTemplateSignSlot
+`DocumentTemplateSignSlot` stores predefined sign slot configurations for a document template.
+Each slot defines a named region where a signature can be placed.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `templateId` | Long | Parent DocumentTemplate ID |
+| `slotName` | String | Display name for the slot |
+| `slotCode` | String | Code used in `signSlotCode` during signing |
+| `sequence` | Integer | Order of the slot |
+| `placement` | JsonNode | Default placement coordinates (page, x, y, width, height, unit) |
+| `description` | String | Description text |
+
+CRUD is available via `POST/GET/PUT/DELETE /DocumentTemplateSignSlot`.
+
 ### Placement Resolution
-- `signSlotCode` is the recommended mode for template-defined sign slots.
+- `signSlotCode` is the recommended mode for template-defined sign slots. The system first tries to locate a matching PDF form field in the source PDF; if not found, it looks up the `DocumentTemplateSignSlot` by code.
 - `placement` is the fallback for free positioning.
 - Supported placement units:
   - `PT`
@@ -143,59 +158,3 @@ This means the current implementation is suitable for:
 
 It does not yet support:
 - signing a document that must first be rendered with business row data and then assigned to a `SigningDocument`
-
-## REST APIs (Summary)
-- Import
-  - `POST /import/importByTemplate`
-  - `POST /import/dynamicImport`
-  - `GET /ImportTemplate/getTemplateFile`
-- Export
-  - `POST /export/exportByTemplate` (dispatches to field-template or file-template mode based on `customFileTemplate`)
-  - `POST /export/dynamicExport`
-- Document
-  - `GET /DocumentTemplate/generateDocument`
-- Signing
-  - `POST /SigningDocument/sign`
-- Template Listing
-  - `POST /ImportTemplate/listByModel`
-  - `POST /ExportTemplate/listByModel`
-
-## Examples
-Export params (with cascaded fields):
-```json
-{
-  "fields": ["id", "name", "code", "status", "deptId.name", "deptId.managerId.name"],
-  "filters": ["status", "=", "ACTIVE"],
-  "orders": ["createdTime", "DESC"],
-  "limit": 200,
-  "groupBy": [],
-  "effectiveDate": "2026-03-03"
-}
-```
-
-Import field mapping (with relation lookup):
-```json
-[
-  {"header": "Product Code", "fieldName": "productCode", "required": true},
-  {"header": "Product Name", "fieldName": "productName", "required": true},
-  {"header": "Category Code", "fieldName": "categoryId.code", "required": true},
-  {"header": "Price", "fieldName": "price"}
-]
-```
-
-Import field mapping (direct FK id):
-```json
-[
-  {"header": "Product Code", "fieldName": "productCode", "required": true},
-  {"header": "Product Name", "fieldName": "productName", "required": true},
-  {"header": "Price", "fieldName": "price"}
-]
-```
-
-Import env:
-```json
-{
-  "deptId": 10,
-  "source": "manual"
-}
-```

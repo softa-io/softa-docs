@@ -136,9 +136,24 @@ Content-Type：
 7. 持久化 `signatureEvidence`、`evidenceId`、签名人信息与签名时间戳。
 8. 更新 `SigningDocument.status` 并刷新 `SigningRequest.status`。
 
+### DocumentTemplateSignSlot
+
+`DocumentTemplateSignSlot` 存储文档模板的预定义签槽配置。每个签槽定义一个可放置签名的命名区域。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `templateId` | Long | 所属 DocumentTemplate ID |
+| `slotName` | String | 签槽展示名称 |
+| `slotCode` | String | 签署时用于 `signSlotCode` 的代码 |
+| `sequence` | Integer | 签槽顺序 |
+| `placement` | JsonNode | 默认位置坐标（page、x、y、width、height、unit） |
+| `description` | String | 说明文本 |
+
+可通过 `POST/GET/PUT/DELETE /DocumentTemplateSignSlot` 进行 CRUD。
+
 ### 位置解析
 
-- `signSlotCode` 为模板定义签槽时的推荐方式。
+- 针对模板定义的签槽，推荐使用 `signSlotCode`。系统会先在源 PDF 中查找匹配的 PDF 表单域；若未找到，再按 code 查询 `DocumentTemplateSignSlot`。
 - `placement` 为自由定位时的回退方案。
 - 支持的 placement 单位：
   - `PT`
@@ -163,65 +178,3 @@ Content-Type：
 尚不支持：
 
 - 必须先按业务行数据渲染文档，再关联到 `SigningDocument` 后签署的场景
-
-## REST API 汇总
-
-- 导入
-  - `POST /import/importByTemplate`
-  - `POST /import/dynamicImport`
-  - `GET /ImportTemplate/getTemplateFile`
-- 导出
-  - `POST /export/exportByTemplate`（根据 `customFileTemplate` 分发至字段模板或文件模板模式）
-  - `POST /export/dynamicExport`
-- 文档
-  - `GET /DocumentTemplate/generateDocument`
-- 签名
-  - `POST /SigningDocument/sign`
-- 模板列表
-  - `POST /ImportTemplate/listByModel`
-  - `POST /ExportTemplate/listByModel`
-
-## 示例
-
-导出参数（含级联字段）：
-
-```json
-{
-  "fields": ["id", "name", "code", "status", "deptId.name", "deptId.managerId.name"],
-  "filters": ["status", "=", "ACTIVE"],
-  "orders": ["createdTime", "DESC"],
-  "limit": 200,
-  "groupBy": [],
-  "effectiveDate": "2026-03-03"
-}
-```
-
-导入字段映射（含关联反查）：
-
-```json
-[
-  {"header": "Product Code", "fieldName": "productCode", "required": true},
-  {"header": "Product Name", "fieldName": "productName", "required": true},
-  {"header": "Category Code", "fieldName": "categoryId.code", "required": true},
-  {"header": "Price", "fieldName": "price"}
-]
-```
-
-导入字段映射（直接外键 id）：
-
-```json
-[
-  {"header": "Product Code", "fieldName": "productCode", "required": true},
-  {"header": "Product Name", "fieldName": "productName", "required": true},
-  {"header": "Price", "fieldName": "price"}
-]
-```
-
-导入环境：
-
-```json
-{
-  "deptId": 10,
-  "source": "manual"
-}
-```
