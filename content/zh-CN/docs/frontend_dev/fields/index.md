@@ -203,8 +203,8 @@ function UserTableView() {
 | `filters`      | `string \| FilterCondition`        | 否   | 关联过滤条件覆盖。`Field.filters` 会覆盖 `metaField.filters`。支持 JSON 字符串形式的元数据过滤条件以及 `{{ expr }}`（如 `{{ fieldName }}`）引用。 |
 | `onChange`     | `FieldOnChangeProp`                | 否   | 远程字段联动。支持简写 `string[]` 或 `{ update?, with? }`。 |
 | `tableView`    | `RelationTableView`                | 否   | `OneToMany` / `ManyToMany` 的关联表格视图。须为零 props 的组件，且渲染 `<RelationTable />`。详见 [关联字段](./relations)。 |
-| `formView`     | `RelationFormView`                 | 否   | 关联对话框 / 详情视图配置。详见 [Relation Fields](./relations)。 |
-| `isPaged`      | `boolean`                          | 否   | 为 `OneToMany` / `ManyToMany` 启用分页关联表格模式。详见 [Relation Fields](./relations)。 |
+| `formView`     | `RelationFormView`                 | 否   | 关联对话框 / 详情视图配置。详见 [关联字段](./relations)。 |
+| `isPaged`      | `boolean`                          | 否   | 为 `OneToMany` / `ManyToMany` 启用分页关联表格模式。详见 [关联字段](./relations)。 |
 
 `FieldCondition`：
 
@@ -346,6 +346,7 @@ import { dependsOn, Field } from "@/components/fields";
   - `MultiOption` -> `itemCode[]`
 - 如果任意 `{{ expr }}` 依赖缺失，则关联查询会视为未就绪，不会发送请求
 - 前端不会求值后端环境 token，例如 `TODAY`；它们会原样透传
+- 对未分页的 `OneToMany` 字段，不含 `{{ fieldName }}` 引用的静态过滤条件也会写入 `getById` 的 subQuery，首屏即可拿到已过滤的关联数据；含 `{{ fieldName }}` 引用的过滤仅在远程模式查询时生效
 
 ## 远程 `Field.onChange`
 
@@ -572,7 +573,7 @@ companyId.cascadedField = "employeeId.department.companyId";
 <Field fieldName="departmentId" widgetType="SelectTree" />
 ```
 
-`SelectTree`、`RelationTable`、`OneToMany`、`ManyToMany` 请见 [Relation Fields](./relations)。
+`SelectTree`、`RelationTable`、`OneToMany`、`ManyToMany` 请见 [关联字段](./relations)。
 
 ### 文件类型
 
@@ -621,7 +622,7 @@ companyId.cascadedField = "employeeId.department.companyId";
 - 后端 payload 和元数据默认值可能仍以字符串形式到达；字段运行时会在加载时把它们归一化为 UI 形态
 - 传入页面 / 对话框 `defaultValues` 时，请直接使用上表中的 UI 形态，而不是预先字符串化
 - `ManyToMany` 即使使用 `widgetType="TagList"`，提交时仍是普通增量 patch map
-- 顶层关联字段的细节请见 [Relation Fields](./relations) 。
+- 顶层关联字段的细节请见 [关联字段](./relations)。
 
 ### `FileInfo`
 

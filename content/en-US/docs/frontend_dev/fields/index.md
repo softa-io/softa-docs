@@ -346,6 +346,7 @@ Behavior:
   - `MultiOption` -> `itemCode[]`
 - if any `{{ expr }}` dependency is missing, the relation query is treated as not ready and is not sent
 - frontend does not evaluate backend environment tokens such as `TODAY`; they are passed through unchanged
+- for `OneToMany` fields (non-paged), static filters without `{{ fieldName }}` references are also included in the `getById` subQuery so the initial page load already returns pre-filtered relation data; filters with `{{ fieldName }}` references are applied only at remote-mode query time
 
 ## Remote `Field.onChange`
 

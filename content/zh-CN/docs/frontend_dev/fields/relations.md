@@ -180,6 +180,7 @@ function OptionItemsTableView() {
 
 - `false`（默认）：在 `getById` 中包含关联 `subQuery`；关联表格 UI 不分页，渲染本地行
 - `true`：关联表格启用分页 UI；当 `recordId + relatedModel + 作用域内关联过滤` 就绪时，由 `relatedModel.searchPage` 加载数据（远程模式），否则在本地做分页
+- 静态 `Field.filters`（不含 `{{ fieldName }}` 引用）会并入 `getById` 的 subQuery，首屏加载即带上过滤；含 `{{ fieldName }}` 的动态过滤仅在远程模式查询、且引用字段值可用时生效
 - 可编辑单元格限制为已声明的 `RelationTable` 列与关联模型可编辑字段的交集
 - 未解析的 `{{ expr }}` 依赖会暂停远程关联查询，直到父表单依赖值存在
 

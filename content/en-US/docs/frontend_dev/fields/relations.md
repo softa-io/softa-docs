@@ -180,6 +180,7 @@ Behavior:
 
 - `false` (default): include relation `subQuery` in `getById`; relation table does not paginate in UI and renders local rows
 - `true`: relation table enables pagination UI; when `recordId + relatedModel + scoped relation filter` are ready, data is loaded by `relatedModel.searchPage` (remote mode), otherwise paginated locally
+- static `Field.filters` (no `{{ fieldName }}` references) are included in the `getById` subQuery so the initial load already applies the filter; dynamic filters with `{{ fieldName }}` references are applied only at remote-mode query time once the referenced values are available
 - editable cells are limited to declared `RelationTable` columns intersected with editable related-model fields
 - unresolved `{{ expr }}` dependencies pause remote relation queries until the dependent parent form value exists
 
