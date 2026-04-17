@@ -4,10 +4,10 @@
 
 ## 相关文档
 
-- [Fields](./fields/index)
+- [Fields](./fields/fields)
 - [关联字段](./fields/relations)
 - [Widget 矩阵](./fields/widgets)
-- [Group（行内字段布局）](./fields/index#group)
+- [Group（行内字段布局）](./fields/fields#group)
 - [Action](./action)
 - [Dialog](./dialog)
 - [ModelTable](./table)
@@ -123,7 +123,7 @@ function ConfigGroupForm() {
 
 需要自定义布局？在子组件中使用 `useModelFormContext()`，并直接调整 `FormHeader` / `FormToolbar` / `FormBody` 的组合即可。
 
-字段的规范化用法现在统一维护在 [Fields](./fields/index)。
+字段的规范化用法现在统一维护在 [Fields](./fields/fields)。
 widget 兼容性和 widget 专属示例维护在 [Widget 矩阵](./fields/widgets)。
 关联字段行为维护在 [关联字段](./fields/relations)。
 这些文档用于说明：
@@ -163,7 +163,7 @@ widget 兼容性和 widget 专属示例维护在 [Widget 矩阵](./fields/widget
 - `Filters`：`FilterCondition`
 - `Orders`：结构化排序元组 / 数组
 
-更详细的字段值契约见 [Field](./fields/index)。
+更详细的字段值契约见 [Field](./fields/fields)。
 
 条件字段控制示例：
 

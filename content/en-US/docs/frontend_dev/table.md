@@ -121,7 +121,7 @@ Table declaration notes:
 - `hidden` only supports `boolean` in table declarations; `hidden={true}` removes the whole column
 - conditional `required` / `readonly` are supported in inline edit, but conditional `hidden` is not
 
-Detailed field value contracts are documented in [Field & Widget](./fields/index).
+Detailed field value contracts are documented in [Field & Widget](./fields/fields).
 
 ## File And Image Columns
 

@@ -4,10 +4,10 @@ Metadata-driven create/edit form container based on `react-hook-form` and Zod.
 
 ## Related Docs
 
-- [Fields](./fields/index)
+- [Fields](./fields/fields)
 - [Relation fields](./fields/relations)
 - [Widget matrix](./fields/widgets)
-- [Group (inline field layout)](./fields/index#group)
+- [Group (inline field layout)](./fields/fields#group)
 - [Action](./action)
 - [Dialog](./dialog)
 - [ModelTable](./table)
@@ -123,7 +123,7 @@ function ConfigGroupForm() {
 
 Need custom variations? Use `useModelFormContext()` in children and rearrange `FormHeader/FormToolbar/FormBody` directly.
 
-Canonical field usage now lives in [Fields](./fields/index).
+Canonical field usage now lives in [Fields](./fields/fields).
 Widget compatibility and widget-specific examples live in [Widget matrix](./fields/widgets).
 Relation field behavior lives in [Relation fields](./fields/relations).
 Use those documents for:
@@ -163,7 +163,7 @@ When you do pass container-level `defaultValues`, use field UI values directly:
 - `Filters`: `FilterCondition`
 - `Orders`: structured order tuples/arrays
 
-Detailed field value contracts are documented in [Field](./fields/index).
+Detailed field value contracts are documented in [Field](./fields/fields).
 
 Example conditional field control:
 

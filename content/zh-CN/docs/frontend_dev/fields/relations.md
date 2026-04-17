@@ -11,7 +11,7 @@
 
 相关文档：
 
-- [Fields](./index)：核心 `Field` props、条件、`filters`、`Field.onChange`、值契约
+- [Fields](./fields)：核心 `Field` props、条件、`filters`、`Field.onChange`、值契约
 - [Widget 矩阵](./widgets)：widget 兼容性与 widget 专属示例
 - [ModelForm](../form)：页面壳层与关联表单示例
 - [ModelTable](../table)：只读单元格与内联编辑行为
@@ -26,7 +26,7 @@ import { Field, RelationTable } from "@/components/fields";
 
 ## `RelationTable`
 
-`RelationTable` 是 `OneToMany` 与 `ManyToMany` 的关联表格视图定义。  
+`RelationTable` 是 `OneToMany` 与 `ManyToMany` 的关联表格视图定义。
 请声明一个**零 props** 的 `tableView` 组件，并在其中返回 `<RelationTable />`。
 
 示例：

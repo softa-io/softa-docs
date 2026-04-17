@@ -8,7 +8,7 @@
 
 相关文档：
 
-- [Fields](./index)：核心 `Field` props、条件、`filters`、`Field.onChange`、值契约
+- [Fields](./fields)：核心 `Field` props、条件、`filters`、`Field.onChange`、值契约
 - [关联字段](./relations)：`RelationTable`、`SelectTree`、`OneToMany`、`ManyToMany`
 
 ## FieldType -> WidgetType 矩阵

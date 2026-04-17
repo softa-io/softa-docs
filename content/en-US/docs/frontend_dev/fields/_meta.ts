@@ -1,5 +1,5 @@
 export default {
-  index: "Fields Introduction",
+  fields: "Fields Overview",
   relations: "Relation Fields",
   widgets: "Field-Widgets Matrix",
 }

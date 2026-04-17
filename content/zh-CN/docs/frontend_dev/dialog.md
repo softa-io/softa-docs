@@ -19,7 +19,7 @@
 `Field.onChange` 的远程联动有所不同：
 
 - 当前已实现于 `ModelForm`、基于对话框的编辑器（`ActionDialog`、`ModelDialog`）、`ModelTable` 内联行以及 `RelationTable` 内联行
-- 当前远程联动契约请查看 [Fields](./fields/index)、[ModelForm](./form) 和 [ModelTable](./table)
+- 当前远程联动契约请查看 [Fields](./fields/fields)、[ModelForm](./form) 和 [ModelTable](./table)
 
 ## 导入
 

@@ -8,7 +8,7 @@ Use this document for:
 
 Related docs:
 
-- [Fields](./index): core `Field` props, conditions, `filters`, `Field.onChange`, value contracts
+- [Fields](./fields): core `Field` props, conditions, `filters`, `Field.onChange`, value contracts
 - [Relation fields](./relations): `RelationTable`, `SelectTree`, `OneToMany`, `ManyToMany`
 
 ## FieldType -> WidgetType Matrix
@@ -314,6 +314,8 @@ When read-only and the value is empty (or whitespace only), the editor body show
 | `step`     | `number` | inferred from field type / scale | Step size.            |
 
 ## Boolean And Option Widgets
+
+`Option` and `MultiOption` interactive widgets (`OptionSelect`, `Radio`, `StatusBar`, `CheckBox`) support client-side option filtering via `Field.filters` — the filter is matched on each option's `itemCode`. `Badge` is display-only and unaffected. See [Fields → `filters`](./fields#filters).
 
 ### `CheckBox`
 

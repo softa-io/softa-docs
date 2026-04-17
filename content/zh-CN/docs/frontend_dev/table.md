@@ -121,7 +121,7 @@ type ModelTableRowData = { id: string };
 - 在表格声明中，`hidden` 只支持 `boolean`；`hidden={true}` 会移除整列
 - 条件 `required` / `readonly` 支持内联编辑；条件 `hidden` 不支持
 
-更详细的字段值契约请见 [Field & Widget](./fields/index)。
+更详细的字段值契约请见 [Field & Widget](./fields/fields)。
 
 ## 文件与图片列
 
@@ -469,7 +469,7 @@ import { SideList } from "@/components/views/shared/side-panel/SideList";
 - `SideTree` 内部封装现有 `TreePanel`
 - 侧栏宽度固定 280px
 - `searchable` 默认在客户端对所有字段值做关键词过滤；设置 `remoteSearch` 可改为服务端 `["searchName", "CONTAINS", keyword]`（300ms 防抖）
-- 在 `SideCard` 正文内可用 [`Group`](../fields/index#group) 将多字段并排（例如 `<Group separator="-"><Field .../><Field .../></Group>`）
+- 在 `SideCard` 正文内可用 [`Group`](../fields/fields#group) 将多字段并排（例如 `<Group separator="-"><Field .../><Field .../></Group>`）
 
 ## 统一的工具栏激活状态
 
