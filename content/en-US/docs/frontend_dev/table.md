@@ -772,7 +772,7 @@ Built-in reserved fields are always excluded:
 - Side panel width is fixed at 280px; there is no public width API.
 - `SideCard` / `SideList` `Field` children render in display mode via `RecordContext` — no `FieldPropsContext` is needed.
 - `SideTree` wraps the existing `TreePanel`; `searchMode` defaults to `"local"`, or `"server"` when `remoteSearch` is enabled.
-- `SideCard` and `SideList` can also be used inside `ModelSideForm` as the data source panel (see [ModelSideForm](../side-form)).
+- `SideCard` and `SideList` can also be used inside `ModelSideForm` as the data source panel (see [ModelSideForm](../sideForm)).
 
 ## PageTabs
 

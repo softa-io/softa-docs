@@ -9,7 +9,7 @@
 - `Field` props 与覆盖方式，三种渲染模式（表单 / 展示 / 声明）
 - `required` / `readonly` / `hidden`
 - `dependsOn(...)`
-- 关联 `filters`
+- `filters`（关联查询与 `Option` / `MultiOption` 客户端选项过滤）
 - 远程 `Field.onChange`
 - 运行时值契约
 - 按字段类型划分的前端行为
@@ -20,7 +20,7 @@
 - [Widgets](./widgets)：`FieldType -> WidgetType` 矩阵与 widget 专属示例
 - [ModelForm](../form)：页面壳层
 - [ModelTable](../table)：只读单元格、内联编辑与侧栏
-- [ModelSideForm](../side-form)：侧栏 + 内嵌表单视图
+- [ModelSideForm](../sideForm)：侧栏 + 内嵌表单视图
 - [Tree](../tree)：`SideTree` 与 `SelectTree` 使用的内部树形原语
 
 ## 导入
@@ -36,6 +36,8 @@ import { Field } from "@/components/fields";
 ```tsx
 import {
   Field,
+  useDisplayRecord,
+  useDisplayRecordValue,
   RelationTable,
   type FieldCondition,
   type FieldConditionContext,
@@ -79,7 +81,7 @@ import { RecordContextProvider } from "@/components/contexts/RecordContext";
 在 `ModelForm` 中已提供 `FieldPropsContext`。若需将 `Field` 强制为展示模式（例如在 `FormHeader` 子节点中），请用 `FieldDisplayScope` 包裹：
 
 ```tsx
-import { FieldDisplayScope } from "@/components/fields/FieldDisplayScope";
+import { FieldDisplayScope } from "@/components/fields/display";
 
 <FieldDisplayScope>
   <Field fieldName="status" />     {/* 虽在 ModelForm 内，仍以展示模式渲染 */}
@@ -88,11 +90,27 @@ import { FieldDisplayScope } from "@/components/fields/FieldDisplayScope";
 
 `FormHeader` 会用 `FieldDisplayScope` 自动包裹其 `children`。
 
+在 `FieldDisplayScope` 内若编写自定义仅展示组件，请使用 `useDisplayRecordValue(path)` 或 `useDisplayRecord(paths)` 仅订阅所需字段，而不要读取整份表单记录：
+
+```tsx
+import { Field, useDisplayRecordValue } from "@/components/fields";
+
+function HeaderStatusBadge() {
+  const status = useDisplayRecordValue<string>("status");
+  return <span>{status}</span>;
+}
+
+<FormHeader>
+  <Field fieldName="employeeCode" />
+  <HeaderStatusBadge />
+</FormHeader>
+```
+
 ### `Group`
 
 用于在同一行内横向组合多个 `Field` 的行内 flex 容器。内部 Field 的标签一律隐藏——请改用 `Group` 的 `labelName`。
 
-**位置：** `@/components/fields/extend/Group`
+**位置：** `@/components/fields/composition`
 
 #### Group 属性
 
@@ -124,7 +142,7 @@ import { FieldDisplayScope } from "@/components/fields/FieldDisplayScope";
 **表单模式——共享标签：**
 
 ```tsx
-import { Group } from "@/components/fields/extend/Group";
+import { Group } from "@/components/fields/composition";
 
 <FormSection labelName="名称">
   <Group labelName="姓名" separator="-">
@@ -200,7 +218,7 @@ function UserTableView() {
 | `readonly`     | `FieldCondition`                   | 否   | 动态只读控制。支持 `boolean`、`FilterCondition` 或 `dependsOn(...)`。 |
 | `hidden`       | `FieldCondition`                   | 否   | 动态可见性控制。隐藏字段不会渲染，同时会抑制其校验。 |
 | `defaultValue` | `unknown`                          | 否   | 仅创建态使用的默认值覆盖。优先级高于 `metaField.defaultValue` 和对话框 / 页面级 `defaultValues`。 |
-| `filters`      | `string \| FilterCondition`        | 否   | 关联过滤条件覆盖。`Field.filters` 会覆盖 `metaField.filters`。支持 JSON 字符串形式的元数据过滤条件以及 `{{ expr }}`（如 `{{ fieldName }}`）引用。 |
+| `filters`      | `string \| FilterCondition`        | 否   | 过滤条件覆盖。用于关联查询，以及 `Option` / `MultiOption` 在客户端按 `itemCode` 过滤已加载的选项（再渲染）。`Field.filters` 会覆盖 `metaField.filters`。支持 JSON 字符串形式的元数据过滤条件以及 `{{ expr }}`（如 `{{ fieldName }}`）引用。 |
 | `onChange`     | `FieldOnChangeProp`                | 否   | 远程字段联动。支持简写 `string[]` 或 `{ update?, with? }`。 |
 | `tableView`    | `RelationTableView`                | 否   | `OneToMany` / `ManyToMany` 的关联表格视图。须为零 props 的组件，且渲染 `<RelationTable />`。详见 [关联字段](./relations)。 |
 | `formView`     | `RelationFormView`                 | 否   | 关联对话框 / 详情视图配置。详见 [关联字段](./relations)。 |
@@ -295,14 +313,16 @@ import { dependsOn, Field } from "@/components/fields";
 
 优先级建议：先用 `boolean`，再用 `FilterCondition` 表达声明式业务规则，只有真正需要计算逻辑时再使用 `dependsOn(...)`。
 
-## 关联 `filters`
+## filters
 
-`filters` 主要用于关联字段：
+`filters` 用于：
 
-- `ManyToOne` / `OneToOne` 的可搜索关联查询
-- `SelectTree` 的关联选择查询
-- `OneToMany` / `ManyToMany` 的远程关联表格查询
-- `ManyToMany` 选择器对话框查询
+- 关联字段 —— 约束后端查询
+  - `ManyToOne` / `OneToOne` 可搜索引用查询
+  - `SelectTree` 关联选择查询
+  - `OneToMany` / `ManyToMany` 远程关联表格查询
+  - `ManyToMany` 选择器对话框查询
+- `Option` / `MultiOption` 字段 —— 在客户端按 `itemCode` 过滤已加载的 `OptionReference[]` 后再渲染（适用于 `OptionSelect`、`Radio`、`StatusBar`、`CheckBox` widget；`Badge` 为纯展示，不受影响）。未传 `filters` 时展示全部选项。
 
 可接受输入：
 
@@ -315,7 +335,7 @@ import { dependsOn, Field } from "@/components/fields";
 - `TODAY`、`NOW`、`USER_ID`、`USER_EMP_ID`、`USER_POSITION_ID`、`USER_DEPT_ID`、`USER_COMP_ID`：原样透传，由后端替换环境变量
 - 字面量：使用 `{{ 'value' }}` 或后端 token 如 `{{ NOW }}`；保留字段引用在支持的场景下使用 `{{ @fieldName }}`
 
-示例：
+示例 —— 关联：
 
 ```tsx
 <Field
@@ -332,10 +352,24 @@ import { dependsOn, Field } from "@/components/fields";
 />
 ```
 
+示例 —— `Option` / `MultiOption`（过滤条件中的字段名须为 `itemCode`）：
+
+```tsx
+<Field
+  fieldName="country"
+  filters={[["itemCode", "IN", ["US", "CA", "UK"]]]}
+/>
+
+<Field
+  fieldName="tags"
+  filters={[["itemCode", "!=", "archived"]]}
+/>
+```
+
 行为：
 
 - `Field.filters` 会覆盖 `metaField.filters`
-- 如果省略 `Field.filters`，关联 widget 会回退到 `metaField.filters`
+- 若省略 `Field.filters`，关联 widget 会回退到 `metaField.filters`；`Option` / `MultiOption` widget 会原样展示全部选项
 - `{{ fieldName }}` 会基于当前作用域值解析：
   - `ModelForm`：当前表单值
   - `ModelTable` 内联编辑：当前编辑行
@@ -531,7 +565,7 @@ companyId.cascadedField = "employeeId.department.companyId";
 - `CheckBox`
 - `Radio`
 - `StatusBar`
-- `Badge` — 只读徽章展示；将值渲染为带颜色的 `StatusBadge`
+- `Badge` — 只读徽章展示；按选中项将值渲染为一枚或多枚彩色 `StatusBadge`
 
 表格只读行为：
 

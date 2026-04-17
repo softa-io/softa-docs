@@ -315,6 +315,8 @@
 
 ## 布尔与选项类 Widgets
 
+`Option` 与 `MultiOption` 的交互类 widget（`OptionSelect`、`Radio`、`StatusBar`、`CheckBox`）支持通过 `Field.filters` 在客户端过滤选项——过滤条件按每条选项的 `itemCode` 匹配。`Badge` 为纯展示，不受影响。详见 [Fields → `filters`](./fields#filters)。
+
 ### `CheckBox`
 
 ```tsx

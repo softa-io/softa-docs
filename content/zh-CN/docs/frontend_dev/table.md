@@ -776,7 +776,7 @@ function UnlockDialog() {
 - 侧栏宽度固定为 280px，暂无公开宽度 API
 - `SideCard` / `SideList` 中的 `Field` 子节点通过 `RecordContext` 以展示模式渲染，无需 `FieldPropsContext`
 - `SideTree` 封装 `TreePanel`；`searchMode` 默认 `"local"`，启用 `remoteSearch` 时为 `"server"`
-- `SideCard` 与 `SideList` 也可用于 `ModelSideForm` 作为数据源面板（参见 [ModelSideForm](../side-form)）
+- `SideCard` 与 `SideList` 也可用于 `ModelSideForm` 作为数据源面板（参见 [ModelSideForm](../sideForm)）
 
 ## PageTabs
 

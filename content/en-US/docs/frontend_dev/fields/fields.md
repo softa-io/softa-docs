@@ -9,7 +9,7 @@ Use this README for:
 - `Field` props and overrides, three rendering modes (form / display / declaration)
 - `required` / `readonly` / `hidden`
 - `dependsOn(...)`
-- relation `filters`
+- `filters` (relation queries + `Option` / `MultiOption` client-side filtering)
 - remote `Field.onChange`
 - runtime value contracts
 - field-type-level front-end behavior
@@ -20,7 +20,7 @@ Related docs:
 - [Widgets](./widgets): `FieldType -> WidgetType` matrix and widget-specific examples
 - [ModelForm](../form): page shell
 - [ModelTable](../table): read cells, inline edit, and side panels
-- [ModelSideForm](../side-form): side panel + embedded form view
+- [ModelSideForm](../sideForm): side panel + embedded form view
 - [Tree](../tree): internal tree primitives used by `SideTree` and `SelectTree`
 
 ## Import
@@ -36,6 +36,8 @@ Additional public exports:
 ```tsx
 import {
   Field,
+  useDisplayRecord,
+  useDisplayRecordValue,
   RelationTable,
   type FieldCondition,
   type FieldConditionContext,
@@ -79,7 +81,7 @@ import { RecordContextProvider } from "@/components/contexts/RecordContext";
 Inside `ModelForm`, `FieldPropsContext` is already provided. To force `Field` into display mode (e.g. in `FormHeader` children), wrap with `FieldDisplayScope`:
 
 ```tsx
-import { FieldDisplayScope } from "@/components/fields/FieldDisplayScope";
+import { FieldDisplayScope } from "@/components/fields/display";
 
 <FieldDisplayScope>
   <Field fieldName="status" />     {/* display mode despite being inside ModelForm */}
@@ -88,11 +90,29 @@ import { FieldDisplayScope } from "@/components/fields/FieldDisplayScope";
 
 `FormHeader` automatically wraps its `children` in `FieldDisplayScope`.
 
+For custom display-only components inside `FieldDisplayScope`, use
+`useDisplayRecordValue(path)` or `useDisplayRecord(paths)` to subscribe only to
+the fields you need, instead of reading the whole form record:
+
+```tsx
+import { Field, useDisplayRecordValue } from "@/components/fields";
+
+function HeaderStatusBadge() {
+  const status = useDisplayRecordValue<string>("status");
+  return <span>{status}</span>;
+}
+
+<FormHeader>
+  <Field fieldName="employeeCode" />
+  <HeaderStatusBadge />
+</FormHeader>
+```
+
 ### `Group`
 
 Inline flex container that groups multiple `Field` elements on a single line. Inner Field labels are always suppressed — use `labelName` on `Group` instead.
 
-**Location:** `@/components/fields/extend/Group`
+**Location:** `@/components/fields/composition`
 
 #### Group Props
 
@@ -124,7 +144,7 @@ Inline flex container that groups multiple `Field` elements on a single line. In
 **Form mode — with shared label:**
 
 ```tsx
-import { Group } from "@/components/fields/extend/Group";
+import { Group } from "@/components/fields/composition";
 
 <FormSection labelName="Name">
   <Group labelName="Full Name" separator="-">
@@ -200,7 +220,7 @@ function UserTableView() {
 | `readonly`     | `FieldCondition`                   | No       | Dynamic readonly control. Supports `boolean`, `FilterCondition`, or `dependsOn(...)`.                                                                    |
 | `hidden`       | `FieldCondition`                   | No       | Dynamic visibility control. Hidden fields are not rendered and their validation is suppressed.                                                            |
 | `defaultValue` | `unknown`                          | No       | Create-only default override. Has higher priority than `metaField.defaultValue` and dialog/page `defaultValues`.                                         |
-| `filters`      | `string \| FilterCondition`        | No       | Relation filter override. `Field.filters` overrides `metaField.filters`. Supports JSON-string metadata filters and `{{ expr }}` (e.g. `{{ fieldName }}`) references.            |
+| `filters`      | `string \| FilterCondition`        | No       | Filter override. Used by relation queries and by `Option` / `MultiOption` client-side option filtering (matched on `itemCode`). `Field.filters` overrides `metaField.filters`. Supports JSON-string metadata filters and `{{ expr }}` (e.g. `{{ fieldName }}`) references.            |
 | `onChange`     | `FieldOnChangeProp`                | No       | Remote field linkage. Supports shorthand `string[]` or `{ update?, with? }`.                                                                              |
 | `tableView`    | `RelationTableView`                | No       | Relation-table view for `OneToMany` / `ManyToMany`. Must be a zero-prop component that renders `<RelationTable />`. See [Relation Fields](./relations).          |
 | `formView`     | `RelationFormView`                 | No       | Relation dialog/detail view config. See [Relation Fields](./relations).                                                                                            |
@@ -295,14 +315,16 @@ Why prefer `dependsOn(...)` over a bare function:
 
 Use `boolean` first, `FilterCondition` for declarative business rules, and `dependsOn(...)` when you truly need computed logic.
 
-## Relation `filters`
+## `filters`
 
-`filters` is mainly used by relation fields:
+`filters` is used by:
 
-- `ManyToOne` / `OneToOne` searchable reference queries
-- `SelectTree` relation picker queries
-- `OneToMany` / `ManyToMany` remote relation-table queries
-- `ManyToMany` picker dialog queries
+- relation fields — constrains backend queries
+  - `ManyToOne` / `OneToOne` searchable reference queries
+  - `SelectTree` relation picker queries
+  - `OneToMany` / `ManyToMany` remote relation-table queries
+  - `ManyToMany` picker dialog queries
+- `Option` / `MultiOption` fields — filters the loaded `OptionReference[]` on the client by `itemCode` before rendering (applies to `OptionSelect`, `Radio`, `StatusBar`, and `CheckBox` widgets; `Badge` is display-only and unaffected). When `filters` is omitted, all options are shown.
 
 Accepted input:
 
@@ -315,7 +337,7 @@ Recommended declarative value syntax inside filter values:
 - `TODAY`, `NOW`, `USER_ID`, `USER_EMP_ID`, `USER_POSITION_ID`, `USER_DEPT_ID`, `USER_COMP_ID`: pass through unchanged and let backend replace environment variables
 - literals: use `{{ 'value' }}` or backend tokens like `{{ NOW }}`; reserved field references: `{{ @fieldName }}` where supported
 
-Example:
+Example — relation:
 
 ```tsx
 <Field
@@ -332,10 +354,24 @@ Example:
 />
 ```
 
+Example — `Option` / `MultiOption` (filter condition field name must be `itemCode`):
+
+```tsx
+<Field
+  fieldName="country"
+  filters={[["itemCode", "IN", ["US", "CA", "UK"]]]}
+/>
+
+<Field
+  fieldName="tags"
+  filters={[["itemCode", "!=", "archived"]]}
+/>
+```
+
 Behavior:
 
 - `Field.filters` overrides `metaField.filters`
-- if `Field.filters` is omitted, relation widgets fall back to `metaField.filters`
+- if `Field.filters` is omitted, relation widgets fall back to `metaField.filters`; `Option` / `MultiOption` widgets render all options unchanged
 - `{{ fieldName }}` is resolved against current scope values:
   - `ModelForm`: current form values
   - `ModelTable` inline edit: current editing row
