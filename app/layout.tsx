@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import type { ReactNode } from 'react'
+import Script from 'next/script'
 
 import 'nextra-theme-docs/style.css'
 import '../style.css'
@@ -33,7 +34,19 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   // we can import global CSS when using the App Router.
   return (
     <html lang={DEFAULT_LOCALE} dir="ltr" suppressHydrationWarning>
+      <head>
+        <script
+          src="https://analytics.ahrefs.com/analytics.js"
+          data-key="Ha6ljdyqO4zRt7qDyJ8HrQ"
+          async
+        />
+      </head>
       <body>
+        <Script
+          src="https://analytics.ahrefs.com/analytics.js"
+          strategy="afterInteractive"
+          data-key="Ha6ljdyqO4zRt7qDyJ8HrQ"
+        />
         <HtmlLangSyncScript />
         <PagefindLocaleSyncClient />
         {children}
