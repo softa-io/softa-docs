@@ -48,7 +48,7 @@ function OptionItemsTableView() {
 
 | Prop       | 类型             | 必填 | 说明                                                                                      |
 | ---------- | ---------------- | ---- | ----------------------------------------------------------------------------------------- |
-| `children` | `ReactNode`      | 是   | 按顺序声明关联表格列的 `<Field />`。                                                      |
+| `children` | `ReactNode`      | 是   | 按顺序声明的 `<Field />` 列，以及可选的 `<Action />` 行级操作（见 [行内操作](#row-actions)）。 |
 | `orders`   | `OrderCondition` | 否   | 关联表格默认排序。支持单个元组或多个元组。                                                |
 | `pageSize` | `number`         | 否   | 关联表格页大小。仅对分页关联表格（`isPaged={true}`）生效。                                |
 
@@ -79,6 +79,47 @@ function OptionItemsTableView() {
 - `RelationTable.orders` 同时支持单个元组与多个元组
 - 列声明仍由子级 `<Field />` 的顺序决定
 
+### 行内操作 {#row-actions}
+
+`RelationTable` 可与 `<Field />` 并列接受 `<Action />` 子节点。它们渲染在末尾的 `Actions` 列中，作为每行操作，并面向**关联模型**派发——动作的 `operation` / `href` / `onClick` 会以该行的 `id` 作为记录 id。
+
+```tsx
+import { Action } from "@/components/actions/Action";
+
+function OptionItemsTableView() {
+  return (
+    <RelationTable orders={["sequence", "ASC"]}>
+      <Field fieldName="itemCode" />
+      <Field fieldName="itemName" />
+      <Action
+        type="link"
+        labelName="打开"
+        placement="inline"
+        href="/config/option-item/{id}"
+      />
+      <Action
+        labelName="归档"
+        operation="archive"
+        placement="more"
+      />
+    </RelationTable>
+  );
+}
+```
+
+放置规则与 `ModelTable` 行级操作一致：
+
+- `placement="inline"`（行上默认）→ 显示在 Actions 列中的图标/按钮
+- `placement="more"` → 显示在 Actions 列的溢出下拉中
+- `placement="toolbar"` / `"header"` 会被忽略（关联表格没有工具栏）
+
+行为说明：
+
+- 仅当行存在 `id` 时才渲染操作；草稿/未保存行对应单元格为空
+- 动作派发使用**关联**模型名（而非父表单的模型），因此 `operation` 针对关联实体执行，查询失效会刷新该模型
+- `disabled` / `hidden` 条件基于**已保存**的行数据求值——不会跟踪未保存的内联编辑值（与 `ModelTable` 不同）
+- 此上下文中 `ActionExecutionContext.scope` 报告为 `"model-table"`（关联行复用同一套派发器）
+
 ## `ManyToOne` / `OneToOne`
 
 默认行为为可搜索的关联选择：
@@ -106,6 +147,45 @@ function OptionItemsTableView() {
 
 - `filters` 作用于默认的可搜索关联查询
 - 当依赖的 `{{ fieldName }}` 在当前作用域没有值时，选择器保持**查询禁用**，而不会加载全部选项
+
+#### `filterBySource` —— 由后端驱动的上下文过滤
+
+当业务规则无法仅通过 `filters` / `{{ fieldName }}` 声明表达时（例如「男性员工不能选产假类型」「剩余年假须大于 0」），可使用 `filterBySource`，让后端根据调用方记录上下文自行过滤：
+
+```tsx
+<Field fieldName="leaveTypeId" filterBySource />
+```
+
+当 `filterBySource` 为 true 时，`searchName` 请求会携带 `SourceRecord`：
+
+```ts
+interface SourceRecord {
+  model: string;                     // metaField.modelName —— 拥有该字段的模型
+  recordId?: string | null;          // 解析后的 recordId；创建模式下为 null
+  values?: Record<string, unknown>;  // 该记录当前的内存表单值
+}
+```
+
+语义：
+
+- `model` 与 `recordId` 描述**直接拥有该字段**的记录——根表单上的 Field 为根记录；`OneToMany` / `ManyToMany` 行内的 Field 则为该行记录（使用行自身模型，而非父级）
+- `values` 为查询时刻的表单快照；任意表单值变更都会触发重新查询，使下拉随表单联动过滤
+- 默认为 `false`；按字段开启，因为「该查找是否应尊重宿主表单」由调用方决定，而非目标模型
+- 可与声明式 `filters` 同时使用；二者一并提交，由后端合并应用
+
+在 `filters` 与 `filterBySource` 之间选择：
+
+- **`filters` + `{{ fieldName }}`** —— 简单跨字段引用，在前端解析（`gender`、`status`、`departmentId` 等）。声明式、代码可读，无需改后端。
+- **`filterBySource`** —— 需要计算、策略查询或后端跨模型关联的规则。对前端不透明，但业务规则可与在 `save` 上强制执行的后端服务放在一起。
+
+示例 —— 请假类型下拉通过服务端规则按员工性别过滤：
+
+```tsx
+<Field fieldName="employeeId" />
+<Field fieldName="leaveTypeId" filterBySource />
+```
+
+安全提示：`filterBySource` 会发送当前完整表单值映射。若表单含有目标后端不应看到的字段，请勿启用。
 
 ### `SelectTree`
 

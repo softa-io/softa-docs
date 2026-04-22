@@ -25,10 +25,10 @@ import { BulkAction } from "@/components/actions/BulkAction";
 
 ## 选择合适的组件
 
-| 组件         | 适用场景                                          | 典型作用域                                      |
-| ------------ | ------------------------------------------------- | ----------------------------------------------- |
-| `Action`     | 单记录动作、行级动作、表单动作或链接              | `ModelForm`、`ModelTable`、`ModelCard`          |
-| `BulkAction` | 基于表格多选行批量执行的动作                      | 仅 `ModelTable`                                 |
+| 组件         | 适用场景                                          | 典型作用域                                                         |
+| ------------ | ------------------------------------------------- | ------------------------------------------------------------------ |
+| `Action`     | 单记录动作、行级动作、表单动作或链接              | `ModelForm`、`ModelTable`、`ModelCard`、`RelationTable`            |
+| `BulkAction` | 基于表格多选行批量执行的动作                      | 仅 `ModelTable`                                                    |
 
 ## `Action`
 
@@ -56,6 +56,7 @@ type ActionValue<T> =
 | ---------------- | ---------------------------------------------- | ---- | --------------------- | ---- |
 | `type`           | `"default" \| "dialog" \| "link" \| "custom" \| "form"` | 否   | `"default"`           | 动作行为。省略时表示直接调用 API。 |
 | `labelName`      | `ReactNode`                                    | 是   | -                     | 动作文案。 |
+| `style`          | `"primary" \| "danger"`                        | 否   | -                     | 视觉样式。省略时为中性默认外观。见 [动作样式](#动作样式)。 |
 | `placement`      | `"toolbar" \| "more" \| "header" \| "inline"` | 否   | 取决于容器            | 支持的位置依赖于父容器。 |
 | `confirmMessage` | `ActionValue<string>`                          | 否   | -                     | 执行动作前的可选确认提示。 |
 | `successMessage` | `ActionValue<string>`                          | 否   | -                     | `default` 和 `dialog` 动作成功后的提示文案。 |
@@ -96,6 +97,29 @@ type ActionValue<T> =
 | `"read"` | 已有记录，字段只读 | 详情表单且 `detailStartsInReadOnly`、用户尚未点编辑，或路由 `?mode=read`。 |
 
 要点：**工具栏上的业务动作（`Action`）在 `read` 模式下不会自动禁用。** 只读只锁表单字段；状态流转类动作仍可点击。若某动作在只读下也应禁用，请显式设置 `disabled`。
+
+### 动作样式
+
+使用 `style` 表达按钮的视觉意图。省略 `style` 时，动作为中性外观（ghost 或描边，由容器决定）。
+
+| 取值 | 外观 | 适用场景 |
+| ---- | ---- | -------- |
+| `"primary"` | 突出 / 实心 | 工具栏或区块中的主推荐操作。 |
+| `"danger"` | 红色 / 危险 | 不可逆或高风险操作。 |
+| _（省略）_ | 中性 ghost/描边 | 其他动作。 |
+
+```tsx
+// 主按钮：突出关键操作
+<Action labelName="提交审批" operation="submit" style="primary" />
+
+// 危险：明确提示风险
+<Action labelName="停用账户" operation="deactivate" style="danger" confirmMessage="确定停用该账户？" />
+
+// 无 style：中性外观
+<Action labelName="导出" operation="export" />
+```
+
+> **自动识别**：若省略 `style`，当 `operation` 或 `labelName` 含有 `delete`、`remove`、`disable`、`deactivate`、`archive`、`reject` 等关键词时，会自动视为 `"danger"`。仍建议显式设置 `style="danger"` 以保持清晰。
 
 ### 条件类 props（`disabled` / `hidden`）
 
@@ -246,7 +270,7 @@ function ConfigGroupForm() {
 
 - 类型：`default | dialog`
 - 放置位置：`toolbar | more`
-- 通用视觉 props 与 `Action` 保持一致：`labelName`、`confirmMessage`、`successMessage`、`icon`、`disabled`
+- 通用视觉 props 与 `Action` 保持一致：`labelName`、`style`、`confirmMessage`、`successMessage`、`icon`、`disabled`
 
 行为专属 Props：
 
@@ -271,7 +295,7 @@ function ConfigGroupForm() {
 - 对于 API 动作（`default` / `dialog`），请放在 `FormToolbar`
 - 编辑模式且有未保存修改时，点击业务动作会先询问是否丢弃修改再继续
 - 创建模式下，内置的 `Duplicate` / `Delete` 仍可见但禁用
-- 内置工作流/新建/复制/删除工具栏行为通过 `ModelForm` / `ModelSideForm` 的 props 配置
+- 内置工作流/新建/复制/删除工具栏行为在 `ModelForm` / `ModelSideForm` 的 props 上配置
 
 完整示例：
 
@@ -483,3 +507,52 @@ function UnlockDialog() {
   />
 </ModelTable>;
 ```
+
+## `RelationTable` 中的动作
+
+可在关联字段的 `tableView` 中，将 `<Action />` 声明为 `<RelationTable />` 的子节点，为 `OneToMany` / `ManyToMany` 关联表附加行级操作。
+
+规则：
+
+- `<Action placement="inline" />` 在该行的 `Actions` 列中渲染为图标/按钮
+- `<Action placement="more" />` 在该行的溢出下拉中渲染
+- 此处不支持 `placement="toolbar"` / `"header"`（关联表格无工具栏）
+- 动作面向**关联模型**派发，而非父表单模型——`operation` 使用关联记录 id 调用，查询失效针对关联模型
+- 仅当行存在 `id` 时渲染操作；新增未保存行对应单元格为空
+- `disabled` / `hidden` 仅基于已保存行数据求值；不跟踪未保存的内联编辑值（与 `ModelTable` 不同）
+- `ActionExecutionContext.scope` 报告为 `"model-table"`（关联行复用同一派发器）
+- `RelationTable` 不支持 `BulkAction`
+
+示例 —— 在内嵌关联表上声明行操作：
+
+```tsx
+import { Action } from "@/components/actions/Action";
+import { Field, RelationTable } from "@/components/fields";
+
+function AgreementLineTableView() {
+  return (
+    <RelationTable orders={["sequence", "ASC"]}>
+      <Field fieldName="sequence" />
+      <Field fieldName="productCode" />
+      <Field fieldName="quantity" />
+
+      <Action
+        type="link"
+        labelName="打开"
+        placement="inline"
+        href="/sales/agreement-line/{id}"
+      />
+      <Action
+        labelName="重算"
+        operation="recalculate"
+        placement="more"
+        successMessage="行已重算。"
+      />
+    </RelationTable>
+  );
+}
+
+<Field fieldName="lines" tableView={AgreementLineTableView} />;
+```
+
+另见 [关联字段 — 行内操作](./fields/relations.md#row-actions)。

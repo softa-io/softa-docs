@@ -46,11 +46,11 @@ function OptionItemsTableView() {
 
 ### Props
 
-| Prop       | Type             | Required | Notes                                                                                      |
-| ---------- | ---------------- | -------- | ------------------------------------------------------------------------------------------ |
-| `children` | `ReactNode`      | Yes      | Ordered `<Field />` column declarations for the relation table.                            |
-| `orders`   | `OrderCondition` | No       | Default relation-table sorting. Supports a single tuple or multiple tuples.                |
-| `pageSize` | `number`         | No       | Relation-table page size. Only affects paged relation tables (`isPaged={true}`).           |
+| Prop       | Type             | Required | Notes                                                                                                     |
+| ---------- | ---------------- | -------- | --------------------------------------------------------------------------------------------------------- |
+| `children` | `ReactNode`      | Yes      | Ordered `<Field />` column declarations, plus optional `<Action />` row actions (see [Row Actions](#row-actions)). |
+| `orders`   | `OrderCondition` | No       | Default relation-table sorting. Supports a single tuple or multiple tuples.                               |
+| `pageSize` | `number`         | No       | Relation-table page size. Only affects paged relation tables (`isPaged={true}`).                          |
 
 Sorting examples:
 
@@ -79,6 +79,47 @@ Behavior notes:
 - `RelationTable.orders` supports both a single tuple and multiple tuples
 - column declaration still comes from child `<Field />` order
 
+### Row Actions
+
+`RelationTable` accepts `<Action />` children alongside `<Field />` declarations. They render as per-row actions in a trailing `Actions` column and dispatch against the **related model** — the action's `operation` / `href` / `onClick` receives the row's `id` as the record id.
+
+```tsx
+import { Action } from "@/components/actions/Action";
+
+function OptionItemsTableView() {
+  return (
+    <RelationTable orders={["sequence", "ASC"]}>
+      <Field fieldName="itemCode" />
+      <Field fieldName="itemName" />
+      <Action
+        type="link"
+        labelName="Open"
+        placement="inline"
+        href="/config/option-item/{id}"
+      />
+      <Action
+        labelName="Archive"
+        operation="archive"
+        placement="more"
+      />
+    </RelationTable>
+  );
+}
+```
+
+Placement rules match `ModelTable` row actions:
+
+- `placement="inline"` (default for rows) → icon/button in the Actions column
+- `placement="more"` → overflow dropdown in the Actions column
+- `placement="toolbar"` / `"header"` are ignored (relation tables have no toolbar)
+
+Behavior notes:
+
+- actions only render on rows that have an `id`; draft/unsaved rows show an empty cell
+- action dispatch uses the **related** model name (not the parent form's model), so `operation` invokes against the related entity and query invalidation refreshes that model
+- `disabled` / `hidden` conditions evaluate against the saved row data — they do not track unsaved inline-edit values (unlike `ModelTable`)
+- `ActionExecutionContext.scope` is reported as `"model-table"` in this context (relation rows reuse the same dispatcher)
+
 ## `ManyToOne` / `OneToOne`
 
 Default behavior is searchable reference selection:
@@ -106,6 +147,45 @@ Notes:
 
 - `filters` is applied to the default searchable reference query
 - when a dependent `{{ fieldName }}` has no current value, the selector stays query-disabled instead of loading all options
+
+#### `filterBySource` — backend-driven contextual filtering
+
+For business rules that cannot be expressed declaratively via `filters` / `{{ fieldName }}` (e.g. "male employees can't select maternity leave", "remaining annual leave must be > 0"), use `filterBySource` to let the backend apply its own filtering based on the calling record's context:
+
+```tsx
+<Field fieldName="leaveTypeId" filterBySource />
+```
+
+When `filterBySource` is true, the `searchName` request carries a `SourceRecord`:
+
+```ts
+interface SourceRecord {
+  model: string;                     // metaField.modelName — the model that owns this field
+  recordId?: string | null;          // resolved recordId; null in create mode
+  values?: Record<string, unknown>;  // current in-memory form values of that record
+}
+```
+
+Semantics:
+
+- `model` and `recordId` describe the record that directly owns the field — for a root form Field this is the root record, for a Field inside a OneToMany / ManyToMany row it is that row's record (with the row's own model, not the parent's)
+- `values` is the form snapshot at query time; changes to any form value trigger a fresh query so the dropdown re-filters reactively
+- default is `false`; enable per field, because "should this lookup honor the host form" is a call-site decision, not a target-model decision
+- can be combined with declarative `filters`; both are sent and the backend applies them together
+
+Choosing between `filters` and `filterBySource`:
+
+- **`filters` with `{{ fieldName }}`** — simple cross-field references resolved on the frontend (`gender`, `status`, `departmentId` etc.). Declarative, discoverable in code, no backend changes needed.
+- **`filterBySource`** — rules that require computation, policy lookups, or cross-model joins on the backend. Opaque to the frontend but keeps business rules co-located with the backend service that enforces them on `save`.
+
+Example — a leave-type dropdown filtered by employee gender through a server-side rule:
+
+```tsx
+<Field fieldName="employeeId" />
+<Field fieldName="leaveTypeId" filterBySource />
+```
+
+Security note: `filterBySource` sends the entire current form values map. Don't enable it on forms carrying fields the target backend shouldn't see.
 
 ### `SelectTree`
 

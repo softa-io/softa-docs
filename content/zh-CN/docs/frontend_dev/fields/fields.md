@@ -219,6 +219,7 @@ function UserTableView() {
 | `hidden`       | `FieldCondition`                   | 否   | 动态可见性控制。隐藏字段不会渲染，同时会抑制其校验。 |
 | `defaultValue` | `unknown`                          | 否   | 仅创建态使用的默认值覆盖。优先级高于 `metaField.defaultValue` 和对话框 / 页面级 `defaultValues`。 |
 | `filters`      | `string \| FilterCondition`        | 否   | 过滤条件覆盖。用于关联查询，以及 `Option` / `MultiOption` 在客户端按 `itemCode` 过滤已加载的选项（再渲染）。`Field.filters` 会覆盖 `metaField.filters`。支持 JSON 字符串形式的元数据过滤条件以及 `{{ expr }}`（如 `{{ fieldName }}`）引用。 |
+| `filterBySource` | `boolean`                        | 否   | 为 true 时，在 `searchName` 等服务端搜索调用中附带 `SourceRecord` 快照（所属模型 + recordId + 当前表单值），供后端按调用表单上下文应用业务规则。默认 `false`；按调用点开启。详见 [关联字段 — filterBySource](./relations.md)。 |
 | `onChange`     | `FieldOnChangeProp`                | 否   | 远程字段联动。支持简写 `string[]` 或 `{ update?, with? }`。 |
 | `tableView`    | `RelationTableView`                | 否   | `OneToMany` / `ManyToMany` 的关联表格视图。须为零 props 的组件，且渲染 `<RelationTable />`。详见 [关联字段](./relations)。 |
 | `formView`     | `RelationFormView`                 | 否   | 关联对话框 / 详情视图配置。详见 [关联字段](./relations)。 |

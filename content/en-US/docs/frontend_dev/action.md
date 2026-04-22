@@ -25,10 +25,10 @@ import { BulkAction } from "@/components/actions/BulkAction";
 
 ## Choose The Right Component
 
-| Component    | Use when                                               | Typical scope                          |
-| ------------ | ------------------------------------------------------ | -------------------------------------- |
-| `Action`     | Single-record action, row action, form action, or link | `ModelForm`, `ModelTable`, `ModelCard` |
-| `BulkAction` | Selection-based action over multiple table rows        | `ModelTable` only                      |
+| Component    | Use when                                               | Typical scope                                           |
+| ------------ | ------------------------------------------------------ | ------------------------------------------------------- |
+| `Action`     | Single-record action, row action, form action, or link | `ModelForm`, `ModelTable`, `ModelCard`, `RelationTable` |
+| `BulkAction` | Selection-based action over multiple table rows        | `ModelTable` only                                       |
 
 ## `Action`
 
@@ -56,6 +56,7 @@ type ActionValue<T> =
 | ---------------- | ------------------------------------------------------- | -------- | ------------------- | --------------------------------------------------------- |
 | `type`           | `"default" \| "dialog" \| "link" \| "custom" \| "form"` | No       | `"default"`         | Action behavior. Omit to use direct API invoke.           |
 | `labelName`      | `ReactNode`                                             | Yes      | -                   | Action label.                                             |
+| `style`          | `"primary" \| "danger"`                                 | No       | -                   | Visual style. Omit for neutral default appearance. See [Action Style](#action-style). |
 | `placement`      | `"toolbar" \| "more" \| "header" \| "inline"`           | No       | container-dependent | Placement support depends on parent container.            |
 | `confirmMessage` | `ActionValue<string>`                                   | No       | -                   | Optional confirmation prompt before action execution.     |
 | `successMessage` | `ActionValue<string>`                                   | No       | -                   | Success toast message for `default` and `dialog` actions. |
@@ -96,6 +97,29 @@ Every `ActionValue<T>`, `disabled`, and `hidden` callback receives the same cont
 | `"read"`   | Existing record, form fields are read-only.   | Detail form with `detailStartsInReadOnly` before the user clicks Edit, or route `?mode=read`. |
 
 Key behavior: **business actions (toolbar `Action` components) are NOT automatically disabled in `read` mode.** Read mode only locks form fields — actions like status transitions remain clickable. If an action should be disabled in read mode, declare it explicitly via the `disabled` prop.
+
+### Action Style
+
+Use `style` to express the visual intent of an action button. Omitting `style` renders the action with a neutral appearance (ghost or outline, determined by the container).
+
+| Value       | Appearance          | When to use                                          |
+| ----------- | ------------------- | ---------------------------------------------------- |
+| `"primary"` | Prominent / filled  | The main recommended action in a toolbar or section. |
+| `"danger"`  | Red / destructive   | Irreversible or high-risk operations.                |
+| _(omitted)_ | Neutral ghost/outline | All other actions.                                 |
+
+```tsx
+// Primary: highlight the key action
+<Action labelName="Submit for Approval" operation="submit" style="primary" />
+
+// Danger: signal risk explicitly
+<Action labelName="Deactivate Account" operation="deactivate" style="danger" confirmMessage="Deactivate this account?" />
+
+// No style: neutral appearance
+<Action labelName="Export" operation="export" />
+```
+
+> **Auto-detection**: If `style` is omitted, actions whose `operation` or `labelName` contains keywords like `delete`, `remove`, `disable`, `deactivate`, `archive`, or `reject` are automatically treated as `"danger"`. Explicitly setting `style="danger"` is recommended for clarity.
 
 ### Condition props (`disabled` / `hidden`)
 
@@ -244,7 +268,7 @@ Supported behavior:
 
 - types: `default | dialog`
 - placements: `toolbar | more`
-- common visual props follow the same pattern as `Action`: `labelName`, `confirmMessage`, `successMessage`, `icon`, `disabled`
+- common visual props follow the same pattern as `Action`: `labelName`, `style`, `confirmMessage`, `successMessage`, `icon`, `disabled`
 
 Behavior-specific props:
 
@@ -481,3 +505,52 @@ function UnlockDialog() {
   />
 </ModelTable>;
 ```
+
+## Actions In `RelationTable`
+
+`<Action />` can be declared as a child of `<RelationTable />` (inside a relation field's `tableView`) to attach per-row actions to a `OneToMany` / `ManyToMany` relation table.
+
+Rules:
+
+- `<Action placement="inline" />` renders as an icon/button in the row's `Actions` column
+- `<Action placement="more" />` renders in the row's overflow dropdown
+- `placement="toolbar"` / `"header"` are not supported here (relation tables have no toolbar)
+- actions dispatch against the **related model**, not the parent form's model — `operation` is called with the related record id, and query invalidation targets the related model
+- only rows with an `id` render actions; newly-added unsaved rows show an empty cell
+- `disabled` / `hidden` evaluate against saved row data only; they do not track unsaved inline-edit values (unlike `ModelTable`)
+- `ActionExecutionContext.scope` is reported as `"model-table"` (relation rows reuse the same dispatcher)
+- `BulkAction` is not supported in `RelationTable`
+
+Example — declare row actions on an embedded relation table:
+
+```tsx
+import { Action } from "@/components/actions/Action";
+import { Field, RelationTable } from "@/components/fields";
+
+function AgreementLineTableView() {
+  return (
+    <RelationTable orders={["sequence", "ASC"]}>
+      <Field fieldName="sequence" />
+      <Field fieldName="productCode" />
+      <Field fieldName="quantity" />
+
+      <Action
+        type="link"
+        labelName="Open"
+        placement="inline"
+        href="/sales/agreement-line/{id}"
+      />
+      <Action
+        labelName="Recalculate"
+        operation="recalculate"
+        placement="more"
+        successMessage="Line recalculated."
+      />
+    </RelationTable>
+  );
+}
+
+<Field fieldName="lines" tableView={AgreementLineTableView} />;
+```
+
+See also [Relation Fields — Row Actions](./fields/relations.md#row-actions).
