@@ -1,3 +1,4 @@
 export default {
-  index: "Studio",
+  index: "User Guide",
+  technical: "Technical Guide",
 }

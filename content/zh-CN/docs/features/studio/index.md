@@ -1,354 +1,309 @@
-# Studio Starter
+# Studio 模块使用指南
 
-## 概述
+本文面向使用 Studio 配置业务应用的开发人员。它说明在前端 Studio 中如何创建应用、设计元数据、管理变更、预览代码和 DDL、发布版本以及处理运行环境差异。
 
-Studio Starter 提供元数据设计时 IDE，支持可视化模型设计、代码生成、版本控制与多环境部署，覆盖 Softa 元数据驱动应用从设计到生产部署的全生命周期。
+## 1. Studio 是什么
 
-主要能力：
+Studio 是元数据驱动应用的设计时工作台，用于把业务对象、字段、视图、导航、选项集等配置成可发布的应用元数据，并通过版本和环境流程发布到目标运行系统。
 
-- **模型设计器**：设计模型、字段、选项集、视图、导航、校验、OnChange 规则、索引，以及生成映射/模板
-- **代码生成器**：通过 Pebble 模板从模型生成模板驱动代码文件；优先使用库表中的模板与字段类型映射，否则回退到类路径下 `templates/code/` 中的模板
-- **DDL 生成器**：通过 Pebble 模板从模型定义与合并后的变更集生成 DDL（CREATE TABLE、ALTER TABLE、DROP TABLE、索引）；优先使用库表中的 SQL 模板与库类型映射
-- **DDL 预览**：在工作项、版本、部署各阶段预览 DDL SQL，便于复制到数据库客户端执行
-- **版本控制**：基于工作项的变更追踪，集成 ES 变更日志；支持版本封存/解封与冻结
-- **部署**：版本直达环境部署，按 `sealedTime` 自动合并已发布版本，生成 DDL 并记录执行；新环境会合并截至目标版本的全部已发布版本
-- **多环境部署**：支持部署到 Dev/Test/UAT/Prod，支持本地或远程升级
+Studio 的核心工作包括：
 
-## 模板引擎
+- 管理 Portfolio 和 App。
+- 在 App 下设计模型、字段、索引、选项集、视图和导航。
+- 配置字段类型默认值、数据库类型映射、代码类型映射、代码模板和 SQL 模板。
+- 通过 WorkItem 追踪一组可发布的设计变更。
+- 将完成的 WorkItem 加入版本，封版后部署到 Dev、Test、UAT、Prod 等环境。
+- 预览模型、WorkItem、Version 和 Deployment 维度的变更、代码和 DDL。
+- 对比设计态元数据和运行态元数据，并在需要时从运行态导入或接受运行态差异。
 
-Studio Starter 使用 [Pebble](https://pebbletemplates.io/)（v4.1.1）作为 Java 代码与 SQL DDL 的模板引擎。Pebble 采用 `{{ var }}` / `{% if %}` 语法，与项目统一的 `{{ }}` 占位符约定一致。
+## 2. 关键概念
 
-### 模板文件
-
-| 目录 | 模板 | 用途 |
-| --- | --- | --- |
-| `templates/code/` | `entity/{{modelName}}.java.peb`、`service/{{modelName}}Service.java.peb`、`service/impl/{{modelName}}ServiceImpl.java.peb`、`controller/{{modelName}}Controller.java.peb` | 代码生成回退模板。未配置 `DesignCodeTemplate` 时，会扫描全部 `templates/code/**/*.peb`；相对目录作为默认输出子目录，`.peb` 前最后一段路径作为渲染后的输出文件名 |
-| `templates/sql/mysql/` | `CreateTable.peb`、`AlterTable.peb`、`DropTable.peb`、`AlterIndex.peb` | MySQL DDL 回退模板 |
-
-### 代码模板规则
-
-- 数据库模式：按 `codeLang` 加载 `DesignCodeTemplate` 并按 `sequence` 排序，渲染到 `ModelCodeDTO.files` 列表。
-- `DesignCodeTemplate.subDirectory` 为 Pebble 模板。`null`、空串、仅空白、`.`、`./`、`/` 均视为 zip 根目录；开头的 `./`、`/`、结尾的 `/`、重复的 `/` 以及 `\` 会被规范化。
-- `DesignCodeTemplate.fileName` 为 Pebble 模板，直接作为输出文件名，须自行包含期望后缀（如 `{{modelName}}Service.java`）；当前实现不会自动追加 `DesignCodeLang.fileExtension`。
-- 渲染后的 `DesignCodeTemplate.fileName` 不能为空，且不能包含目录分隔符；目录结构只能通过 `subDirectory` 表达。
-- 仅当数据库中未配置任何代码模板语言时启用回退模式；此时会渲染类路径下所有 `templates/code/**/*.peb`。
-- 回退模式下，输出文件名来自回退模板路径本身。例如 `templates/code/service/{{modelName}}Service.java.peb` 会生成 `service/SysModelService.java`。
-- 单文件下载使用渲染后的文件名，zip 下载使用渲染后的相对路径。`downloadAllZip` 会为每种语言包加上 `<codeLang>/` 前缀。
-
-### 核心类
-
-| 类 | 说明 |
+| 概念 | 说明 |
 | --- | --- |
-| `TemplateEngine` | Pebble 引擎封装 — 单例 `PebbleEngine`，带缓存，无自动转义 |
-| `CodeGenerator` | 从 `DesignModel` 生成代码文件，优先 `DesignCodeTemplate` + `DesignFieldCodeMapping`；预览/下载可指定单一语言或打包全部已配置语言 |
-| `MySQLDDL` | DDL 生成器，优先 `DesignSqlTemplate` + `DesignFieldDbMapping`，否则回退到类路径 SQL 模板 |
-| `DesignGenerationMetadataResolver` | 库表模板/映射/默认值的统一解析，带优雅回退 |
-| `DdlContextBuilder` | 从 `DesignModel`、`DesignField`、`DesignModelIndex` 构建便于模板使用的 DDL 上下文对象 |
-| `VersionDdl` / `VersionDdlImpl` | 将 `List<ModelChangesDTO>` 转为 `DdlTemplateContext`，再渲染合并后的 DDL 字符串（表 + 索引） |
-
-### 代码生成输出
+| Portfolio | 项目或产品线分组，用来归类多个 App。 |
+| App | 一个元数据应用。进入 App 后，左侧菜单会围绕当前 App 展示 Workbench、模型、版本、环境和部署记录。 |
+| WorkItem | 一次业务变更的工作单元。需要发布的模型、选项集、视图和导航变更应放在一个进行中的 WorkItem 下完成。 |
+| Version | 一个应用版本，聚合多个已完成的 WorkItem。Draft 版本可以继续调整，Sealed/Frozen 版本可以部署。 |
+| Env | 应用运行环境，例如 DEV、TEST、UAT、PROD。部署时只会展示当前 App 下启用的环境。 |
+| Deployment | 一次实际部署记录，包含合并后的变更内容、表结构 DDL、索引 DDL、执行状态和错误信息。 |
+| Drift | 设计态和运行态之间的差异。用于发现运行环境中被手工改动或首次接入已有运行系统的情况。 |
 
-- `ModelCodeDTO` 将某一模型在某一语言下生成的文件归为一组。
-- `ModelCodeDTO.files` 为 `ModelCodeFileDTO` 列表，而非固定的 entity/service/controller 字段。
-- `ModelCodeFileDTO` 包含 `templateId`、`templateName`、`sequence`、`subDirectory`、`fileName`、`relativePath`、`content`。
-- `downloadCode` 根据 `previewCode` 返回的渲染后 `relativePath` 定位文件。
-
-### DDL 模板上下文
-
-SQL 模板不直接读取原始 `DesignModel` / `DesignField` / `DesignModelIndex` 实体。`VersionDdlImpl` 会先将合并后的行变更转为便于模板使用的 DTO，模板作者只需关注 SQL 语法而非 diff 逻辑。
-
-顶层上下文：
-
-- `DdlTemplateContext.createdModels`
-- `DdlTemplateContext.deletedModels`
-- `DdlTemplateContext.updatedModels`
-
-按模型上下文（`ModelDdlCtx`）：
-
-- 基础元数据：`modelName`、`labelName`、`description`、`tableName`、`oldTableName`、`pkColumn`
-- 表变更标记：`renamed`、`tableCommentChanged`、`tableCommentText`
-- 字段分组：`createdFields`、`deletedFields`、`updatedFields`、`renamedFields`
-- 索引分组：`createdIndexes`、`deletedIndexes`、`updatedIndexes`、`renamedIndexes`
-- 渲染标记：`hasTableChanges`、`hasFieldChanges`、`hasIndexChanges`、`hasAlterTableChanges`
+## 3. 菜单结构
 
-按字段上下文（`FieldDdlCtx`）：
+Studio 入口在左侧导航的 `Studio` 模块下。
 
-- 标识：`fieldName`、`columnName`、`oldColumnName`、`renamed`
-- 显示/注释：`labelName`、`description`、`commentText`
-- 类型/默认值：`fieldType`、`dbType`、`length`、`scale`、`required`、`autoIncrement`、`defaultValue`
+### Portfolio & Apps
 
-按索引上下文（`IndexDdlCtx`）：
+- `Apps`：管理应用定义。应用详情页可以维护应用名称、编码、类型、所属 Portfolio、负责人、状态、数据库类型和包名。
+- `Portfolios`：管理 Portfolio。可将 Portfolio 设为 Active 或 Archived。
 
-- 标识：`indexName`、`oldIndexName`、`renamed`
-- 定义：`columns`、`unique`
+### App Design
 
-当前 MySQL 模板行为：
+这些页面依赖当前选中的 App：
 
-- `CreateTable.peb` 为单个新建模型渲染，使用 `model.createdFields`
-- `DropTable.peb` 为单个删除模型渲染，使用 `model.tableName`
-- `AlterTable.peb` 处理表重命名、表注释变更，以及字段的创建/删除/更新/重命名
-- `AlterIndex.peb` 处理索引的创建/删除/更新/重命名
-- 字段重命名渲染为 `DROP COLUMN oldColumnName` + `ADD COLUMN columnName ...`
-- 索引重命名渲染为 `DROP INDEX oldIndexName` + `ADD INDEX indexName ...`
-- 纯删除索引也会生成 SQL
-- 新建表上的索引来自 `DesignModelIndex.createdRows`
+- `Workbench`：当前 App 的变更工作台。用于创建和管理 WorkItem，并从 WorkItem 进入元数据设计页面。
+- `Environments`：配置当前 App 的运行环境、部署地址、密钥和环境差异检查。
+- `Versions`：创建版本、封版、解封、冻结和发起部署。
+- `Deployments`：查看部署记录、部署 DDL、部署状态、错误信息，以及失败后的重试或卡住后的取消。
 
-该结构有意与元数据术语（`Model`、`Field`、`Index`）对齐，使同一套 Pebble SQL 模板可存于库中并按应用定制，降低心智负担。
+### App Metadata
 
-## 依赖
+这些页面也依赖当前 App：
 
-```xml
-<dependency>
-  <groupId>io.softa</groupId>
-  <artifactId>studio-starter</artifactId>
-  <version>${softa.version}</version>
-</dependency>
-```
+- `Models`：设计业务模型、字段、索引、表名、存储策略和运行特性。
+- `Option Sets`：维护选项集和选项项。
+- `Views`：配置模型视图、结构、默认过滤和排序。
+- `Navigations`：配置运行时导航结构和页面入口。
 
-## 运行要求
+### Generation
 
-- **metadata-starter**：提供运行时元数据模型管理与升级 API。
-- **es-starter**：提供 Elasticsearch 变更日志存储，用于版本控制变更追踪。
-- 数据库需包含 Studio 元数据表（见下文数据模型）。
+这些是生成规则配置，通常由平台开发人员或资深业务开发人员维护：
 
-## 数据模型
+- `Field DB Mapping`：配置字段类型到数据库列类型的映射。
+- `Field Code Mapping`：配置字段类型到代码属性类型的映射。
+- `Field Type Defaults`：配置字段类型默认值、长度和精度。
+- `Code Templates`：配置代码生成模板。
+- `SQL Templates`：配置 SQL DDL 生成模板。
 
-### 核心设计模型
+## 4. 推荐工作流
 
-| 实体 | 说明 |
-| --- | --- |
-| `DesignPortfolio` | 项目组合 / 应用分组 |
-| `DesignApp` | 应用定义（名称、编码、databaseType、packageName）。`packageName` 会直接传入代码模板上下文 |
-| `DesignModel` | 模型定义（字段、索引、tableName、storageType 等） |
-| `DesignField` | 字段定义（fieldType、length、scale、relatedModel 等） |
-| `DesignFieldDbMapping` | 字段类型到数据库类型的映射 |
-| `DesignFieldTypeDefault` | 各字段类型的默认元数据 |
-| `DesignFieldCodeMapping` | 各字段类型在各语言下的属性类型映射 |
-| `DesignSqlTemplate` | 按数据库类型管理的 Pebble SQL 模板 |
-| `DesignCodeTemplate` | 按语言管理的 Pebble 代码模板，可配置 `sequence`、`subDirectory`、`fileName`、`templateContent` |
-| `DesignModelIndex` | 模型索引定义 |
-| `DesignView` | 视图定义 |
-| `DesignNavigation` | 导航定义 |
-| `DesignOptionSet` | 选项集定义 |
-| `DesignOptionItem` | 选项项定义 |
+### 4.1 创建 Portfolio 和 App
 
-### 版本控制与部署模型
+1. 进入 `Studio / Portfolios`，创建 Portfolio。
+2. 进入 `Studio / Apps`，创建 App。
+3. 在 App 详情页维护：
+   - `appName`：应用名称。
+   - `appCode`：应用编码。
+   - `portfolioId`：所属 Portfolio。
+   - `databaseType`：目标数据库类型。
+   - `packageName`：代码生成时使用的基础包名。
+4. 在 App 卡片上点击 `Design App`，进入该 App 的 Workbench。
 
-| 实体 | 说明 |
-| --- | --- |
-| `DesignAppEnv` | 应用环境（Dev/Test/UAT/Prod），记录 `currentVersionId` |
-| `DesignWorkItem` | 变更工作项 — 通过 ES 的 correlationId 界定一次设计变更；`versionId` 外键关联所属版本 |
-| `DesignAppVersion` | 版本壳 — 聚合工作项变更；`versionType` 区分 `Normal` 与 `Hotfix`，发布顺序由 `status + sealedTime` 决定 |
-| `DesignDeployment` | 不可变部署记录 — 包含 sealedTime 区间内合并的内容、DDL 与执行结果 |
-| `DesignDeploymentVersion` | 审计记录，关联一次部署与其合并的版本 |
+App 状态说明：
 
-### 当前同步到运行时的范围
+- `Active`：正常维护。
+- `Maintenance`：维护中，可从详情页重新 Activate。
+- `Deprecated`：已废弃。
 
-当前版本控制与发布管道仅将下列设计时模型升级到运行时元数据：
+### 4.2 配置环境
 
-- `DesignModel` → `SysModel`
-- `DesignModelTrans` → `SysModelTrans`
-- `DesignField` → `SysField`
-- `DesignFieldTrans` → `SysFieldTrans`
-- `DesignModelIndex` → `SysModelIndex`
-- `DesignOptionSet` → `SysOptionSet`
-- `DesignOptionSetTrans` → `SysOptionSetTrans`
-- `DesignOptionItem` → `SysOptionItem`
-- `DesignOptionItemTrans` → `SysOptionItemTrans`
+进入当前 App 的 `Environments` 页面，创建 DEV、TEST、UAT 或 PROD 环境。
 
-下列设计时实体在 `studio-starter` 中已有 CRUD，但**未纳入发布管道**：
+重要字段：
 
-- `DesignView`
-- `DesignNavigation`
-
-## DDL 存储设计
-
-**版本（Version）** 仅存储变更数据（`versionedContent` = `List<ModelChangesDTO>` 的 JSON），**不**存储 DDL。DDL 始终由变更数据即时生成：`VersionDdlImpl` → `DdlTemplateContext` → Pebble 模板。
-
-这样设计的好处：
+- `envType`：环境类型。
+- `sequence`：环境排序。
+- `active`：是否启用。部署弹窗只展示启用的环境。
+- `upgradeEndpoint`：目标运行系统的基础地址。后端会自动拼接运行时元数据升级和导出接口。
+- `publicKey`：由 `Issue Key` 生成，用于配置到目标运行系统。
+- `currentVersionId`：当前环境已经部署到的版本，由部署流程维护。
 
-- DDL 反映最新模板版本（模板可独立升级）
-- 无需在存储的 DDL 与模板之间维护一致性
-- 即时生成计算成本极低
-- 版本级 DDL 为中间态（部署会合并多个版本后再执行）
+首次远程部署前，推荐流程是：
 
-**部署（Deployment）** 将预渲染的 DDL 字符串（`mergedDdlTable`、`mergedDdlIndex`）作为最终发布产物保存，即在目标库上实际执行的 DDL。部署记录自包含、不可变，包含合并内容、DDL 与执行结果。
+1. 在环境详情页点击 `Issue Key`。
+2. 将返回或写入的 public key 配置到对应运行系统的 `system.runtime-public-key`。
+3. 确认运行系统可以访问 Studio 后端的部署回调地址。
+4. 再从 Version 发起部署。
 
-## 工作流
+注意：`protectedEnv` 和 `autoUpgrade` 目前是配置字段，但当前部署流程不会强制执行保护或自动升级策略。涉及生产环境时仍应以团队发布规范为准。
 
-### 设计时工作流
+### 4.3 创建 WorkItem 并开始设计
 
-1. 创建 **Portfolio** 与 **App**
-2. 设计 **模型**、**字段**、**选项集**、**视图**、**导航** 等
-3. 为模型预览 DDL 与生成文件
+进入当前 App 的 `Workbench`：
 
-### 版本控制工作流
+1. 创建 WorkItem，填写名称和描述。
+2. 保持 WorkItem 处于 `InProgress`。
+3. 在 WorkItem 详情页的 `Related Metadata` 区域进入：
+   - `Models`
+   - `Option Sets`
+   - `Views`
+   - `Navigations`
+4. 在这些入口下完成需要发布的设计变更。
 
-1. 创建 **WorkItem**，标记为 `IN_PROGRESS`
-2. 可选：通过 `readyWorkItem` 将工作项标记为 **READY**
-3. 进行设计变更（模型、字段等 CRUD — 变更按工作项 correlationId 写入 ES）
-4. 完成工作项 → `doneWorkItem`
-   - 可选：`mergeToLatestVersion` 将工作项快速并入应用级最新 **DRAFT** 版本
-   - 若无 DRAFT 版本，系统会自动创建一个 `Normal` 类型版本
-5. 创建 **版本**（DRAFT），`versionType = Normal | Hotfix` → 加入已完成的工作项 → `sealVersion`
-   - 封存会聚合工作项变更、计算 diffHash，状态变为 SEALED
-   - 若尚未部署，可通过 `unsealVersion` 将 SEALED 版本退回 DRAFT
-6. 生产部署后执行 `freezeVersion`（不可再改）
+推荐所有需要进入发布流程的元数据变更都从 WorkItem 详情页进入。这样当前路由会携带 `workItemId`，前端会把它作为变更追踪上下文，后端才能按 WorkItem 聚合变更。
 
-说明：
+Workbench 常用动作：
 
-- 当前 API 提供 `readyWorkItem`；代码中**没有** `startWorkItem` 接口。
-- 实体上定义了 `DesignWorkItem.startTime`，但当前实现**不会**写入该字段。
+- `Done`：完成 WorkItem，停止继续累积变更。
+- `Add to Version`：把 WorkItem 加入一个 Draft 版本。
+- `Remove from Version`：从当前 Draft 版本移除。
+- `Cancel`：取消 WorkItem。
+- `Defer`：延期 WorkItem。
+- `Reopen`：重新打开已取消或延期的 WorkItem。
+- `Preview Changes`：按模型查看本 WorkItem 的创建、更新、删除记录。
+- `Preview DDL`：预览本 WorkItem 会产生的 DDL。
 
-### 部署工作流
+### 4.4 设计模型
 
-1. **增量部署**：`POST /DesignDeployment/deployToEnv?envId=&targetVersionId=`
-   - 按 `sealedTime` 选取区间 `(env.currentVersionId, targetVersion]` 内的已发布版本
-   - 通过 `VersionMerger` 合并版本内容并生成 DDL
-   - 创建自包含的部署记录（合并内容 + DDL）
-   - 执行部署（本地或远程）并更新 `env.currentVersionId`
-   - 生产部署成功后自动冻结相关版本
-   - 新环境（无 `currentVersionId`）会合并截至目标版本的全部已发布版本
-2. **重试**：`POST /DesignDeployment/retry`
+进入 WorkItem 下的 `Models`，创建或编辑业务模型。
 
-说明：
+模型详情包含三个页签：
 
-- `DesignDeploymentStatus` 含 `ROLLED_BACK`，但 `studio-starter` 中**尚无**回滚 API 或回滚实现。
-- `DesignAppEnv.asyncUpgrade` 当前仍会**同步**执行。
+- `Model Info`：维护模型名称、显示名、表名、应用、描述、显示字段、搜索字段、默认排序、ID 策略、存储类型、数据源、服务名、软删除、多租户、时间线、版本锁等。
+- `Fields`：维护模型字段。
+- `Indexes`：维护模型索引。
 
-## 主要 API
+字段配置重点：
 
-### 模型设计
+- `fieldName`：代码和元数据字段名。
+- `columnName`：数据库列名。
+- `fieldType`：字段类型。
+- `optionSetCode`：选项字段关联的选项集编码。
+- `length` / `scale` / `defaultValue`：长度、精度和默认值。
+- `relatedModel` / `relatedField` / `joinModel` / `joinLeft` / `joinRight`：关系字段配置。
+- `filters`：关系字段过滤条件。
+- `widgetType`：前端控件类型。
+- `required` / `readonly` / `hidden`：校验和展示行为。
+- `translatable` / `encrypted` / `maskingType`：翻译、加密和脱敏能力。
 
-| 接口 | 说明 |
-| --- | --- |
-| `GET /DesignModel/previewDDL?id=` | 预览模型的 CREATE TABLE DDL |
-| `GET /DesignModel/previewCode?id=&codeLang=` | 预览某一语言生成的代码文件（含渲染后的相对路径）。仅当只有一种语言包时 `codeLang` 可省略 |
-| `GET /DesignModel/previewAllCode?id=` | 预览该模型全部语言包的生成结果 |
-| `GET /DesignModel/downloadCode?id=&codeLang=&relativePath=` | 按渲染后的相对路径下载单个生成文件。`relativePath` 须来自 `previewCode` |
-| `GET /DesignModel/downloadZip?id=&codeLang=` | 下载某一语言包 zip。仅当只有一种语言包时 `codeLang` 可省略 |
-| `GET /DesignModel/downloadAllZip?id=` | 下载包含全部语言包的 zip，按 `<codeLang>/` 分组 |
+模型详情页提供：
 
-### 工作项生命周期
+- `Preview DDL`：预览该模型建表和索引 DDL。
+- `Preview Code`：预览该模型生成的代码。弹窗中可以按语言切换、查看文件树、复制代码、下载当前文件、下载当前语言 ZIP 或下载全部语言 ZIP。
 
-| 接口 | 说明 |
-| --- | --- |
-| `POST /DesignWorkItem/readyWorkItem?id=` | 将工作项从 `IN_PROGRESS` 标为 `READY` |
-| `POST /DesignWorkItem/doneWorkItem?id=` | 完成工作项 — 结束变更追踪 |
-| `GET /DesignWorkItem/previewChanges?id=` | 预览累积的元数据变更 |
-| `GET /DesignWorkItem/previewDDL?id=` | 根据工作项变更预览 DDL SQL（可复制到数据库客户端） |
-| `POST /DesignWorkItem/mergeToLatestVersion?id=` | 将已完成的工作项并入应用级最新 DRAFT 版本（若无则自动创建） |
-| `POST /DesignWorkItem/cancelWorkItem?id=` | 取消工作项 |
-| `POST /DesignWorkItem/deferWorkItem?id=` | 暂缓工作项 |
-| `POST /DesignWorkItem/reopenWorkItem?id=` | 重新打开已完成/已取消/已暂缓的工作项 |
+### 4.5 配置选项集、视图和导航
 
-### 版本生命周期
+`Option Sets` 用于配置枚举类业务值：
 
-| 接口 | 说明 |
-| --- | --- |
-| `POST /DesignAppVersion/createOne` | 创建新版本（DRAFT，`versionType` 为 `Normal` 或 `Hotfix`，默认 `Normal`） |
-| `POST /DesignAppVersion/addWorkItem?versionId=&workItemId=` | 向版本添加已完成的工作项 |
-| `POST /DesignAppVersion/removeWorkItem?versionId=&workItemId=` | 从版本移除工作项 |
-| `GET /DesignAppVersion/previewVersion?id=` | 预览合并后的版本内容 |
-| `GET /DesignAppVersion/previewDDL?id=` | 根据版本内容预览 DDL SQL（可复制到数据库客户端） |
-| `POST /DesignAppVersion/sealVersion?id=` | 封存版本（DRAFT → SEALED） |
-| `POST /DesignAppVersion/unsealVersion?id=` | 解封版本（SEALED → DRAFT，且未部署） |
-| `POST /DesignAppVersion/freezeVersion?id=` | 冻结版本（SEALED → FROZEN） |
+- 选项集维护 `name`、`optionSetCode`、`appId` 和描述。
+- 选项项维护 `itemCode`、`itemName`、`sequence`、`parentItemCode`、`itemColor`、`active` 和描述。
 
-### 部署
+`Views` 用于配置模型视图：
 
-| 接口 | 说明 |
-| --- | --- |
-| `POST /DesignDeployment/deployToEnv?envId=&targetVersionId=` | 将版本部署到某环境 |
-| `POST /DesignDeployment/retry?deploymentId=` | 重试失败的部署 |
-| `GET /DesignDeployment/previewDeployment?deploymentId=` | 预览部署内容与 DDL |
-| `GET /DesignDeployment/previewDDL?deploymentId=` | 预览部署的 DDL SQL（可复制到数据库客户端） |
+- 维护视图名称、编码、模型、类型、排序。
+- 在配置区维护 `structure`、`defaultFilter` 和 `defaultOrder`。
+- 可设置 `navId`、`publicView` 和 `defaultView`。
 
-### 环境
+`Navigations` 用于配置运行时导航：
 
-| 接口 | 说明 |
-| --- | --- |
-| `POST /DesignAppEnv/previewBetweenEnv?sourceEnvId=&targetEnvId=` | 预览两环境之间的差异 |
+- 维护导航名称、编码、类型、关联模型、父级导航、描述和过滤条件。
 
-## 行级合并（model + rowId）
+### 4.6 预览变更和 DDL
 
-整条链路在 **模型 + rowId** 粒度追踪与合并变更。
+Studio 支持多个阶段的预览：
 
-### 工作项 → 版本（封存）
+- 模型详情页：预览单个模型的建表 DDL 和生成代码。
+- WorkItem 详情页：预览该 WorkItem 累积的元数据变更和 DDL。
+- Version 详情页：预览版本聚合后的元数据变更和 DDL。
+- Deployment 详情页：查看本次部署实际保存的 `mergedDdlTable` 和 `mergedDdlIndex`。
 
-`VersionControlImpl` 按 `correlationId IN (workItemIds)` 查询 ES 变更日志，按 `rowId` 分组，将同一行的多条日志合并为一条 `RowChangeDTO`。同一工作项集合内既创建又删除的行会相互抵消（净效果为无变更）。
+如果是上线前检查，应优先看 Version 和 Deployment 维度。模型维度适合开发中快速检查单个模型，WorkItem 维度适合检查一个需求内的变更是否完整。
 
-### 版本 → 部署（发布）
+### 4.7 创建版本、封版和部署
 
-`VersionMerger` 使用 `modelName → (rowId → RowChangeDTO)` 映射合并多个版本内容。同一行跨多个版本变更时，由状态机折叠：
+进入当前 App 的 `Versions`：
 
-| V1 操作 | V2 操作 | 净结果 |
-| --- | --- | --- |
-| CREATE | UPDATE | CREATE（采用 V2 数据） |
-| CREATE | DELETE | 抵消（无净变更） |
-| UPDATE | UPDATE | UPDATE（合并 before/after） |
-| UPDATE | DELETE | DELETE（V1 的 dataBeforeChange） |
-| DELETE | CREATE | UPDATE（再创建） |
+1. 创建 Version，选择 `versionType`：
+   - `Normal`：常规版本。
+   - `Hotfix`：紧急修复版本。
+2. 回到 Workbench，将已完成的 WorkItem 通过 `Add to Version` 加入该 Draft 版本。
+3. 在 Version 详情页点击 `Preview Changes` 和 `Preview DDL` 做发布前检查。
+4. 点击 `Seal Version`。封版后，后端会聚合 WorkItem 变更并计算 `diffHash`。
+5. 如封版后发现问题，且版本尚未部署，可以点击 `Unseal Version` 回到 Draft。
+6. 对已封版或已冻结版本点击 `Deploy to Env`，选择启用的目标环境并确认部署。
 
-这样可保证跨工作项与版本多次修改的同一记录在部署中只体现为**一条净变更**，避免重复或冗余操作。
+版本状态说明：
 
-部署从应用已发布流中选取要合并的版本：
+- `Draft`：草稿，可加入或移除 WorkItem。
+- `Sealed`：已封版，可部署；未部署前可解封。
+- `Frozen`：已冻结，不应继续修改。
 
-- 仅 `SEALED` 与 `FROZEN` 版本参与
-- 版本按 `sealedTime ASC` 排序
-- 合并区间为 `(env.currentVersionId, targetVersion]`
-- `targetVersion` 本身须为 `SEALED` 或 `FROZEN`
+部署是异步流程。发起部署后，前端会创建 Deployment 记录；真正完成状态由目标运行系统回调 Studio 后更新。
 
-## 当前缺口
+### 4.8 查看部署记录
 
-### 最高优先级补齐项
+进入当前 App 的 `Deployments`：
 
-1. **将 `DesignView` / `DesignNavigation` 纳入发布管道**
-   - 这些实体已有设计时 CRUD，运行时侧也已存在对应模型，但未加入 `VERSION_CONTROL_MODELS`。这是当前最大的功能缺口：设计变更无法随环境晋升。
-2. **理顺工作项激活模型**
-   - README 曾描述 `startWorkItem`，实现侧暴露的是 `readyWorkItem`，且未填充 `DesignWorkItem.startTime`。API 命名、流程语义与持久化时间戳应对齐。
-3. **闭合部署契约缺口**
-   - README 曾提及回滚，且 `DesignDeploymentStatus` 含 `ROLLED_BACK`，但尚无回滚接口/实现。`DesignAppEnv.asyncUpgrade` 也仍为同步执行。
-4. **清理预留或未接线的环境/配置字段**
-   - `DesignAppEnv.protectedEnv`、`active`、`clientId`、`autoUpgrade` 在部署流程中尚未强制生效。
+- 列表按创建时间倒序展示部署记录。
+- 详情页 `General` 页签显示源版本、目标版本、目标环境、部署状态、操作人和耗时。
+- `Content` 页签显示合并后的元数据内容、表 DDL 和索引 DDL。
+- `Version List` 页签显示本次部署合并进来的版本。
+- `Error` 页签显示失败原因。
 
-### 其他说明
+部署状态为 `Failure` 时，可以点击 `Retry` 重新发起。状态为 `Pending` 或 `Deploying` 且确认已经卡住时，可以点击 `Cancel` 释放环境部署锁。
 
-- `DesignView.defaultView` 目前仅为设计时标记；运行时个人默认视图由 `SysViewDefault` 管理。
-- 实体上存在 `DesignOptionSet.optionItems`，但当前 starter 依赖独立的 `DesignOptionItem` 记录，不会自动灌入该集合。
-- 部分元数据字段由 `studio-starter` 之外消费，主要在 `softa-orm` 与 `metadata-starter`。例如 `displayName`、`searchName`、`activeControl`、`multiTenant`、`versionLock`、`relatedField`、`joinLeft`、`joinRight`、`cascadedField`、`translatable`、`encrypted`、`maskingType` 会在运行时生效。
+重要限制：`Cancel` 不会自动回滚目标运行库中已经执行过的 DDL 或数据变更，只会把部署记录标记为取消并释放环境锁。
 
-## 状态枚举
+### 4.9 处理设计态和运行态差异
 
-### DesignAppVersionStatus
+进入环境详情页，可以查看 `Runtime Drift` 面板。
 
-`DRAFT` ⇄ `SEALED` → `FROZEN`
+常用动作：
 
-- `DRAFT → SEALED`：`sealVersion` — 聚合工作项变更，计算 diffHash
-- `SEALED → DRAFT`：`unsealVersion` — 仅当未部署（无部署引用）
-- `SEALED → FROZEN`：`freezeVersion` — 生产部署后冻结，不可再改
+- `Compare (cached)`：查看当前缓存的设计态和运行态差异。
+- `Refresh Drift`：异步重新拉取运行态元数据并计算差异。面板会轮询刷新状态。
+- `Apply Drift`：接受当前缓存差异，用运行态内容覆盖设计态元数据。
+- `Import from Runtime`：重新从运行态拉取元数据，并用当前运行态内容覆盖设计态元数据。
 
-### DesignAppVersionType
+使用建议：
 
-`Normal` / `Hotfix`
+- 首次接入一个已经有运行态元数据的系统时，使用 `Import from Runtime` 更合适。
+- 运行环境被临时手工修复后，如果决定把运行态作为新的设计基准，先 `Refresh Drift`，确认差异，再 `Apply Drift`。
+- `Apply Drift` 和 `Import from Runtime` 都会改写设计态元数据，执行前必须确认目标环境就是要接受的事实来源。
 
-- `Normal`：计划发布版本
-- `Hotfix`：紧急补丁版本
+## 5. 生成配置说明
 
-### DesignWorkItemStatus
+代码和 DDL 生成基于 Pebble 模板，模板变量使用 `{{ var }}` 形式。
 
-`IN_PROGRESS` → `READY` → `DONE`
+### Code Templates
 
-- `IN_PROGRESS` → `READY`：`readyWorkItem`
-- `IN_PROGRESS` / `READY` → `DONE`：`doneWorkItem`
-- `IN_PROGRESS` / `READY` / `DEFERRED` → `CANCELLED`：`cancelWorkItem`
-- `IN_PROGRESS` → `DEFERRED`：`deferWorkItem`
-- `DONE` / `CANCELLED` / `DEFERRED` → `IN_PROGRESS`：`reopenWorkItem`
+代码模板按 `codeLang` 和 `sequence` 加载。每条模板可以配置：
 
-### DesignDeploymentStatus
+- `subDirectory`：输出子目录，可使用 Pebble 表达式。
+- `fileName`：输出文件名，可使用 Pebble 表达式，必须包含期望的后缀，例如 `{{modelName}}Service.java`。
+- `templateContent`：模板内容。
 
-`PENDING` → `DEPLOYING` → `SUCCESS` / `FAILURE` / `ROLLED_BACK`
+如果数据库中没有配置代码模板，后端会使用内置 classpath 模板作为兜底。
 
-### DesignAppEnvType
+### SQL Templates
 
-`DEV`、`TEST`、`UAT`、`PROD`
+SQL 模板按 `databaseType` 加载，用于生成建表、改表、索引和删表 SQL。模板作者主要面对的是模型、字段、索引的差异上下文，不需要自己读取原始实体并计算 diff。
+
+### Mapping 和 Defaults
+
+- `Field DB Mapping` 决定字段类型生成什么数据库列类型。
+- `Field Code Mapping` 决定字段类型生成什么代码属性类型。
+- `Field Type Defaults` 决定字段类型默认长度、精度和默认值。
+
+调整这些配置后，模型的代码预览和 DDL 预览会反映新的生成规则。
+
+## 6. 上线前检查清单
+
+发布前建议逐项确认：
+
+- 变更是否都在正确的 App 下完成。
+- 需要发布的模型、选项集、视图和导航变更是否都来自正确的 WorkItem。
+- WorkItem 的 `Preview Changes` 中是否只包含本次需求变更。
+- WorkItem 的 `Preview DDL` 是否符合预期。
+- Version 是否包含所有需要发布的 WorkItem，且没有误加入其他 WorkItem。
+- Version 的 `Preview Changes` 和 `Preview DDL` 是否通过评审。
+- 目标 Env 是否启用，`upgradeEndpoint` 是否正确。
+- 首次部署或密钥轮换后，目标运行系统是否已配置最新 public key。
+- 生产环境部署前，Deployment 里的表 DDL 和索引 DDL 是否已经确认。
+- 失败重试或取消前，是否确认目标运行系统的实际执行状态。
+
+## 7. 常见问题
+
+### 为什么 WorkItem 里看不到我刚改的元数据？
+
+需要确认修改是否是在 WorkItem 详情页的 `Related Metadata` 入口下完成。只有当前路由带有 `workItemId` 时，前端才会把 WorkItem 作为变更追踪上下文传给后端。
+
+### 为什么 Deploy to Env 弹窗没有目标环境？
+
+部署弹窗只展示当前 App 下 `active = true` 的环境。请检查环境是否属于当前 App，并且是否已启用。
+
+### Compare (cached) 和 Refresh Drift 有什么区别？
+
+`Compare (cached)` 只读取上一次计算好的差异。`Refresh Drift` 会请求后端异步重新对比设计态快照和运行态元数据。
+
+### Apply Drift 和 Import from Runtime 应该怎么选？
+
+如果已经刷新并审阅过差异，决定接受缓存的运行态差异，使用 `Apply Drift`。如果是首次从已有运行系统初始化设计态，或希望先重新拉取运行态再覆盖设计态，使用 `Import from Runtime`。
+
+### Cancel Deployment 是回滚吗？
+
+不是。Cancel 只释放卡住的环境部署锁并标记部署记录，不会自动撤销目标运行系统中已经执行的 DDL 或数据变更。
+
+### 什么时候看 Model DDL，什么时候看 Version 或 Deployment DDL？
+
+模型 DDL 用于开发中检查单个模型。发布前应看 Version DDL。部署后应看 Deployment 详情中的 `mergedDdlTable` 和 `mergedDdlIndex`，这是本次部署保存下来的最终执行产物。

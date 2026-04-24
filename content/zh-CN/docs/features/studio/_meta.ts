@@ -1,3 +1,4 @@
 export default {
-  index: "Studio 设计时",
+  index: "用户指南",
+  technical: "技术指南",
 }
