@@ -4,12 +4,12 @@ Split-pane view: a side panel on the left selects a record, and a `ModelForm` on
 
 ## Related Docs
 
-- [ModelForm](../form/README.md) — the form rendered on the right side
-- [ModelTable](../table/README.md) — table view (shared side panel components)
-- [ModelCard](../card/README.md) — card grid view
-- [Side Panel components](../shared/side-panel/) — SideTree, SideCard, SideList
-- [Field](../../fields/README.md) — field widgets used in both side panel and form
-- [Action](../../actions/README.md) — toolbar and form actions
+- [ModelForm](./form) — the form rendered on the right side
+- [ModelTable](./table) — table view (shared side panel components)
+- [ModelCard](./card) — card grid view
+- [Side Panel components](./table#side-panel-optional) — SideTree, SideCard, SideList
+- [Field](./fields/fields) — field widgets used in both side panel and form
+- [Action](./actions) — toolbar and form actions
 
 ## Quick Start
 
@@ -201,6 +201,9 @@ function WorkItemListItem() {
     <SideCard.Header>
       <Field fieldName="appName" />
     </SideCard.Header>
+    <SideCard.Header align="right">
+      <Field fieldName="status" widgetType="Badge" />
+    </SideCard.Header>
     <Field fieldName="appCode" />
     <SideCard.Footer>
       <Field fieldName="updatedTime" />
@@ -216,6 +219,8 @@ function WorkItemListItem() {
   </FormBody>
 </ModelSideForm>
 ```
+
+`SideCard.Header` accepts an `align` prop (`"left" | "right"`, default `"left"`). Declare a second `<SideCard.Header align="right">` to push elements to the right side of the card header row. The left and right groups can each contain multiple elements; ordering within a group follows JSX order. Actions with `placement="header"` always render in the left group; the `more` (`...`) menu always sits at the very end of the right group.
 
 ## Form Content
 
@@ -233,9 +238,11 @@ The right side renders a full `ModelForm`. Use the same form component compositi
 ### With Toolbar Actions
 
 ```tsx
-import { Action, dependsOn } from "@/components/actions/Action";
+import { Action } from "@/components/actions/Action";
 import { CheckCircle, XCircle } from "lucide-react";
 
+// Form-scope actions are implicitly disabled in `create` mode — no need to
+// repeat `mode === "create"` in `disabled`. See actions/README.md.
 <ModelSideForm modelName="DesignWorkItem">
   <SideList filterField="id" searchable>
     <WorkItemListItem />
@@ -251,7 +258,6 @@ import { CheckCircle, XCircle } from "lucide-react";
       placement="toolbar"
       confirmMessage="Approve this item?"
       successMessage="Approved."
-      disabled={dependsOn(["id"], ({ mode }) => mode === "create")}
       hidden={["status", "!=", "PENDING"]}
     />
     <Action
@@ -262,7 +268,6 @@ import { CheckCircle, XCircle } from "lucide-react";
       placement="more"
       confirmMessage="Reject this item?"
       successMessage="Rejected."
-      disabled={dependsOn(["id"], ({ mode }) => mode === "create")}
       hidden={["status", "!=", "PENDING"]}
     />
   </FormToolbar>

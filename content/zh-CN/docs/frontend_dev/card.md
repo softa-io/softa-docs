@@ -11,10 +11,10 @@
 
 ## 相关文档
 
-- [ModelTable](../table) — 表格网格视图（共用工具栏对话框、侧栏与数据钩子）
-- [ModelForm](../form) — 默认卡片点击打开的详情表单
-- [Action](../action) — 动作系统（侧栏中使用）
-- [Field](../fields) — 通过 `RecordContext` 在卡片内渲染的字段控件
+- [ModelTable](./table) — 表格网格视图（共用工具栏对话框、侧栏与数据钩子）
+- [ModelForm](./form) — 默认卡片点击打开的详情表单
+- [Action](./action) — 动作系统（侧栏中使用）
+- [Field](./fields/fields) — 通过 `RecordContext` 在卡片内渲染的字段控件
 
 ## 快速开始
 
@@ -299,7 +299,7 @@ import { SideTree } from "@/components/views/shared/side-panel/SideTree";
 - 激活的树筛选在工具栏激活状态栏中以徽章展示
 - 各侧栏组件均支持 `remoteSearch`，可从客户端筛选切换为服务端搜索
 
-完整侧栏 props 说明见 [ModelTable 侧栏（可选）](../table#side-panel-optional)。
+完整侧栏 props 说明见 [ModelTable 侧栏（可选）](./table#side-panel-optional)。
 
 ## 标签页
 

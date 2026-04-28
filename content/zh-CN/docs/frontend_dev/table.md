@@ -9,7 +9,7 @@
 
 ## 相关文档
 
-- [ModelCard](../card) — 卡片网格视图（共用工具栏对话框、侧栏与数据钩子）
+- [ModelCard](./card) — 卡片网格视图（共用工具栏对话框、侧栏与数据钩子）
 - [Dialog](./dialog)
 - [ModelForm](./form)
 - [Action](./action)
@@ -361,7 +361,7 @@ import { SideTree } from "@/components/views/shared/side-panel/SideTree";
 
 ```tsx
 import { SideCard } from "@/components/views/shared/side-panel/SideCard";
-import { Group } from "@/components/fields/extend/Group";
+import { Group } from "@/components/fields/composition";
 import { Action } from "@/components/actions/Action";
 
 <ModelTable modelName="DesignWorkItem">
@@ -373,7 +373,9 @@ import { Action } from "@/components/actions/Action";
   >
     <SideCard.Header>
       <Field fieldName="appName" />
-      <Field fieldName="status" />
+    </SideCard.Header>
+    <SideCard.Header align="right">
+      <Field fieldName="status" widgetType="Badge" />
     </SideCard.Header>
     <Group separator="-">
       <Field fieldName="appCode" />
@@ -409,22 +411,43 @@ import { Action } from "@/components/actions/Action";
 | `remoteSearch` | `boolean`         | 否   | `false`  | 为 `true` 时，搜索会触发远程 API（`["searchName", "CONTAINS", keyword]`），而不是只做客户端筛选；输入 300ms 防抖 |
 | `sortOptions`  | `SortOption[]`    | 否   | -        | 排序下拉选项 |
 | `title`        | `string`          | 否   | -        | 面板标题 |
-| `children`     | `ReactNode`       | 是   | -        | `SideCard.Header`、正文、`SideCard.Footer` 与 `Action` |
+| `children`     | `ReactNode`       | 是   | -        | `SideCard.Header`、正文、`SideCard.Footer` 与 `Action` 元素 |
 
-#### SideCard 中 Action 的 placement
+#### SideCard 标题行对齐
 
-`SideCard` 内的 `Action` 按卡片渲染，`placement` 控制位置：
+`SideCard.Header` 接受 `align` prop：
 
-| `placement` | 位置 | 可见性 |
-| ----------- | ---- | ------ |
-| `header` | 卡片标题行，与头部字段同一行 | 始终可见 |
-| `inline` | 卡片正文下方 | 始终可见 |
-| `more` | 右上角 `...` 下拉 | hover / 展开时 |
+| `align`   | 在标题行中的位置 |
+| --------- | ---------------- |
+| `"left"`  | 标题行左侧（默认） |
+| `"right"` | 标题行右侧，位于 `...` 菜单之前 |
 
-- 省略时默认相当于 `inline`。
-- 动作收到含 `id`、`row`（记录）、`modelName` 的执行上下文。
+可声明多个 `SideCard.Header` 区块以填充左右两侧；每个区块内的子节点按 JSX 顺序渲染。
+
+```tsx
+<SideCard.Header>
+  <Field fieldName="appName" />
+</SideCard.Header>
+<SideCard.Header align="right">
+  <Field fieldName="status" widgetType="Badge" />
+</SideCard.Header>
+```
+
+#### SideCard 内 Action 的 placement
+
+`SideCard` 内的 `Action` 按卡片渲染。`placement` 控制位置：
+
+| `placement` | 位置                                     | 可见性            |
+| ----------- | ---------------------------------------- | ----------------- |
+| `header`    | 卡片标题行中，与头部字段同一区域         | 始终可见          |
+| `inline`    | 卡片正文下方                             | 始终可见          |
+| `more`      | 右上角 `...` 下拉菜单                    | hover / 展开时    |
+
+- 省略 `placement` 时默认为 `inline`。
+- 动作收到 `ActionExecutionContext`，含 `id`、`row`（记录数据）、`modelName`。
 - 点击动作不会触发卡片选中。
-- `hidden` / `disabled` 按每张卡片单独求值。
+- `hidden` 与 `disabled` 条件按每张卡片单独求值。
+- `placement="header"` 的动作渲染在标题行**左侧组**；`placement="more"` 始终位于**右侧组**最末端。
 
 ### `<SideList>`
 
@@ -469,7 +492,7 @@ import { SideList } from "@/components/views/shared/side-panel/SideList";
 - `SideTree` 内部封装现有 `TreePanel`
 - 侧栏宽度固定 280px
 - `searchable` 默认在客户端对所有字段值做关键词过滤；设置 `remoteSearch` 可改为服务端 `["searchName", "CONTAINS", keyword]`（300ms 防抖）
-- 在 `SideCard` 正文内可用 [`Group`](../fields/fields#group) 将多字段并排（例如 `<Group separator="-"><Field .../><Field .../></Group>`）
+- 在 `SideCard` 正文内可用 [`Group`](./fields/fields.md#group) 将多字段并排（例如 `<Group separator="-"><Field .../><Field .../></Group>`）
 
 ## 统一的工具栏激活状态
 
@@ -754,8 +777,8 @@ function UnlockDialog() {
 ```tsx
 <ModelTable
   modelName="UserAccount"
-  bulkEditFields={["status", "email", "phoneNumber", "locked"]} // optional
-  excludeFields={["email"]} // optional
+  bulkEditFields={["status", "email", "phoneNumber", "locked"]} // 可选
+  excludeFields={["email"]} // 可选
 >
   <Field fieldName="username" />
   <Field fieldName="email" />
@@ -776,7 +799,7 @@ function UnlockDialog() {
 - 侧栏宽度固定为 280px，暂无公开宽度 API
 - `SideCard` / `SideList` 中的 `Field` 子节点通过 `RecordContext` 以展示模式渲染，无需 `FieldPropsContext`
 - `SideTree` 封装 `TreePanel`；`searchMode` 默认 `"local"`，启用 `remoteSearch` 时为 `"server"`
-- `SideCard` 与 `SideList` 也可用于 `ModelSideForm` 作为数据源面板（参见 [ModelSideForm](../sideForm)）
+- `SideCard` 与 `SideList` 也可用于 `ModelSideForm` 作为数据源面板（参见 [ModelSideForm](./sideForm)）
 
 ## PageTabs
 

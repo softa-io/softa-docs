@@ -69,10 +69,10 @@ type ActionValue<T> =
 | 组件行为                           | 必填行为 Props         | 默认值 | 说明 |
 | ---------------------------------- | ---------------------- | ------ | ---- |
 | 省略 `type` 或 `type="default"` | `operation` | - | 调用 `POST /{modelName}/{operation}`，当前记录 `id` 通过 query 参数传递。 |
-| `type="dialog"` | `operation`, `component` | - | `component={MyDialogComponent}`。打开/关闭、operation 与成功提示由 `Action` 注入；失败使用接口返回的 toast。 |
-| `type="link"` | `href` | 当前标签页打开（`target="_self"`） | `href` 支持模板字符串（见下文）或 `({ id, modelName }) => string`。`target="_blank"` 在新标签页打开。 |
-| `type="custom"` | `onClick` | - | 纯 UI/本地行为。签名：`onClick({ id, modelName, scope, mode, isDirty, values, row }) => void`。 |
-| `type="form"` | `component`, `relatedField` | - | 在对话框中打开独立的 `ModelForm`。`component` 渲染子表单；`relatedField` 为子模型指向父记录的字段名。父级 `id` 会自动写入 `ModelForm.defaultValues` 的 `{ [relatedField]: parentId }`，并包含在创建/更新 API payload 中。 |
+| `type="dialog"` | `operation`, `component` | - | `component={MyDialogComponent}`。打开/关闭、operation 与成功提示由 `Action` 注入；失败时使用接口返回的 toast。 |
+| `type="link"` | `href` | 当前标签页打开（`target="_self"`） | `href` 支持模板字符串（见下文）或 `({ id, modelName }) => string`。使用 `target="_blank"` 在新标签页打开。 |
+| `type="custom"` | `onClick` | - | 纯 UI / 本地行为。签名：`onClick({ id, modelName, scope, mode, isDirty, values, row }) => void`。 |
+| `type="form"` | `component`, `relatedField` | - | 在对话框中打开独立的 `ModelForm`。`component` 渲染子表单视图；`relatedField` 为子模型指向父记录的字段名。父级 `id` 会自动写入 `ModelForm.defaultValues` 的 `{ [relatedField]: parentId }`，并包含在创建/更新 API 的请求体中。 |
 
 ### 动作执行上下文
 
@@ -131,16 +131,13 @@ type ActionValue<T> =
 
 不支持裸函数条件；请用 `dependsOn([...], evaluator)` 包装。
 
+> **隐式规则（表单作用域）**：表单内（`FormToolbar` / `FormSection`）的动作在 `create` 模式下会自动禁用，因为其 `operation` 依赖已有记录的 `id`。请**不要**在 `disabled` 中重复写 `mode === "create"`。创建模式下用户传入的条件会被短路，回调不会执行。若仍需要展示禁用原因，可通过 `disabledReason` 解析（其中写 `mode === "create"` 分支是可以的）。
+
 #### 常见的 `disabled` / `hidden` 写法
 
 ```tsx
-import { dependsOn } from "@/components/fields";
-
-// 创建模式禁用（尚无 id）
-disabled={dependsOn(["id"], ({ mode }) => mode === "create")}
-
-// 创建与只读模式下禁用（仅编辑模式可用）
-disabled={dependsOn(["id"], ({ mode }) => mode !== "edit")}
+// 仅在只读模式下禁用（创建模式已由隐式规则覆盖）
+disabled={dependsOn(["id"], ({ mode }) => mode === "read")}
 
 // 除非状态为某值，否则隐藏（FilterCondition 简写）
 hidden={["status", "!=", "InProgress"]}
@@ -292,10 +289,10 @@ function ConfigGroupForm() {
 
 - `FormToolbar` 是页面级业务动作区域
 - `FormSection` 是局部 UI 动作区域，不直接执行模型 API 动作
-- 对于 API 动作（`default` / `dialog`），请放在 `FormToolbar`
-- 编辑模式且有未保存修改时，点击业务动作会先询问是否丢弃修改再继续
-- 创建模式下，内置的 `Duplicate` / `Delete` 仍可见但禁用
-- 内置工作流/新建/复制/删除工具栏行为在 `ModelForm` / `ModelSideForm` 的 props 上配置
+- API 类动作（`default` / `dialog`）请放在 `FormToolbar`
+- 内置工作流 / 新建 / 复制 / 删除工具栏行为通过 `ModelForm` / `ModelSideForm` 的 props 配置
+- 编辑模式下若有未保存修改，点击业务动作会先询问是否丢弃修改再继续
+- 创建模式下，内置 `Duplicate` / `Delete` 仍可见但处于禁用状态
 
 完整示例：
 

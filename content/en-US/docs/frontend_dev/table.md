@@ -9,7 +9,7 @@ Composable data table view with:
 
 ## Related Docs
 
-- [ModelCard](../card) — card grid view (shared toolbar dialogs, side panel, and data hooks)
+- [ModelCard](./card) — card grid view (shared toolbar dialogs, side panel, and data hooks)
 - [Dialog](./dialog)
 - [ModelForm](./form)
 - [Action](./action)
@@ -361,7 +361,7 @@ Card-based side panel with rich template layout. Uses `Field` children in displa
 
 ```tsx
 import { SideCard } from "@/components/views/shared/side-panel/SideCard";
-import { Group } from "@/components/fields/extend/Group";
+import { Group } from "@/components/fields/composition";
 import { Action } from "@/components/actions/Action";
 
 <ModelTable modelName="DesignWorkItem">
@@ -373,7 +373,9 @@ import { Action } from "@/components/actions/Action";
   >
     <SideCard.Header>
       <Field fieldName="appName" />
-      <Field fieldName="status" />
+    </SideCard.Header>
+    <SideCard.Header align="right">
+      <Field fieldName="status" widgetType="Badge" />
     </SideCard.Header>
     <Group separator="-">
       <Field fieldName="appCode" />
@@ -411,6 +413,26 @@ import { Action } from "@/components/actions/Action";
 | `title`         | `string`          | No       | -        | Panel title                                           |
 | `children`      | `ReactNode`       | Yes      | -        | `SideCard.Header`, body, `SideCard.Footer`, and `Action` elements |
 
+#### SideCard Header Alignment
+
+`SideCard.Header` accepts an `align` prop:
+
+| `align`   | Position in header row                                   |
+| --------- | -------------------------------------------------------- |
+| `"left"`  | Left side of the header row (default)                    |
+| `"right"` | Right side of the header row, before the `...` menu      |
+
+Declare multiple `SideCard.Header` blocks to populate both sides. Children within each block render in JSX order.
+
+```tsx
+<SideCard.Header>
+  <Field fieldName="appName" />
+</SideCard.Header>
+<SideCard.Header align="right">
+  <Field fieldName="status" widgetType="Badge" />
+</SideCard.Header>
+```
+
 #### SideCard Action Placement
 
 `Action` children inside `SideCard` are rendered per card. The `placement` prop controls position:
@@ -425,6 +447,7 @@ import { Action } from "@/components/actions/Action";
 - Actions receive `ActionExecutionContext` with `id`, `row` (record data), and `modelName`.
 - Clicking an action does not trigger card selection.
 - `hidden` and `disabled` conditions are evaluated per card.
+- `placement="header"` actions render in the left group of the header row. `placement="more"` always sits at the end of the right group.
 
 ### `<SideList>`
 
@@ -469,7 +492,7 @@ import { SideList } from "@/components/views/shared/side-panel/SideList";
 - `SideTree` wraps the existing `TreePanel` component internally
 - Side panel width is fixed at 280px
 - `searchable` enables keyword filtering; by default this is client-side across all field values. Set `remoteSearch` to switch to server-side search via `["searchName", "CONTAINS", keyword]` (debounced 300ms)
-- Use [`Group`](../../fields/README.md#group) to compose multiple fields inline within `SideCard` body (e.g. `<Group separator="-"><Field .../><Field .../></Group>`)
+- Use [`Group`](./fields/fields#group) to compose multiple fields inline within `SideCard` body (e.g. `<Group separator="-"><Field .../><Field .../></Group>`)
 
 ## Unified Active Toolbar State
 
@@ -772,7 +795,7 @@ Built-in reserved fields are always excluded:
 - Side panel width is fixed at 280px; there is no public width API.
 - `SideCard` / `SideList` `Field` children render in display mode via `RecordContext` — no `FieldPropsContext` is needed.
 - `SideTree` wraps the existing `TreePanel`; `searchMode` defaults to `"local"`, or `"server"` when `remoteSearch` is enabled.
-- `SideCard` and `SideList` can also be used inside `ModelSideForm` as the data source panel (see [ModelSideForm](../sideForm)).
+- `SideCard` and `SideList` can also be used inside `ModelSideForm` as the data source panel (see [ModelSideForm](./sideForm)).
 
 ## PageTabs
 

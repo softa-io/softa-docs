@@ -11,10 +11,10 @@ Composable card grid view with:
 
 ## Related Docs
 
-- [ModelTable](../table) — table grid view (shared toolbar dialogs, side panel, and data hooks)
-- [ModelForm](../form) — detail form opened by default card click
-- [Action](../../actions) — action system (used in side panels)
-- [Field](../../fields) — field widgets rendered inside cards via `RecordContext`
+- [ModelTable](./table) — table grid view (shared toolbar dialogs, side panel, and data hooks)
+- [ModelForm](./form) — detail form opened by default card click
+- [Action](./actions) — action system (used in side panels)
+- [Field](./fields) — field widgets rendered inside cards via `RecordContext`
 
 ## Quick Start
 
@@ -307,7 +307,7 @@ Side panel behavior is identical to `ModelTable`:
 - Active tree filter is shown as a badge in the toolbar active state bar
 - All side panel components support `remoteSearch` prop to switch from client-side filtering to server-side search
 
-See [ModelTable Side Panel](../table/README.md#side-panel-optional) for full side panel prop reference.
+See [ModelTable Side Panel](./table/README.md#side-panel-optional) for full side panel prop reference.
 
 ## Tabs
 

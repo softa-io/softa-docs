@@ -131,14 +131,13 @@ Use `style` to express the visual intent of an action button. Omitting `style` r
 
 Bare function conditions are not supported; wrap function logic with `dependsOn([...], evaluator)`.
 
+> **Implicit rule (form scope)**: Actions inside a form (`FormToolbar` / `FormSection`) are automatically disabled in `create` mode, since their `operation` is dispatched against an existing record `id`. Do **not** repeat `mode === "create"` checks in `disabled`. The user-supplied condition is short-circuited in create mode and never invoked. `disabledReason` is still resolved when disabled, so a `mode === "create"` branch there is fine if you want to show "Save the record first."
+
 #### Common `disabled` / `hidden` patterns
 
 ```tsx
-// Disabled in create mode (no id yet)
-disabled={dependsOn(["id"], ({ mode }) => mode === "create")}
-
-// Disabled in both create and read mode
-disabled={dependsOn(["id"], ({ mode }) => mode !== "edit")}
+// Disabled in read mode only (create is already covered implicitly)
+disabled={dependsOn(["id"], ({ mode }) => mode === "read")}
 
 // Hidden unless status is a specific value (FilterCondition shorthand)
 hidden={["status", "!=", "InProgress"]}

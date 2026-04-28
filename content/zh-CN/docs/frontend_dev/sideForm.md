@@ -4,12 +4,12 @@
 
 ## 相关文档
 
-- [ModelForm](../form) — 右侧渲染的表单
-- [ModelTable](../table) — 表格视图（共用侧栏组件）
-- [ModelCard](../card) — 卡片网格视图
-- [侧栏组件](../shared/side-panel/) — SideTree、SideCard、SideList
-- [Field](../fields) — 侧栏与表单共用的字段控件
-- [Action](../action) — 工具栏与表单动作
+- [ModelForm](./form) — 右侧渲染的表单
+- [ModelTable](./table) — 表格视图（共用侧栏组件）
+- [ModelCard](./card) — 卡片网格视图
+- [侧栏组件](./table#侧栏可选) — SideTree、SideCard、SideList
+- [Field](./fields/fields) — 侧栏与表单共用的字段控件
+- [Action](./action) — 工具栏与表单动作
 
 ## 快速开始
 
@@ -201,6 +201,9 @@ function WorkItemListItem() {
     <SideCard.Header>
       <Field fieldName="appName" />
     </SideCard.Header>
+    <SideCard.Header align="right">
+      <Field fieldName="status" widgetType="Badge" />
+    </SideCard.Header>
     <Field fieldName="appCode" />
     <SideCard.Footer>
       <Field fieldName="updatedTime" />
@@ -216,6 +219,8 @@ function WorkItemListItem() {
   </FormBody>
 </ModelSideForm>
 ```
+
+`SideCard.Header` 接受 `align` prop（`"left" | "right"`，默认 `"left"`）。可再声明 `<SideCard.Header align="right">`，将元素推到卡片标题行右侧。左右两组内均可包含多个子节点；组内顺序遵循 JSX 顺序。`placement="header"` 的动作始终渲染在左侧组；`more`（`...`）菜单始终位于右侧组最末端。
 
 ## 表单内容
 
@@ -233,9 +238,10 @@ function WorkItemListItem() {
 ### 配合工具栏动作
 
 ```tsx
-import { Action, dependsOn } from "@/components/actions/Action";
+import { Action } from "@/components/actions/Action";
 import { CheckCircle, XCircle } from "lucide-react";
 
+// 表单作用域动作在 `create` 模式下会隐式禁用 —— 无需在 `disabled` 中重复判断 `mode === "create"`。详见 actions/README.md。
 <ModelSideForm modelName="DesignWorkItem">
   <SideList filterField="id" searchable>
     <WorkItemListItem />
@@ -251,7 +257,6 @@ import { CheckCircle, XCircle } from "lucide-react";
       placement="toolbar"
       confirmMessage="Approve this item?"
       successMessage="Approved."
-      disabled={dependsOn(["id"], ({ mode }) => mode === "create")}
       hidden={["status", "!=", "PENDING"]}
     />
     <Action
@@ -262,7 +267,6 @@ import { CheckCircle, XCircle } from "lucide-react";
       placement="more"
       confirmMessage="Reject this item?"
       successMessage="Rejected."
-      disabled={dependsOn(["id"], ({ mode }) => mode === "create")}
       hidden={["status", "!=", "PENDING"]}
     />
   </FormToolbar>
@@ -387,6 +391,6 @@ export default function WorkbenchDetailPage() {
 | 记录编辑          | 完整表单编辑     | 可选行内编辑     | -                |
 | 点击行为          | 侧栏选记录       | 跳转或行内编辑   | 跳转             |
 | 脏数据保护        | 有               | 仅行内编辑       | -                |
-| 搜索/筛选/排序    | 主要在侧栏       | 完整工具栏       | 简化工具栏       |
+| 搜索 / 筛选 / 排序 | 仅在侧栏         | 完整工具栏       | 简化工具栏       |
 | 分页              | 侧栏（客户端）   | 服务端           | 服务端           |
-| 远程搜索          | `remoteSearch`   | 内置             | 内置             |
+| 远程搜索          | `remoteSearch` prop | 内置        | 内置             |
