@@ -398,14 +398,13 @@ Complete example:
     <Field fieldName="appName" />
     <Action type="link" labelName="Edit" href="/studio/app/{id}/workbench" />
     <Action
-      type="default"
       labelName="Archive"
       operation="archive"
       placement="more"
     />
   </ModelCard.Header>
   <Field fieldName="status" />
-  <Action type="default" labelName="Publish" operation="publish" />
+  <Action labelName="Publish" operation="publish" />
   <ModelCard.Footer>
     <Field fieldName="updatedTime" />
   </ModelCard.Footer>
@@ -464,7 +463,6 @@ function UnlockDialog() {
   />
 
   <Action
-    type="default"
     labelName="Lock Account"
     placement="more"
     icon={Lock}

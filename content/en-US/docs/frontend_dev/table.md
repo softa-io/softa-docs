@@ -719,7 +719,6 @@ function UnlockDialog() {
   />
 
   <Action
-    type="default"
     labelName="Lock Account"
     placement="more"
     icon={Lock}

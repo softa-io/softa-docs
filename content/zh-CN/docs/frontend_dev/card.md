@@ -107,7 +107,6 @@ export default function DesignAppPage() {
   </ModelCard.Header>
   <Field fieldName="status" />
   <Action
-    type="default"
     labelName="Publish"
     operation="publish"
     confirmMessage="Publish this app?"
@@ -124,7 +123,6 @@ export default function DesignAppPage() {
   <ModelCard.Header>
     <Field fieldName="appName" />
     <Action
-      type="default"
       labelName="Archive"
       operation="archive"
       placement="more"

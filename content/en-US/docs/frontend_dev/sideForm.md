@@ -251,7 +251,6 @@ import { CheckCircle, XCircle } from "lucide-react";
   <FormHeader />
   <FormToolbar>
     <Action
-      type="default"
       labelName="Approve"
       icon={CheckCircle}
       operation="approve"
@@ -261,7 +260,6 @@ import { CheckCircle, XCircle } from "lucide-react";
       hidden={["status", "!=", "PENDING"]}
     />
     <Action
-      type="default"
       labelName="Reject"
       icon={XCircle}
       operation="reject"

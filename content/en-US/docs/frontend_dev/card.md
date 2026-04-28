@@ -107,7 +107,6 @@ The explicit `placement` prop is only consulted to detect `"more"`. For `"header
   </ModelCard.Header>
   <Field fieldName="status" />
   <Action
-    type="default"
     labelName="Publish"
     operation="publish"
     confirmMessage="Publish this app?"
@@ -124,7 +123,6 @@ Top-level `Action` children (not inside a slot wrapper) render to the right of t
   <ModelCard.Header>
     <Field fieldName="appName" />
     <Action
-      type="default"
       labelName="Archive"
       operation="archive"
       placement="more"
