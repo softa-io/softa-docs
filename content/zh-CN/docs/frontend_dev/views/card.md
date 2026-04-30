@@ -13,8 +13,8 @@
 
 - [ModelTable](./table) — 表格网格视图（共用工具栏对话框、侧栏与数据钩子）
 - [ModelForm](./form) — 卡片点击后打开的详情表单
-- [Action](./action) — 动作系统（侧栏中使用）
-- [Field](./fields/fields) — 通过 `RecordContext` 在卡片内渲染的字段控件
+- [Action](../actions) — 动作系统（侧栏中使用）
+- [Field](../fields/fields) — 通过 `RecordContext` 在卡片内渲染的字段控件
 
 ## 快速开始
 
@@ -271,7 +271,7 @@ import { SideTree } from "@/components/views/shared/side-panel/SideTree";
 
 ## 标签页筛选
 
-`ModelCard` 本身没有 `tabs` prop。若需基于标签切换筛选（或混合多种视图），请用 `<MultiView>` 包裹卡片网格 —— 参见 [MultiView](../multi-view)。
+`ModelCard` 本身没有 `tabs` prop。若需基于标签切换筛选（或混合多种视图），请用 `<MultiView>` 包裹卡片网格 —— 参见 [MultiView](./multi-view)。
 
 ## 网格布局
 
@@ -318,7 +318,7 @@ import { SideTree } from "@/components/views/shared/side-panel/SideTree";
 | `labelName`     | `string`                 | 否   | -       | 覆盖页头标题。默认 `metaModel.labelName`。 |
 | `description`   | `string`                 | 否   | -       | 覆盖页头副标题。默认 `metaModel.description`。 |
 | `orders`        | `OrderCondition`         | 否   | -       | 推荐的默认排序。优先于 `initialParams.orders` 与 `MultiView.Tab.orders`（上下文）。 |
-| `filters`       | `FilterCondition`        | 否   | -       | 推荐的基础筛选。优先于 `initialParams.filters` 与 `MultiView.Tab.filters`（上下文）。与工作区/运行时筛选按 `AND` 合并。参见 [筛选与排序优先级](../multi-view#filter--order-precedence)。 |
+| `filters`       | `FilterCondition`        | 否   | -       | 推荐的基础筛选。优先于 `initialParams.filters` 与 `MultiView.Tab.filters`（上下文）。与工作区/运行时筛选按 `AND` 合并。参见 [筛选与排序优先级](./multi-view#filter--order-precedence)。 |
 | `initialParams` | `QueryParamsWithoutFields` | 否 | -     | 高级初始查询（`pageSize` 等）。`filters` / `orders` 建议用顶层 props。 |
 | `children`      | `ReactNode`              | 否   | -       | `ModelCard.Header`、`Field`、`ModelCard.Footer`，以及可选的一个侧栏。 |
 | `enableCreate`  | `boolean`                | 否   | `true`  | 在工具栏显示新建按钮。 |

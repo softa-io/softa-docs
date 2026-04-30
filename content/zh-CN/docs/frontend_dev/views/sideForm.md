@@ -7,9 +7,9 @@
 - [ModelForm](./form) — 右侧渲染的表单
 - [ModelTable](./table) — 表格视图（共用侧栏组件）
 - [ModelCard](./card) — 卡片网格视图
-- [侧栏组件](./table#侧栏可选) — SideTree、SideCard、SideList
-- [Field](./fields/fields) — 侧栏与表单共用的字段控件
-- [Action](./action) — 工具栏与表单动作
+- [侧栏组件](./table#side-panel-optional) — SideTree、SideCard、SideList
+- [Field](../fields/fields) — 侧栏与表单共用的字段控件
+- [Actions](../actions) — 工具栏与表单动作
 
 ## 快速开始
 

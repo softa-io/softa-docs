@@ -8,8 +8,8 @@ Split-pane view: a side panel on the left selects a record, and a `ModelForm` on
 - [ModelTable](./table) — table view (shared side panel components)
 - [ModelCard](./card) — card grid view
 - [Side Panel components](./table#side-panel-optional) — SideTree, SideCard, SideList
-- [Field](./fields/fields) — field widgets used in both side panel and form
-- [Action](./actions) — toolbar and form actions
+- [Fields](../fields/fields) — field widgets used in both side panel and form
+- [Actions](../actions) — toolbar and form actions
 
 ## Quick Start
 

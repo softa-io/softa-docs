@@ -13,8 +13,8 @@ Composable card grid view with:
 
 - [ModelTable](./table) — table grid view (shared toolbar dialogs, side panel, and data hooks)
 - [ModelForm](./form) — detail form opened on card click
-- [Action](./action) — action system (used in side panels)
-- [Field](./fields/fields) — field widgets rendered inside cards via `RecordContext`
+- [Action.](../actions) — action system (used in side panels)
+- [Field](../fields/fields) — field widgets rendered inside cards via `RecordContext`
 
 ## Quick Start
 
@@ -275,7 +275,7 @@ See [ModelTable Side Panel](./table#side-panel-optional) for full side panel pro
 
 `ModelCard` itself does not have a `tabs` prop. For tab-based filter switching
 (or mixed view kinds), wrap the card grid in `<MultiView>` — see
-[MultiView](../multi-view).
+[MultiView](./multi-view).
 
 ## Grid Layout
 
@@ -322,7 +322,7 @@ Active filter/sort states are shown as clearable badges below the toolbar.
 | `labelName`   | `string`                                                      | No       | -       | Overrides the page title in the header. Defaults to `metaModel.labelName`.                                   |
 | `description` | `string`                                                      | No       | -       | Overrides the subtitle in the header. Defaults to `metaModel.description`.                                   |
 | `orders`      | `OrderCondition`                                              | No       | -       | Recommended default sort. Wins over `initialParams.orders` and `MultiView.Tab.orders` (context).            |
-| `filters`     | `FilterCondition`                                             | No       | -       | Recommended base filter. Wins over `initialParams.filters` and `MultiView.Tab.filters` (context). AND-merged with workspace/runtime filters. See [precedence](../multi-view#filter--order-precedence). |
+| `filters`     | `FilterCondition`                                             | No       | -       | Recommended base filter. Wins over `initialParams.filters` and `MultiView.Tab.filters` (context). AND-merged with workspace/runtime filters. See [precedence](./multi-view#filter--order-precedence). |
 | `initialParams` | `QueryParamsWithoutFields`                                  | No       | -       | Advanced initial query settings (`pageSize`, etc.). For `filters` / `orders`, prefer top-level props.        |
 | `children`    | `ReactNode`                                                   | No       | -       | `ModelCard.Header`, `Field`, `ModelCard.Footer`, and one optional side panel.                                |
 | `enableCreate`| `boolean`                                                     | No       | `true`  | Show Create button in toolbar.                                                                               |

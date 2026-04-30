@@ -4,12 +4,12 @@
 
 ## 相关文档
 
-- [Fields](./fields/fields)
-- [关联字段](./fields/relations)
-- [Widget 矩阵](./fields/widgets)
-- [Group（行内字段布局）](./fields/fields#group)
-- [Action](./action)
-- [Dialog](./dialog)
+- [Fields](../fields/fields)
+- [关联字段](../fields/relations)
+- [Widget 矩阵](../fields/widgets)
+- [Group（行内字段布局）](../fields#group)
+- [Actions](../actions)
+- [Dialogs](./dialogs)
 - [ModelTable](./table)
 
 ## 导入
@@ -123,9 +123,9 @@ function ConfigGroupForm() {
 
 需要自定义布局？在子组件中使用 `useModelFormContext()`，并直接调整 `FormHeader` / `FormToolbar` / `FormBody` 的组合即可。
 
-字段的规范化用法现在统一维护在 [Fields](./fields/fields)。
-widget 兼容性和 widget 专属示例维护在 [Widget 矩阵](./fields/widgets)。
-关联字段行为维护在 [关联字段](./fields/relations)。
+字段的规范化用法现在统一维护在 [Fields](../fields/fields)。
+widget 兼容性和 widget 专属示例维护在 [Widget 矩阵](../fields/widgets)。
+关联字段行为维护在 [关联字段](../fields/relations)。
 这些文档用于说明：
 
 - `Field` props 与元数据覆盖
@@ -163,7 +163,7 @@ widget 兼容性和 widget 专属示例维护在 [Widget 矩阵](./fields/widget
 - `Filters`：`FilterCondition`
 - `Orders`：结构化排序元组 / 数组
 
-更详细的字段值契约见 [Field](./fields/fields)。
+更详细的字段值契约见 [Field](../fields/fields)。
 
 条件字段控制示例：
 
@@ -952,14 +952,14 @@ import { FormBody, FormTab } from "@/components/views/form/components/FormBody";
 
 ### `ModelForm` 中的动作
 
-通用 `Action` / `BulkAction` API 现在统一维护在 [Action](./action)。
+通用 `Action` / `BulkAction` API 现在统一维护在 [Actions](../actions)。
 本节只保留 `ModelForm` 容器规则和完整页面示例。
 
 容器支持：
 
 | 容器          | 支持的 Action 类型                     | 支持的位置          |
 | ------------- | -------------------------------------- | ------------------- |
-| `FormToolbar` | `default`, `dialog`, `link`, `custom` | `toolbar`, `more`   |
+| `FormToolbar` | `default`, `dialog`, `link`, `custom`, `form` | `toolbar`, `more`   |
 | `FormSection` | `link`, `custom`                       | `header`, `inline`  |
 
 规则：
@@ -1082,7 +1082,7 @@ function UnlockDialog() {
 ## 对话框架构
 
 更完整的对话框 API、props 和示例维护在：
-[Dialog](./dialog)。
+[Dialogs](./dialogs)。
 
 快速选择：
 

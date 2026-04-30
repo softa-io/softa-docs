@@ -12,9 +12,9 @@
 
 相关文档：
 
-- [ModelForm](./form)：布局与表单容器行为
-- [ModelTable](./table)：布局、侧边树、查询行为
-- [ActionDialog 与 ModelDialog](./dialog)
+- [ModelForm](./views/form)：布局与表单容器行为
+- [ModelTable](./views/table)：布局、侧边树、查询行为
+- [ActionDialog 与 ModelDialog](./views/dialogs)
 
 ## 导入
 

@@ -4,12 +4,12 @@ Metadata-driven create/edit form container based on `react-hook-form` and Zod.
 
 ## Related Docs
 
-- [Fields](./fields/fields)
-- [Relation fields](./fields/relations)
-- [Widget matrix](./fields/widgets)
-- [Group (inline field layout)](./fields/fields#group)
-- [Action](./action)
-- [Dialog](./dialog)
+- [Fields](../fields/fields)
+- [Relation fields](../fields/relations)
+- [Widget matrix](../fields/widgets)
+- [Group (inline field layout)](../fields#group)
+- [Actions](../actions)
+- [Dialogs](./dialogs)
 - [ModelTable](./table)
 
 ## Import
@@ -123,9 +123,9 @@ function ConfigGroupForm() {
 
 Need custom variations? Use `useModelFormContext()` in children and rearrange `FormHeader/FormToolbar/FormBody` directly.
 
-Canonical field usage now lives in [Fields](./fields/fields).
-Widget compatibility and widget-specific examples live in [Widget matrix](./fields/widgets).
-Relation field behavior lives in [Relation fields](./fields/relations).
+Canonical field usage now lives in [Fields](../fields/fields).
+Widget compatibility and widget-specific examples live in [Widget matrix](../fields/widgets).
+Relation field behavior lives in [Relation fields](../fields/relations).
 Use those documents for:
 
 - `Field` props and metadata overrides
@@ -163,7 +163,7 @@ When you do pass container-level `defaultValues`, use field UI values directly:
 - `Filters`: `FilterCondition`
 - `Orders`: structured order tuples/arrays
 
-Detailed field value contracts are documented in [Field](./fields/fields).
+Detailed field value contracts are documented in [Field](../fields/fields).
 
 Example conditional field control:
 
@@ -827,12 +827,10 @@ Remote `Field.onChange` in `ModelForm`:
 **FormHeader with display-mode children:**
 
 ```tsx
-import { Group } from "@/components/fields/extend/Group";
-
 <FormHeader>
   <Group separator="·">
-    <Field fieldName="employeeCode" />
-    <Field fieldName="departmentName" />
+    <Field name="employeeCode" />
+    <Field name="departmentName" />
   </Group>
 </FormHeader>
 ```
@@ -952,7 +950,7 @@ import { FormBody, FormTab } from "@/components/views/form/components/FormBody";
 
 ### Actions In `ModelForm`
 
-Common `Action` / `BulkAction` API now lives in [Action](./action).
+Common `Action` / `BulkAction` API now lives in [Actions](./actions).
 This section keeps only the `ModelForm` container rules and a complete page-level example.
 
 Container support:
@@ -1081,7 +1079,7 @@ Inside `ModelForm` children, use `useModelFormContext()` to access:
 ## Dialog Architecture
 
 Detailed dialog API, props, and full examples are maintained in:
-[Dialog](./dialog).
+[Dialogs](./dialogs).
 
 Quick selection:
 

@@ -10,9 +10,9 @@ Composable data table view with:
 ## Related Docs
 
 - [ModelCard](./card) — card grid view (shared toolbar dialogs, side panel, and data hooks)
-- [Dialog](./dialog)
+- [Dialogs](./dialogs)
 - [ModelForm](./form)
-- [Action](./action)
+- [Actions](../actions)
 
 ## Quick Start
 
@@ -121,7 +121,7 @@ Table declaration notes:
 - `hidden` only supports `boolean` in table declarations; `hidden={true}` removes the whole column
 - conditional `required` / `readonly` are supported in inline edit, but conditional `hidden` is not
 
-Detailed field value contracts are documented in [Field & Widget](./fields/fields).
+Detailed field value contracts are documented in [Field & Widget](../fields/fields).
 
 ## File And Image Columns
 
@@ -246,7 +246,7 @@ Behavior in `ModelTable` inline edit:
 
 `ModelTable` itself does not have a `tabs` prop. For tab-based filter switching
 (or mixed view kinds like Board + Table under one header), wrap the table in
-`<MultiView>` — see [MultiView](../multi-view).
+`<MultiView>` — see [MultiView](./multi-view).
 
 ## Developer Types
 
@@ -455,7 +455,7 @@ import { SideList } from "@/components/views/shared/side-panel/SideList";
 - `SideTree` wraps the existing `TreePanel` component internally
 - Side panel width is fixed at 280px
 - `searchable` enables keyword filtering; by default this is client-side across all field values. Set `remoteSearch` to switch to server-side search via `["searchName", "CONTAINS", keyword]` (debounced 300ms)
-- Use [`Group`](./fields/fields#group) to compose multiple fields inline within `SideCard` body (e.g. `<Group separator="-"><Field .../><Field .../></Group>`)
+- Use [`Group`](../fields/fields#group) to compose multiple fields inline within `SideCard` body (e.g. `<Group separator="-"><Field .../><Field .../></Group>`)
 
 ## Unified Active Toolbar State
 
@@ -478,7 +478,7 @@ Toolbar active state area can show and clear:
 | `description`      | `string`                   | No       | -       | Overrides the subtitle shown in the table header. Defaults to `metaModel.description` when omitted.                                        |
 | `inlineEdit`       | `boolean`                  | No       | `false` | Enable row-click inline edit mode. When enabled, active-row editable cells render `Field` components instead of navigating to detail.      |
 | `orders`           | `OrderCondition`           | No       | -       | Recommended default sort. Supports a single tuple (`["createdTime", "DESC"]`) or multiple tuples. Wins over `initialParams.orders` and `MultiView.Tab.orders` (context). |
-| `filters`          | `FilterCondition`          | No       | -       | Recommended base filter. Wins over `initialParams.filters` and `MultiView.Tab.filters` (context). AND-merged with workspace, search, column, side-panel, and toolbar filters at runtime. See [precedence rules](../multi-view#filter--order-precedence). |
+| `filters`          | `FilterCondition`          | No       | -       | Recommended base filter. Wins over `initialParams.filters` and `MultiView.Tab.filters` (context). AND-merged with workspace, search, column, side-panel, and toolbar filters at runtime. See [precedence rules](./multi-view#filter--order-precedence). |
 | `initialParams`    | `QueryParamsWithoutFields` | No       | -       | Advanced initial query settings (`pageSize`, `groupBy`, `effectiveDate`, `subQueries`, `splitBy`, `aggFunctions`, `summary`). For `filters` / `orders`, prefer the top-level props. |
 | `children`         | `ReactNode`                | No       | -       | Ordered `<Field />` declarations plus optional `<Action />`, `<BulkAction />`, and one side panel (`<SideTree>`, `<SideCard>`, or `<SideList>`). At least one visible `<Field />` is required at runtime. |
 | `enableBulkDelete` | `boolean`                  | No       | `true`  | Enable built-in bulk delete entry.                                                                                                         |
@@ -629,11 +629,11 @@ Example merged condition:
 
 For the full layered model (including how `MultiView.Tab.filters` interacts
 with this), see
-[Filter & order precedence](../multi-view#filter--order-precedence).
+[Filter & order precedence](./multi-view#filter--order-precedence).
 
 ## Actions
 
-Common `Action` / `BulkAction` API now lives in [Action](./action).
+Common `Action` / `BulkAction` API now lives in [Actions](../actions).
 This section keeps only the `ModelTable` container rules and a complete table-level example.
 
 Rules:

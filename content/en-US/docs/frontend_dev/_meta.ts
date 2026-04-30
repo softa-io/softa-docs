@@ -2,9 +2,8 @@ export default {
   index: "Overview",
   module: "Module",
   views: "Views",
-  action: "Action",
+  actions: "Actions",
   fields: "Field & Widget",
-  dialog: "Dialog",
-  tree: "Tree",
+  layout: "Layout",
   components: "Components",
 }

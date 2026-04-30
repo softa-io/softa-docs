@@ -10,9 +10,9 @@
 ## 相关文档
 
 - [ModelCard](./card) — 卡片网格视图（共用工具栏对话框、侧栏与数据钩子）
-- [Dialog](./dialog)
+- [Dialogs](./dialogs)
 - [ModelForm](./form)
-- [Action](./action)
+- [Actions](../actions)
 
 ## 快速开始
 
@@ -121,7 +121,7 @@ type ModelTableRowData = { id: string };
 - 在表格声明中，`hidden` 只支持 `boolean`；`hidden={true}` 会移除整列
 - 条件 `required` / `readonly` 支持内联编辑；条件 `hidden` 不支持
 
-更详细的字段值契约请见 [Field & Widget](./fields/fields)。
+更详细的字段值契约请见 [Field & Widget](../fields/fields)。
 
 ## 文件与图片列
 
@@ -453,7 +453,7 @@ import { SideList } from "@/components/views/shared/side-panel/SideList";
 - `SideTree` 内部封装现有 `TreePanel`
 - 侧栏宽度固定 280px
 - `searchable` 默认在客户端对所有字段值做关键词过滤；设置 `remoteSearch` 可改为服务端 `["searchName", "CONTAINS", keyword]`（300ms 防抖）
-- 在 `SideCard` 正文内可用 [`Group`](./fields/fields#group) 将多字段并排（例如 `<Group separator="-"><Field .../><Field .../></Group>`）
+- 在 `SideCard` 正文内可用 [`Group`](../fields/fields#group) 将多字段并排（例如 `<Group separator="-"><Field .../><Field .../></Group>`）
 
 ## 统一的工具栏激活状态
 
@@ -476,7 +476,7 @@ import { SideList } from "@/components/views/shared/side-panel/SideList";
 | `description`       | `string`                   | 否   | -       | 覆盖表格头部副标题。省略时默认 `metaModel.description`。 |
 | `inlineEdit`        | `boolean`                  | 否   | `false` | 启用按行点击的内联编辑模式。启用后，活跃行的可编辑单元格会渲染 `Field`，而不是跳转详情页。 |
 | `orders`            | `OrderCondition`           | 否   | -       | 推荐的默认排序。支持单个元组（`["createdTime", "DESC"]`）或多个元组。优先于 `initialParams.orders` 与 `MultiView.Tab.orders`（上下文）。 |
-| `filters`           | `FilterCondition`          | 否   | -       | 推荐的基础筛选。优先于 `initialParams.filters` 与 `MultiView.Tab.filters`（上下文）。运行时会与工作区、搜索、列、侧栏及工具栏筛选按 `AND` 合并。参见 [筛选与排序优先级](../multi-view#filter--order-precedence)。 |
+| `filters`           | `FilterCondition`          | 否   | -       | 推荐的基础筛选。优先于 `initialParams.filters` 与 `MultiView.Tab.filters`（上下文）。运行时会与工作区、搜索、列、侧栏及工具栏筛选按 `AND` 合并。参见 [筛选与排序优先级](./multi-view#filter--order-precedence)。 |
 | `initialParams`     | `QueryParamsWithoutFields` | 否   | -       | 高级初始查询（`pageSize`、`groupBy`、`effectiveDate`、`subQueries`、`splitBy`、`aggFunctions`、`summary` 等）。`filters` / `orders` 建议使用顶层 props。 |
 | `children`          | `ReactNode`                | 否   | -       | 按顺序的 `<Field />` 声明，以及可选 `<Action />`、`<BulkAction />`，和至多一个侧栏（`<SideTree>` / `<SideCard>` / `<SideList>`）。运行时至少需要一个可见 `<Field />`。 |
 | `enableBulkDelete`  | `boolean`                  | 否   | `true`  | 是否启用内置批量删除入口。 |
@@ -626,7 +626,7 @@ type initialParams = QueryParamsWithoutFields;
 
 ## 动作
 
-通用 `Action` / `BulkAction` API 现在统一维护在 [Action](./action)。
+通用 `Action` / `BulkAction` API 现在统一维护在 [Actions](../actions)。
 本节只保留 `ModelTable` 容器规则和完整表格示例。
 
 规则：
