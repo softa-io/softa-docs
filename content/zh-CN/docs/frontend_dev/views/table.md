@@ -244,7 +244,7 @@ import { dependsOn, Field } from "@/components/fields";
 
 ## 标签页筛选
 
-`ModelTable` 本身没有 `tabs` prop。若需基于标签切换筛选（或在同一标题下混合多种视图，如看板 + 表格），请用 `<MultiView>` 包裹表格 —— 参见 [MultiView](../multi-view)。
+`ModelTable` 本身没有 `tabs` prop。若需基于标签切换筛选（或在同一标题下混合多种视图，如看板 + 表格），请用 `<MultiView>` 包裹表格 —— 参见 [MultiView](./multi-view)。
 
 ## 开发者类型
 
@@ -260,206 +260,28 @@ type UserAccountRow = ModelTableRowWith<{
 
 ## 侧栏（可选）
 
-`ModelTable` 支持通过子节点 `<SideTree>`、`<SideCard>` 或 `<SideList>` 在左侧做筛选。
-
-侧栏与 `<Field />`、`<Action />` 并列作为直接子节点声明。每个 `ModelTable` 只支持**一个**侧栏组件。
-
-### `<SideTree>`
-
-树形层级筛选面板，适合父子数据。
+`ModelTable` 支持通过子节点 `<SideTree>` / `<SideCard>` / `<SideList>` 在左侧展示筛选面板。侧栏选择会与表格查询按 `AND` 合并。
 
 ```tsx
-import { SideTree } from "@/components/views/shared/side-panel/SideTree";
-
-<ModelTable
-  modelName="SysField"
-  orders={["modelName", "ASC"]}
->
+<ModelTable modelName="SysField">
   <SideTree
-    title="System Model"
     modelName="SysModel"
     filterField="modelId"
     labelField="labelName"
     parentField="parentId"
-    sortField="modelName"
-    treeLimit={1000}
-    selectionMode="single"
-    defaultExpandedLevel={2}
   />
   <Field fieldName="modelName" />
-  <Field fieldName="fieldName" />
-  <Field fieldName="labelName" />
-  <Field fieldName="fieldType" />
-</ModelTable>;
+  ...
+</ModelTable>
 ```
 
-`SideTree` props：
-
-| Prop                   | 类型                       | 必填 | 默认值    | 说明 |
-| ---------------------- | -------------------------- | ---- | --------- | ---- |
-| `filterField`          | `string`                   | 是   | -         | 根据所选树节点 id 构建表格过滤时使用的目标字段 |
-| `labelField`           | `string`                   | 是   | -         | 树节点文案字段名 |
-| `parentField`          | `string`                   | 是   | -         | 树父级 id 字段名 |
-| `modelName`            | `string`                   | 否   | 继承父级  | 树数据源模型，默认可继承 `ModelTable` 的 `modelName` |
-| `title`                | `string`                   | 否   | -         | 侧栏标题 |
-| `filterValueField`     | `string`                   | 否   | `idField` | 从选中节点提取过滤值时使用的字段名 |
-| `filterOperator`       | `FilterOperator`           | 否   | `"="`     | 生成过滤条件时使用的操作符 |
-| `treeFields`           | `string[]`                 | 否   | -         | 树查询模式下额外拉取的字段 |
-| `treeFilters`          | `FilterCondition`          | 否   | -         | 树查询模式下的附加过滤 |
-| `treeLimit`            | `number`                   | 否   | -         | 树查询条数上限 |
-| `idField`              | `string`                   | 否   | `"id"`    | 树节点 id 字段 |
-| `disabledField`        | `string`                   | 否   | -         | 树节点禁用状态字段 |
-| `sortField`            | `string`                   | 否   | -         | 树排序字段 |
-| `selectionMode`        | `"single" \| "multi"`      | 否   | `"single"` | 树选择模式 |
-| `remoteSearch`         | `boolean`                  | 否   | `false`   | 为 `true` 时，树搜索会触发远程 API（`searchMode="server"`），而不是只做客户端筛选 |
-| `defaultExpandedLevel` | `number`                   | 否   | -         | 初始展开深度 |
-| `height`               | `number`                   | 否   | `560`     | 树视口高度 |
-| `className`            | `string`                   | 否   | -         | 侧栏 `className` |
-
-### `<SideCard>`
-
-卡片式侧栏，模板更丰富。`Field` 子节点在 `RecordContext` 下以展示模式渲染，支持 `Action` 做每张卡片的操作。
-
-```tsx
-import { SideCard } from "@/components/views/shared/side-panel/SideCard";
-import { Group } from "@/components/fields/composition";
-import { Action } from "@/components/actions/Action";
-
-<ModelTable modelName="DesignWorkItem">
-  <SideCard
-    modelName="DesignApp"
-    filterField="appId"
-    sortField="appName"
-    searchable
-  >
-    <SideCard.Header>
-      <Field fieldName="appName" />
-    </SideCard.Header>
-    <SideCard.Header align="right">
-      <Field fieldName="status" widgetType="Badge" />
-    </SideCard.Header>
-    <Group separator="-">
-      <Field fieldName="appCode" />
-      <Field fieldName="appType" />
-    </Group>
-    <SideCard.Footer>
-      <Field fieldName="updatedTime" />
-    </SideCard.Footer>
-
-    {/* 动作 — placement 控制每张卡片内的位置 */}
-    <Action type="link" labelName="Edit" placement="header" href="/design/app/{id}" />
-    <Action type="custom" labelName="Copy" placement="inline" onClick={(ctx) => { /* ... */ }} />
-    <Action type="custom" labelName="Archive" placement="more" onClick={(ctx) => { /* ... */ }} />
-    <Action type="custom" labelName="Delete" placement="more" confirmMessage="Delete this app?"
-      onClick={(ctx) => { /* ... */ }} />
-  </SideCard>
-
-  <Field fieldName="name" />
-  <Field fieldName="status" />
-</ModelTable>;
-```
-
-`SideCard` props：
-
-| Prop           | 类型              | 必填 | 默认值   | 说明 |
-| -------------- | ----------------- | ---- | -------- | ---- |
-| `filterField`  | `string`          | 是   | -        | 构建表格过滤的目标字段 |
-| `modelName`    | `string`          | 否   | 继承父级 | 数据模型，默认可继承 `ModelTable` 的 `modelName` |
-| `filters`      | `FilterCondition` | 否  | -        | 卡片数据查询的固定过滤 |
-| `sortField`    | `string`          | 否   | -        | 卡片列表排序字段 |
-| `limit`        | `number`          | 否   | `200`    | 最大加载条数 |
-| `searchable`   | `boolean`         | 否   | `false`  | 是否启用关键词搜索 |
-| `remoteSearch` | `boolean`         | 否   | `false`  | 为 `true` 时，搜索会触发远程 API（`["searchName", "CONTAINS", keyword]`），而不是只做客户端筛选；输入 300ms 防抖 |
-| `sortOptions`  | `SortOption[]`    | 否   | -        | 排序下拉选项 |
-| `title`        | `string`          | 否   | -        | 面板标题 |
-| `children`     | `ReactNode`       | 是   | -        | `SideCard.Header`、正文、`SideCard.Footer` 与 `Action` 元素 |
-
-#### SideCard 标题行对齐
-
-`SideCard.Header` 接受 `align` prop：
-
-| `align`   | 在标题行中的位置 |
-| --------- | ---------------- |
-| `"left"`  | 标题行左侧（默认） |
-| `"right"` | 标题行右侧，位于 `...` 菜单之前 |
-
-可声明多个 `SideCard.Header` 区块以填充左右两侧；每个区块内的子节点按 JSX 顺序渲染。
-
-```tsx
-<SideCard.Header>
-  <Field fieldName="appName" />
-</SideCard.Header>
-<SideCard.Header align="right">
-  <Field fieldName="status" widgetType="Badge" />
-</SideCard.Header>
-```
-
-#### SideCard 内 Action 的 placement
-
-`SideCard` 内的 `Action` 按卡片渲染。`placement` 控制位置：
-
-| `placement` | 位置                                     | 可见性            |
-| ----------- | ---------------------------------------- | ----------------- |
-| `header`    | 卡片标题行中，与头部字段同一区域         | 始终可见          |
-| `inline`    | 卡片正文下方                             | 始终可见          |
-| `more`      | 右上角 `...` 下拉菜单                    | hover / 展开时    |
-
-- 省略 `placement` 时默认为 `inline`。
-- 动作收到 `ActionExecutionContext`，含 `id`、`row`（记录数据）、`modelName`。
-- 点击动作不会触发卡片选中。
-- `hidden` 与 `disabled` 条件按每张卡片单独求值。
-- `placement="header"` 的动作渲染在标题行**左侧组**；`placement="more"` 始终位于**右侧组**最末端。
-
-### `<SideList>`
-
-列表式侧栏，`Field` 子节点在展示模式下作为行模板。
-
-```tsx
-import { SideList } from "@/components/views/shared/side-panel/SideList";
-
-<ModelTable modelName="DesignField">
-  <SideList
-    modelName="DesignModel"
-    filterField="modelId"
-    searchable
-  >
-    <Field fieldName="modelName" />
-    <Field fieldName="labelName" />
-  </SideList>
-
-  <Field fieldName="fieldName" />
-  <Field fieldName="fieldType" />
-</ModelTable>;
-```
-
-`SideList` props：
-
-| Prop           | 类型              | 必填 | 默认值   | 说明 |
-| -------------- | ----------------- | ---- | -------- | ---- |
-| `filterField`  | `string`          | 是   | -        | 构建表格过滤的目标字段 |
-| `modelName`    | `string`          | 否   | 继承父级 | 数据模型 |
-| `filters`      | `FilterCondition` | 否   | -        | 列表数据查询固定过滤 |
-| `sortField`    | `string`          | 否   | -        | 列表排序字段 |
-| `limit`        | `number`          | 否   | `200`    | 最大加载条数 |
-| `searchable`   | `boolean`         | 否   | `false`  | 关键词搜索 |
-| `remoteSearch` | `boolean`         | 否   | `false`  | 为 `true` 时，搜索会触发远程 API（`["searchName", "CONTAINS", keyword]`），而不是只做客户端筛选；输入 300ms 防抖 |
-| `sortOptions`  | `SortOption[]`    | 否   | -        | 排序下拉 |
-| `children`     | `ReactNode`       | 是   | -        | 含 `Field` 的行模板 |
-
-### 侧栏行为
-
-- 侧栏选择生成的过滤条件与其他激活过滤用 `AND` 合并
-- `SideCard` / `SideList` 通过 `RecordContext` 为每条数据提供上下文，`Field` 自动以展示模式渲染
-- `SideTree` 内部封装现有 `TreePanel`
-- 侧栏宽度固定 280px
-- `searchable` 默认在客户端对所有字段值做关键词过滤；设置 `remoteSearch` 可改为服务端 `["searchName", "CONTAINS", keyword]`（300ms 防抖）
-- 在 `SideCard` 正文内可用 [`Group`](../fields/fields#group) 将多字段并排（例如 `<Group separator="-"><Field .../><Field .../></Group>`）
+完整的 API（props、插槽、自定义面板）见 [侧栏](../shared/side-panel)。
 
 ## 统一的工具栏激活状态
 
 工具栏激活状态区域可以展示并清除：
 
-- 侧栏树过滤标签
+- 树筛选标签
 - 列过滤标签
 - 条件过滤预览
 - 排序摘要
@@ -622,7 +444,7 @@ type initialParams = QueryParamsWithoutFields;
 ];
 ```
 
-完整分层模型（含 `MultiView.Tab.filters` 如何参与）见 [筛选与排序优先级](../multi-view#filter--order-precedence)。
+完整分层模型（含 `MultiView.Tab.filters` 如何参与）见 [筛选与排序优先级](./multi-view#filter--order-precedence)。
 
 ## 动作
 
@@ -755,12 +577,3 @@ function UnlockDialog() {
 即使提供了 `bulkEditFields`，`excludeFields` 里的字段仍然会被移除。
 这些内置保留字段始终会被排除：
 `id`、`createdTime`、`createdId`、`createdBy`、`updatedTime`、`updatedId`、`updatedBy`、`tenantId`。
-
-## 侧栏说明
-
-- 各侧栏组件均要求提供 `filterField`，用于映射为表格查询过滤条件
-- 若选中多项（多节点/多卡片/多列表项），表格过滤会对选中值做 `OR`
-- 侧栏宽度固定为 280px，暂无公开宽度 API
-- `SideCard` / `SideList` 中的 `Field` 子节点通过 `RecordContext` 以展示模式渲染，无需 `FieldPropsContext`
-- `SideTree` 封装 `TreePanel`；`searchMode` 默认 `"local"`，启用 `remoteSearch` 时为 `"server"`
-- `SideCard` 与 `SideList` 也可用于 `ModelSideForm` 作为数据源面板（参见 [ModelSideForm](./sideForm)）

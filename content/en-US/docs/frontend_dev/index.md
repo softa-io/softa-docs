@@ -60,7 +60,7 @@ Render records of a model. Each is a distinct "view kind".
 | `ModelForm` | Detail / create / edit form |
 | `ModelSideForm` | Master-detail (left list + right form) |
 
-→ [views/table/](./views/table) · [views/board/](./views/board) · [views/card/](./views/card) · [views/form/](./views/form) · [views/sideForm/](./views/sideForm)
+→ [views/table/](./views/table) · [views/board/](./views/board) · [views/card/](./views/card) · [views/form/](./views/form) · [views/side-form/](./views/side-form)
 
 All of these accept top-level `filters` / `orders` and inherit from
 `MultiView.Tab` when nested. See
@@ -69,17 +69,59 @@ for cross-layer rules.
 
 ## 4. Building Blocks
 
-Reusable elements consumed by data views and composers. Not used directly in
-`page.tsx` (with rare exceptions); they sit inside views.
+Reusable elements consumed by data views, composers, and pages. Split into
+three sub-categories by **model awareness**:
+
+### 4a. Generic UI widgets (no model awareness)
+
+Plain visual widgets — input is simple data, no `modelName` / `FilterCondition`.
+
+| Component | Role |
+| --------- | ---- |
+| `pagination-bar` | Page number / size controls |
+| `empty-state` | Empty list placeholder |
+| `status-badge` | Colored status pill |
+| `user-avatar` | User avatar + name |
+| `timeline` | Vertical event timeline |
+| `datetime-picker` / `time-picker` | Date/time inputs |
+| `density-switcher` | UI density toggle |
+| `loading-skeleton` / `full-screen-loading` | Loading states |
+| `check-list` / `option-select` | Selection inputs |
+
+→ [common/](./common)
+
+### 4b. Model-aware view children (used inside Model\* views)
+
+Need `modelName` and integrate with the Model\* view via `SidePanelContainerContext`
+or similar — **not** suitable for use outside a host view.
 
 | Component | Used in |
 | --------- | ------- |
+| `SideTree` / `SideCard` / `SideList` | Side panel filters inside `ModelTable` / `ModelCard` |
+| `RecordPickerField` / `RecordPickerList` | Relation record pickers used in fields and forms |
+
+→ [components/side-panel/](./components/side-panel) · [components/picker/](./components/picker)
+
+### 4c. Model-aware standalones (declared inside views, but stand alone)
+
+Used inside Model\* / MultiView declarations as JSX children, but each is a
+self-contained "thing":
+
+| Component | Role |
+| --------- | ---- |
 | `Field` | Column / form field declaration; renders read & edit modes |
 | `Action` / `BulkAction` | Per-record / per-selection operations |
-| `SideTree` / `SideCard` / `SideList` | Side panel filters inside Model\* views |
-| `ViewTitle` | Title block in view headers (used by Model\* and MultiView) |
+| Cell renderers | `BooleanCell` / `OptionCell` / `ReferenceCell` / etc. used by ModelTable |
 
-→ [fields/](./fields) · [actions/](./actions) · [views/shared/side-panel/](./views/shared/side-panel) · [views/shared/ViewTitle.tsx](./views/shared/ViewTitle.tsx)
+→ [fields/](./fields) · [actions/](./actions)
+
+### Sub-category guide
+
+When in doubt where a new component goes:
+
+- Doesn't know about models? → **4a (`common/`)**
+- Knows about models AND must live inside a Model\* host (publishes to or reads from a host context)? → **4b (`views/shared/`)**
+- Knows about models AND is a self-contained child of a host? → **4c**
 
 ## 5. UI Primitives
 

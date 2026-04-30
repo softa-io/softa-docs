@@ -8,9 +8,9 @@
 │  ┌─────────────────────────────────────────────────┐ │
 │  │ 2. 页面编排器  ─── 包裹单个 page.tsx            │ │
 │  │  ┌────────────────────────────────────────────┐ │ │
-│  │  │ 3. 数据视图  ─── 渲染单套数据                │ │ │
+│  │  │ 3. 数据视图  ─── 渲染一套数据集              │ │ │
 │  │  │  ┌───────────────────────────────────────┐ │ │ │
-│  │  │  │ 4. 构建块  ─── 视图内部复用单元        │ │ │ │
+│  │  │  │ 4. 构建块  ─── 位于视图内部           │ │ │ │
 │  │  │  │  ┌──────────────────────────────────┐ │ │ │ │
 │  │  │  │  │ 5. UI 原语                       │ │ │ │ │
 │  │  │  │  └──────────────────────────────────┘ │ │ │ │
@@ -57,27 +57,67 @@
 | `ModelForm` | 详情 / 新建 / 编辑表单 |
 | `ModelSideForm` | 主从布局（左侧列表 + 右侧表单） |
 
-→ [views/table/](./views/table) · [views/board/](./views/board) · [views/card/](./views/card) · [views/form/](./views/form) · [views/sideForm/](./views/sideForm)
+→ [views/table/](./views/table) · [views/board/](./views/board) · [views/card/](./views/card) · [views/form/](./views/form) · [views/side-form/](./views/side-form)
 
-以上均支持顶层 `filters` / `orders`；嵌套在 `MultiView` 中时可继承 `MultiView.Tab` 的上下文。跨层合并规则见
+以上组件均接受顶层 `filters` / `orders`；嵌套时继承 `MultiView.Tab`。跨层规则见
 [views/multi-view/README.md#filter--order-precedence](./views/multi-view/README.md#filter--order-precedence)。
 
 ## 4. 构建块
 
-数据视图与编排器消费的复用单元。通常不直接在 `page.tsx` 使用（少数例外）；它们位于视图内部。
+数据视图、编排器与页面消费的复用单元。按**是否感知模型**再分为三个子类：
 
-| 组件 | 使用场景 |
+### 4a. 通用 UI 部件（无模型感知）
+
+纯展示类控件——输入为简单数据，无 `modelName` / `FilterCondition`。
+
+| 组件 | 作用 |
+| --------- | ---- |
+| `pagination-bar` | 页码 / 每页条数控制 |
+| `empty-state` | 空列表占位 |
+| `status-badge` | 彩色状态徽标 |
+| `user-avatar` | 用户头像 + 名称 |
+| `timeline` | 纵向事件时间线 |
+| `datetime-picker` / `time-picker` | 日期 / 时间输入 |
+| `density-switcher` | 界面密度切换 |
+| `loading-skeleton` / `full-screen-loading` | 加载态 |
+| `check-list` / `option-select` | 选择类输入 |
+
+→ [common/](./common)
+
+### 4b. 感知模型的视图子节点（用于 Model\* 视图内部）
+
+需要 `modelName`，并通过 `SidePanelContainerContext` 等与宿主 Model\* 视图集成——**不适合**在宿主视图外单独使用。
+
+| 组件 | 使用于 |
 | --------- | ------- |
-| `Field` | 列 / 表单字段声明；只读与编辑模式 |
-| `Action` / `BulkAction` | 单条 / 批量操作 |
-| `SideTree` / `SideCard` / `SideList` | Model\* 视图内的侧栏筛选 |
-| `ViewTitle` | 视图头部的标题区（Model\* 与 MultiView 使用） |
+| `SideTree` / `SideCard` / `SideList` | `ModelTable` / `ModelCard` 内的侧栏筛选 |
+| `RecordPickerField` / `RecordPickerList` | 字段与表单中的关联记录选择器 |
 
-→ [fields/](./fields) · [actions/](./actions) · [views/shared/side-panel/](./views/shared/side-panel) · [views/shared/ViewTitle.tsx](./views/shared/ViewTitle.tsx)
+→ [components/side-panel/](./components/side-panel) · [components/picker/](./components/picker)
+
+### 4c. 感知模型且可独立声明（在视图声明中以 JSX 子节点出现）
+
+在 Model\* / MultiView 声明中作为 JSX 子节点使用，但每一块都是自包含单元：
+
+| 组件 | 作用 |
+| --------- | ---- |
+| `Field` | 列 / 表单字段声明；只读与编辑模式 |
+| `Action` / `BulkAction` | 单条 / 基于选中的批量操作 |
+| 单元格渲染器 | `ModelTable` 使用的 `BooleanCell` / `OptionCell` / `ReferenceCell` 等 |
+
+→ [fields/](./fields) · [actions/](./actions)
+
+### 子类对照
+
+不确定新组件归哪一类时：
+
+- 不了解模型？→ **4a（`common/`）**
+- 了解模型**且**必须活在 Model\* 宿主内（向宿主上下文发布或从宿主上下文读取）？→ **4b（`views/shared/`）**
+- 了解模型**且**是宿主下的自包含子节点？→ **4c**
 
 ## 5. UI 原语
 
-更底层的 UI，供上层使用。多为第三方封装或窄用途工具。
+更底层的 UI，供以上各层使用。多为第三方适配或窄用途工具。
 
 | 组件 | 作用 |
 | --------- | ---- |

@@ -5,5 +5,5 @@ export default {
   actions: "Actions",
   fields: "Field & Widget",
   layout: "Layout",
-  components: "Components",
+  components: "Other Components",
 }

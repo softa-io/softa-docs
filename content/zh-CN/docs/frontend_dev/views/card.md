@@ -13,7 +13,7 @@
 
 - [ModelTable](./table) — 表格网格视图（共用工具栏对话框、侧栏与数据钩子）
 - [ModelForm](./form) — 卡片点击后打开的详情表单
-- [Action](../actions) — 动作系统（侧栏中使用）
+- [Action](../actions) — 动作系统（用于侧栏等）
 - [Field](../fields/fields) — 通过 `RecordContext` 在卡片内渲染的字段控件
 
 ## 快速开始
@@ -49,7 +49,7 @@ export default function DesignAppPage() {
 | Body（默认）       | `Field` / 任意子节点                   | 卡片内容区域       |
 | Footer             | `ModelCard.Footer`                   | 卡片底部区域       |
 | Actions            | `Action`                             | 由声明位置推断（见下文） |
-| Side Panel         | `SideTree` / `SideCard` / `SideList` | 左侧侧栏           |
+| Side Panel         | `SideTree` / `SideCard` / `SideList` | 左侧侧栏 —— 见 [侧栏](../components/side-panel) |
 
 未包裹在 `ModelCard.Header` 或 `ModelCard.Footer` 中的子节点作为主体内容渲染。任意插槽内的 `Field` 通过 `RecordContext` 以展示模式渲染 —— 机制与 `SideCard` 相同。
 

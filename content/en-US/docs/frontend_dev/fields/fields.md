@@ -20,7 +20,7 @@ Related docs:
 - [Widgets](./widgets): `FieldType -> WidgetType` matrix and widget-specific examples
 - [ModelForm](../form): page shell
 - [ModelTable](../table): read cells, inline edit, and side panels
-- [ModelSideForm](../sideForm): side panel + embedded form view
+- [ModelSideForm](../side-form): side panel + embedded form view
 - [Tree](../tree): internal tree primitives used by `SideTree` and `SelectTree`
 
 ## Import

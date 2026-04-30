@@ -1,10 +1,10 @@
 export default {
-  multiView: "多视图",
+  "multi-view": "多视图",
   table: "Table",
   form: "Form",
   card: "Card",
   board: "Board",
-  sideForm: "SideForm",
+  "side-form": "SideForm",
   dialogs: "Dialogs",
   tree: "Tree",
 }

@@ -5,5 +5,5 @@ export default {
   actions: "动作",
   fields: "字段 & 控件",
   layout: "布局",
-  components: "组件",
+  components: "其它组件",
 }

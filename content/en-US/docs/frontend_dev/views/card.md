@@ -49,7 +49,7 @@ export default function DesignAppPage() {
 | Body (default)     | `Field` / any child | Card content area       |
 | Footer             | `ModelCard.Footer`  | Card footer area        |
 | Actions            | `Action`            | Inferred from position (see below) |
-| Side Panel         | `SideTree` / `SideCard` / `SideList` | Left side panel |
+| Side Panel         | `SideTree` / `SideCard` / `SideList` | Left side panel — see [Side Panel](../components/side-panel) |
 
 Children that are not wrapped in `ModelCard.Header` or `ModelCard.Footer` are rendered as body content. `Field` components inside any slot render in display mode via `RecordContext` — the same mechanism used by `SideCard`.
 
