@@ -13,7 +13,7 @@ Composable card grid view with:
 
 - [ModelTable](./table) — table grid view (shared toolbar dialogs, side panel, and data hooks)
 - [ModelForm](./form) — detail form opened on card click
-- [Action.](../actions) — action system (used in side panels)
+- [Action](../actions) — action system (used in side panels)
 - [Field](../fields/fields) — field widgets rendered inside cards via `RecordContext`
 
 ## Quick Start

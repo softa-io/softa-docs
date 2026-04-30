@@ -18,10 +18,10 @@
 
 - [关联字段](./relations)：`RelationTable`、`SelectTree`、`OneToMany`、`ManyToMany`
 - [Widgets](./widgets)：`FieldType -> WidgetType` 矩阵与 widget 专属示例
-- [ModelForm](../form)：页面壳层
-- [ModelTable](../table)：只读单元格、内联编辑与侧栏
-- [ModelSideForm](../side-form)：侧栏 + 内嵌表单视图
-- [Tree](../tree)：`SideTree` 与 `SelectTree` 使用的内部树形原语
+- [ModelForm](../views/form)：页面壳层
+- [ModelTable](../views/table)：只读单元格、内联编辑与侧栏
+- [ModelSideForm](../views/side-form)：侧栏 + 内嵌表单视图
+- [Tree](../views/tree)：`SideTree` 与 `SelectTree` 使用的内部树形原语
 
 ## 导入
 

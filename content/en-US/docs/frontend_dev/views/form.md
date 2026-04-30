@@ -950,7 +950,7 @@ import { FormBody, FormTab } from "@/components/views/form/components/FormBody";
 
 ### Actions In `ModelForm`
 
-Common `Action` / `BulkAction` API now lives in [Actions](./actions).
+Common `Action` / `BulkAction` API now lives in [Actions](../actions).
 This section keeps only the `ModelForm` container rules and a complete page-level example.
 
 Container support:

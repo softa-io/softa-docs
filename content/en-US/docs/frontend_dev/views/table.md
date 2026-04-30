@@ -279,7 +279,7 @@ type UserAccountRow = ModelTableRowWith<{
 ```
 
 For full reference (props, slots, custom panels), see
-[Side Panel](../shared/side-panel).
+[Side Panel](../components/side-panel).
 
 ## Unified Active Toolbar State
 

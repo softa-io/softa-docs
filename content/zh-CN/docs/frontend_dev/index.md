@@ -60,7 +60,7 @@
 → [views/table/](./views/table) · [views/board/](./views/board) · [views/card/](./views/card) · [views/form/](./views/form) · [views/side-form/](./views/side-form)
 
 以上组件均接受顶层 `filters` / `orders`；嵌套时继承 `MultiView.Tab`。跨层规则见
-[views/multi-view/README.md#filter--order-precedence](./views/multi-view/README.md#filter--order-precedence)。
+[filter 与排序优先级](./views/multi-view#filter--order-precedence)。
 
 ## 4. 构建块
 
@@ -82,7 +82,7 @@
 | `loading-skeleton` / `full-screen-loading` | 加载态 |
 | `check-list` / `option-select` | 选择类输入 |
 
-→ [common/](./common)
+→ [common/](./components/common)
 
 ### 4b. 感知模型的视图子节点（用于 Model\* 视图内部）
 
@@ -121,11 +121,11 @@
 
 | 组件 | 作用 |
 | --------- | ---- |
-| `ui/` (shadcn) | Button / Input / Dialog / Tabs 等 |
+| `ui` (shadcn) | Button / Input / Dialog / Tabs 等 |
 | `TreePanel` | 树渲染原语（供 `SideTree` 使用） |
 | Dialog hosts | 动作 / 表格动作类对话框承载 |
 
-→ [ui/] · [views/tree/](./views/tree) · [views/dialogs/](./views/dialogs)
+→ [views/tree/](./views/tree) · [views/dialogs/](./views/dialogs)
 
 ---
 

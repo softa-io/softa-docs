@@ -275,7 +275,7 @@ type UserAccountRow = ModelTableRowWith<{
 </ModelTable>
 ```
 
-完整的 API（props、插槽、自定义面板）见 [侧栏](../shared/side-panel)。
+完整的 API（props、插槽、自定义面板）见 [侧栏](../components/side-panel)。
 
 ## 统一的工具栏激活状态
 

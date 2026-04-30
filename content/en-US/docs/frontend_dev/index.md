@@ -64,7 +64,7 @@ Render records of a model. Each is a distinct "view kind".
 
 All of these accept top-level `filters` / `orders` and inherit from
 `MultiView.Tab` when nested. See
-[views/multi-view/README.md#filter--order-precedence](./views/multi-view/README.md#filter--order-precedence)
+[Filter & order precedence](./views/multi-view#filter--order-precedence)
 for cross-layer rules.
 
 ## 4. Building Blocks
@@ -88,7 +88,7 @@ Plain visual widgets — input is simple data, no `modelName` / `FilterCondition
 | `loading-skeleton` / `full-screen-loading` | Loading states |
 | `check-list` / `option-select` | Selection inputs |
 
-→ [common/](./common)
+→ [common/](./components/common)
 
 ### 4b. Model-aware view children (used inside Model\* views)
 
@@ -130,11 +130,11 @@ narrow utilities.
 
 | Component | Role |
 | --------- | ---- |
-| `ui/` (shadcn) | Button / Input / Dialog / Tabs / etc. |
+| `ui` (shadcn) | Button / Input / Dialog / Tabs / etc. |
 | `TreePanel` | Tree rendering primitive (used by `SideTree`) |
 | Dialog hosts | Action / table action dialog rendering |
 
-→ [ui/] · [views/tree/](./views/tree) · [views/dialogs/](./views/dialogs)
+→  [views/tree/](./views/tree) · [views/dialogs/](./views/dialogs)
 
 ---
 

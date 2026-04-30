@@ -18,10 +18,10 @@ Related docs:
 
 - [Relation Fields](./relations): `RelationTable`, `SelectTree`, `OneToMany`, `ManyToMany`
 - [Widgets](./widgets): `FieldType -> WidgetType` matrix and widget-specific examples
-- [ModelForm](../form): page shell
-- [ModelTable](../table): read cells, inline edit, and side panels
-- [ModelSideForm](../side-form): side panel + embedded form view
-- [Tree](../tree): internal tree primitives used by `SideTree` and `SelectTree`
+- [ModelForm](../views/form): page shell
+- [ModelTable](../views/table): read cells, inline edit, and side panels
+- [ModelSideForm](../views/side-form): side panel + embedded form view
+- [Tree](../views/tree): internal tree primitives used by `SideTree` and `SelectTree`
 
 ## Import
 

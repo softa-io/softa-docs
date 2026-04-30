@@ -11,7 +11,7 @@ tabbed page.
 | **Page composer (this)** | One `page.tsx` | **`MultiView`** |
 | Data view | One dataset | `ModelTable` / `ModelBoard` / `ModelCard` / `ModelForm` |
 
-See [components](../components) for the full layered taxonomy.
+See [Index](../index) for the full layered taxonomy.
 
 What MultiView gives you:
 

@@ -13,8 +13,8 @@ Related docs:
 
 - [Fields](./fields): core `Field` props, conditions, `filters`, `Field.onChange`, value contracts
 - [Widget matrix](./widgets): widget compatibility and widget-specific examples
-- [ModelForm](../form): page shell and relation-form examples
-- [ModelTable](../table): read cells and inline edit behavior
+- [ModelForm](../views/form): page shell and relation-form examples
+- [ModelTable](../views/table): read cells and inline edit behavior
 
 ## Import
 

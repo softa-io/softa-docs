@@ -9,7 +9,7 @@
 | **页面编排器（本页）** | 单个 `page.tsx` | **`MultiView`** |
 | 数据视图 | 一套数据 | `ModelTable` / `ModelBoard` / `ModelCard` / `ModelForm` |
 
-完整分层说明见 [components](../components)。
+完整分层说明见 [Index](../index)。
 
 MultiView 提供的能力：
 

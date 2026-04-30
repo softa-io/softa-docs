@@ -12,9 +12,9 @@ Use this document for:
 
 Related docs:
 
-- [ModelForm](./form): layout and form container behavior
-- [ModelTable](./table): layout, side tree, query behavior
-- [ActionDialog & ModelDialog](./dialog)
+- [ModelForm](./views/form): layout and form container behavior
+- [ModelTable](./views/table): layout, side tree, query behavior
+- [ActionDialog & ModelDialog](./views/dialogs)
 
 ## Import
 
