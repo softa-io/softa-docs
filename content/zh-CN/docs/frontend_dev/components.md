@@ -2,15 +2,16 @@
 
 应用外壳使用的客户端组件：顶栏、侧栏、工作区切换、全局页面浏览器，以及路由级标签页。它们位于业务页面之上，与 `@/navigation` 清单和工作区上下文集成——不依赖模型元数据（后者在 `src/components/views/` 下）。
 
+对于单个页面内的多视图标签（多个列表或视图类型），请参阅 [MultiView](../views/multi-view)。
+
 | 文件 | 导出 | 作用 |
 |------|------|------|
 | `header.tsx` | `Header` | 顶栏壳层：模块切换入口、面包屑、搜索入口、用户菜单、按需加载的对话框 |
 | `sidebar.tsx` | `Sidebar` | 由当前模块清单生成的可折叠导航；模块声明了 workspace 配置时内嵌 `WorkspaceSwitcher` |
 | `WorkspaceSwitcher.tsx` | `WorkspaceSwitcher` | 可搜索的工作区记录选择器（如应用/租户），在导航清单中 `workspace` 存在时启用 |
 | `browse-pages-dialog.tsx` | `BrowsePagesDialog` | 全屏式对话框，跨模块浏览并跳转页面（从顶栏打开） |
-| `PageTabs.tsx` | `PageTabs`、`PageTab` | 由共享 `layout.tsx` 下子路由驱动的标签栏 |
 
-导入路径使用 `@/components/layout/...` 别名，例如 `@/components/layout/PageTabs`。
+导入路径使用 `@/components/layout/...` 别名，例如 `@/components/layout/header`。
 
 ---
 
@@ -90,69 +91,3 @@
 - 使用 `router.push` 导航，并像侧栏一样尊重工作区模板填充。
 
 `Header` 会懒加载该组件；若在其他位置挂载，可采用相同模式。
-
----
-
-## PageTabs
-
-针对 **`layout` 在多个子路由之间切换**（不同 URL 段）的路由型标签，**不是**单个 `ModelTable` / `ModelCard` 上的筛选标签（那种请用对应组件的 `tabs` prop）。
-
-**导入：** `import { PageTab, PageTabs } from "@/components/layout/PageTabs";`
-
-**何时使用**
-
-- 每个标签对应独立路由子树，例如：
-  - `/user/security-logs/login-history`
-  - `/user/security-logs/auth-failures`
-
-### 快速开始
-
-```tsx
-import type { PropsWithChildren } from "react";
-
-import { PageTab, PageTabs } from "@/components/layout/PageTabs";
-
-export default function SecurityLogsLayout({ children }: PropsWithChildren) {
-  return (
-    <PageTabs>
-      <PageTab path="login-history" labelName="Login History" />
-      <PageTab path="auth-failures" labelName="Auth Failures" />
-      {children}
-    </PageTabs>
-  );
-}
-```
-
-**根路径重定向**（可选）：将父路径指到默认标签。
-
-```tsx
-import { redirect } from "next/navigation";
-
-export default function SecurityLogsPage() {
-  redirect("/user/security-logs/login-history");
-}
-```
-
-### 工作原理
-
-- `PageTab.path` 相对于**当前** `layout.tsx` 的路由段。
-- 激活标签由 Next 选中的 layout 分段与 `usePathname` 推导。
-- 点击会 `router.replace(...)` 到解析后的 href。
-- 嵌套路由仍正确（例如 `/login-history/[id]`）。
-
-### Props
-
-**`PageTabs`**
-
-| Prop | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `children` | `React.ReactNode` | 是 | `PageTab` 节点以及路由内容（如 `{children}`） |
-
-**`PageTab`**
-
-| Prop | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `path` | `string` | 是 | 相对子段，例如 `"login-history"` |
-| `labelName` | `React.ReactNode` | 是 | 标签文案 |
-
-`PageTab` 为声明式标记，自身不渲染任何 DOM——由 `PageTabs` 收集子节点 props。

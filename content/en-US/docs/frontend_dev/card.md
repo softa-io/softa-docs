@@ -7,14 +7,14 @@ Composable card grid view with:
 - toolbar search / filter / sort controls
 - optional side panel filter (SideTree, SideCard, SideList)
 - per-card delete action
-- click navigation (default ModelForm, static href, dynamic href, custom callback)
+- click navigation to record detail (constrained to current route subtree via `linkTo`)
 
 ## Related Docs
 
 - [ModelTable](./table) — table grid view (shared toolbar dialogs, side panel, and data hooks)
-- [ModelForm](./form) — detail form opened by default card click
-- [Action](./actions) — action system (used in side panels)
-- [Field](./fields) — field widgets rendered inside cards via `RecordContext`
+- [ModelForm](./form) — detail form opened on card click
+- [Action](./action) — action system (used in side panels)
+- [Field](./fields/fields) — field widgets rendered inside cards via `RecordContext`
 
 ## Quick Start
 
@@ -24,7 +24,7 @@ import { ModelCard } from "@/components/views/card";
 
 export default function DesignAppPage() {
   return (
-    <ModelCard modelName="DesignApp" enableDelete href="/studio/app/123/workbench">
+    <ModelCard modelName="DesignApp" enableDelete>
       <ModelCard.Header>
         <Field fieldName="appName" />
       </ModelCard.Header>
@@ -188,71 +188,35 @@ Use the function form when you need conditional logic:
 
 ## Click Navigation
 
-Card click behavior is resolved in priority order:
+Card click behavior is constrained to the current route subtree:
 
-1. **`onCardClick`** — custom callback, full control
-2. **`href`** — route navigation (string or function)
-3. **Default** — opens ModelForm in read mode (`/current-path/{id}?mode=read`)
+1. `linkTo="x"` (or inherited from `<MultiView.Tab>`) → `${pathname}/x/{id}?mode=read`
+2. Default — `${pathname}/{id}?mode=read` (current directory's `[id]/page.tsx`)
 
-### Static Route
+`linkTo` must be a single subdirectory name matching `/^[a-zA-Z0-9_-]+$/`.
+Free-form click handlers and cross-route URLs are intentionally not supported
+on `ModelCard` — keeping click targets within the current route subtree
+aligns with permission boundaries.
 
-Use a plain string when all cards navigate to the same destination:
-
-```tsx
-<ModelCard modelName="DesignApp" href="/studio/app/123/workbench">
-  <ModelCard.Header>
-    <Field fieldName="appName" />
-  </ModelCard.Header>
-  <Field fieldName="appCode" />
-</ModelCard>
-```
-
-### Dynamic Route
-
-Use a function when the route depends on the record id:
+### Default
 
 ```tsx
-<ModelCard modelName="DesignApp" href={({ id }) => `/studio/design-app/${id}`}>
-  <ModelCard.Header>
-    <Field fieldName="appName" />
-  </ModelCard.Header>
-  <Field fieldName="appCode" />
-</ModelCard>
-```
-
-The function receives `(id: string, record: Record<string, unknown>)`, so you can also build routes from record fields:
-
-```tsx
-<ModelCard
-  modelName="DesignApp"
-  href={(id, record) => `/studio/${record.appType}/${id}`}
->
-  ...
-</ModelCard>
-```
-
-### Custom Callback
-
-For non-navigation actions (open dialog, set state, etc.):
-
-```tsx
-<ModelCard
-  modelName="DesignApp"
-  onCardClick={(id, record) => {
-    console.log("selected:", id, record);
-  }}
->
-  ...
-</ModelCard>
-```
-
-### Default (ModelForm)
-
-When neither `href` nor `onCardClick` is provided, clicking a card navigates to the ModelForm detail page in read mode — the same behavior as clicking a row in `ModelTable`:
-
-```tsx
-// Clicking card with id "abc" navigates to /studio/design-app/abc?mode=read
+// Clicking card with id "abc" navigates to ${pathname}/abc?mode=read
 <ModelCard modelName="DesignApp">
+  <ModelCard.Header>
+    <Field fieldName="appName" />
+  </ModelCard.Header>
+  <Field fieldName="appCode" />
+</ModelCard>
+```
+
+### With `linkTo` (subdirectory)
+
+When the detail page lives one segment deeper (typical inside a `MultiView`):
+
+```tsx
+// Clicking card with id "abc" navigates to ${pathname}/edit/abc?mode=read
+<ModelCard modelName="DesignApp" linkTo="edit">
   <ModelCard.Header>
     <Field fieldName="appName" />
   </ModelCard.Header>
@@ -305,28 +269,13 @@ Side panel behavior is identical to `ModelTable`:
 - Active tree filter is shown as a badge in the toolbar active state bar
 - All side panel components support `remoteSearch` prop to switch from client-side filtering to server-side search
 
-See [ModelTable Side Panel](./table/README.md#side-panel-optional) for full side panel prop reference.
+See [ModelTable Side Panel](./table#side-panel-optional) for full side panel prop reference.
 
-## Tabs
+## Tab filters
 
-`ModelCard` supports the same `tabs` prop as `ModelTable`:
-
-```tsx
-import type { ModelTableTab } from "@/components/views/table/types/types";
-
-const tabs: ModelTableTab[] = [
-  { id: "all", label: "All" },
-  { id: "active", label: "Active", filter: ["status", "=", "Active"] },
-  { id: "draft", label: "Draft", filter: ["status", "=", "Draft"] },
-];
-
-<ModelCard modelName="DesignApp" tabs={tabs}>
-  <ModelCard.Header>
-    <Field fieldName="appName" />
-  </ModelCard.Header>
-  <Field fieldName="status" />
-</ModelCard>
-```
+`ModelCard` itself does not have a `tabs` prop. For tab-based filter switching
+(or mixed view kinds), wrap the card grid in `<MultiView>` — see
+[MultiView](../multi-view).
 
 ## Grid Layout
 
@@ -372,16 +321,15 @@ Active filter/sort states are shown as clearable badges below the toolbar.
 | `modelName`   | `string`                                                      | Yes      | -       | Model name for metadata and data API.                                                                        |
 | `labelName`   | `string`                                                      | No       | -       | Overrides the page title in the header. Defaults to `metaModel.labelName`.                                   |
 | `description` | `string`                                                      | No       | -       | Overrides the subtitle in the header. Defaults to `metaModel.description`.                                   |
-| `orders`      | `OrderCondition`                                              | No       | -       | Default sort. Supports single `["field", "DESC"]` or multi `[["a", "ASC"], ["b", "DESC"]]`.                 |
-| `initialParams` | `QueryParamsWithoutFields`                                  | No       | -       | Advanced initial query settings (`filters`, `pageSize`, etc.).                                               |
+| `orders`      | `OrderCondition`                                              | No       | -       | Recommended default sort. Wins over `initialParams.orders` and `MultiView.Tab.orders` (context).            |
+| `filters`     | `FilterCondition`                                             | No       | -       | Recommended base filter. Wins over `initialParams.filters` and `MultiView.Tab.filters` (context). AND-merged with workspace/runtime filters. See [precedence](../multi-view#filter--order-precedence). |
+| `initialParams` | `QueryParamsWithoutFields`                                  | No       | -       | Advanced initial query settings (`pageSize`, etc.). For `filters` / `orders`, prefer top-level props.        |
 | `children`    | `ReactNode`                                                   | No       | -       | `ModelCard.Header`, `Field`, `ModelCard.Footer`, and one optional side panel.                                |
 | `enableCreate`| `boolean`                                                     | No       | `true`  | Show Create button in toolbar.                                                                               |
 | `enableDelete`| `boolean`                                                     | No       | `false` | Show `...` delete action on each card.                                                                       |
-| `tabs`        | `ModelTableTab[]`                                             | No       | -       | Tab filter definitions.                                                                                      |
 | `pageSize`    | `number`                                                      | No       | `20`    | Server-side page size.                                                                                       |
 | `columns`     | `number`                                                      | No       | -       | Fixed grid columns (1–6). Default is responsive.                                                             |
-| `href`        | `string \| ((id: string, record: Record<string, unknown>) => string)` | No | -   | Click navigation. String for static route, function for dynamic route.                                       |
-| `onCardClick` | `(id: string, record: Record<string, unknown>) => void`       | No       | -       | Custom click handler. Takes priority over `href`.                                                            |
+| `linkTo`      | `string`                                                      | No       | -       | Subdirectory name (single segment) for click navigation. Goes to `${pathname}/${linkTo}/${id}?mode=read`. Omit for default `${pathname}/${id}?mode=read`. |
 
 ## Filter Merge Behavior
 

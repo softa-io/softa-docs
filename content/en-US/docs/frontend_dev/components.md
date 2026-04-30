@@ -8,9 +8,10 @@ Client components for the application shell: top bar, sidebar, workspace switchi
 | `sidebar.tsx` | `Sidebar` | Collapsible nav from the current module’s manifest; embeds `WorkspaceSwitcher` when the module defines workspace config |
 | `WorkspaceSwitcher.tsx` | `WorkspaceSwitcher` | Searchable workspace record picker (e.g. app/tenant) when the active module has `workspace` in the navigation manifest |
 | `browse-pages-dialog.tsx` | `BrowsePagesDialog` | Full-screen style dialog to browse and jump to pages across modules (opened from the header) |
-| `PageTabs.tsx` | `PageTabs`, `PageTab` | Tab bar driven by child routes under a shared `layout.tsx` |
 
-Import paths use the `@/components/layout/...` alias, for example `@/components/layout/PageTabs`.
+Import paths use the `@/components/layout/...` alias, for example `@/components/layout/header`.
+
+For tabbed views inside a single page (multiple lists or view kinds), see [MultiView](../views/multi-view).
 
 ---
 
@@ -90,69 +91,3 @@ Import paths use the `@/components/layout/...` alias, for example `@/components/
 - Navigates with `router.push` and respects workspace template filling like the sidebar.
 
 `Header` lazy-loads this component; use the same pattern if you mount it elsewhere.
-
----
-
-## PageTabs
-
-Route-backed tabs for a **layout** that switches between **child routes** (separate URL segments), not for filtering a single `ModelTable` / `ModelCard` (use those components’ `tabs` prop instead).
-
-**Import:** `import { PageTab, PageTabs } from "@/components/layout/PageTabs";`
-
-**When to use**
-
-- Each tab is its own route subtree, for example:
-  - `/user/security-logs/login-history`
-  - `/user/security-logs/auth-failures`
-
-### Quick start
-
-```tsx
-import type { PropsWithChildren } from "react";
-
-import { PageTab, PageTabs } from "@/components/layout/PageTabs";
-
-export default function SecurityLogsLayout({ children }: PropsWithChildren) {
-  return (
-    <PageTabs>
-      <PageTab path="login-history" labelName="Login History" />
-      <PageTab path="auth-failures" labelName="Auth Failures" />
-      {children}
-    </PageTabs>
-  );
-}
-```
-
-**Root route redirect** (optional): send the parent path to a default tab.
-
-```tsx
-import { redirect } from "next/navigation";
-
-export default function SecurityLogsPage() {
-  redirect("/user/security-logs/login-history");
-}
-```
-
-### How it works
-
-- `PageTab.path` is relative to the **current** `layout.tsx` route segment.
-- Active tab is derived from Next’s selected layout segments and `usePathname`.
-- Clicks call `router.replace(...)` to the resolved href.
-- Stays correct on nested routes (e.g. `/login-history/[id]`).
-
-### Props
-
-**`PageTabs`**
-
-| Prop | Type | Required | Notes |
-|------|------|----------|--------|
-| `children` | `React.ReactNode` | Yes | `PageTab` elements plus routed content (e.g. `{children}`) |
-
-**`PageTab`**
-
-| Prop | Type | Required | Notes |
-|------|------|----------|--------|
-| `path` | `string` | Yes | Relative child segment, e.g. `"login-history"` |
-| `labelName` | `React.ReactNode` | Yes | Tab label |
-
-`PageTab` is a declarative marker; it renders nothing—`PageTabs` collects props from its children.

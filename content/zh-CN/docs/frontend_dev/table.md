@@ -67,7 +67,7 @@ type ModelTableRowData = { id: string };
 - 列来自按顺序声明的 `<Field />` 子节点
 - 顶层查询 `fields` 会根据这些声明自动生成
 - 顶层 `orders` 是声明默认排序的推荐方式
-- `initialParams` 是用于 `filters`、`pageSize`、`groupBy`、`effectiveDate` 等非列查询参数的高级逃生口
+- `initialParams` 是用于列以外查询参数的高级入口，例如 `filters`、`pageSize`、`groupBy`、`effectiveDate`
 - `children` 可以混合 `<Field />`、`<Action />` 和 `<BulkAction />`
 - 运行时至少需要一个可见的 `<Field />` 声明
 
@@ -242,50 +242,11 @@ import { dependsOn, Field } from "@/components/fields";
 - 响应 `readonly` / `required` 只作用于当前行，并覆盖本地有效状态
 - 当行被保存、取消、重新加载或切换到其他行编辑时，远程规则状态会被清空
 
+## 标签页筛选
+
+`ModelTable` 本身没有 `tabs` prop。若需基于标签切换筛选（或在同一标题下混合多种视图，如看板 + 表格），请用 `<MultiView>` 包裹表格 —— 参见 [MultiView](../multi-view)。
+
 ## 开发者类型
-
-`ModelTableTab` 是一个 **类型**，不是组件。
-
-```ts
-interface ModelTableTab {
-  id: string;
-  label: string;
-  icon?: ReactNode;
-  filter?: FilterCondition;
-}
-```
-
-| Prop     | 类型              | 必填 | 默认值 | 说明 |
-| -------- | ----------------- | ---- | ------ | ---- |
-| `id`     | `string`          | 是   | -      | 稳定的 tab key，用于 `activeTabId`。 |
-| `label`  | `string`          | 是   | -      | 显示在表格头部 tab 上的 UI 文案。 |
-| `icon`   | `ReactNode`       | 否   | -      | 可选 tab 图标，显示在 tab 文案前。 |
-| `filter` | `FilterCondition` | 否   | -      | 当该 tab 激活时附加的基础过滤条件。 |
-
-`tabs` 使用示例：
-
-```tsx
-import type { ModelTableTab } from "@/components/views/table/types/types";
-import { Lock, ShieldCheck } from "lucide-react";
-
-const tabs: ModelTableTab[] = [
-  { id: "all", label: "All" },
-  {
-    id: "active",
-    label: "Active",
-    icon: <ShieldCheck className="ui-icon-sm" />,
-    filter: ["status", "=", "active"],
-  },
-  {
-    id: "locked",
-    label: "Locked",
-    icon: <Lock className="ui-icon-sm" />,
-    filter: ["locked", "=", true],
-  },
-];
-
-<ModelTable modelName="UserAccount" tabs={tabs} />;
-```
 
 当你需要更强的行类型约束时，可以使用 `ModelTableRowWith<TExtra>`：
 
@@ -492,7 +453,7 @@ import { SideList } from "@/components/views/shared/side-panel/SideList";
 - `SideTree` 内部封装现有 `TreePanel`
 - 侧栏宽度固定 280px
 - `searchable` 默认在客户端对所有字段值做关键词过滤；设置 `remoteSearch` 可改为服务端 `["searchName", "CONTAINS", keyword]`（300ms 防抖）
-- 在 `SideCard` 正文内可用 [`Group`](./fields/fields.md#group) 将多字段并排（例如 `<Group separator="-"><Field .../><Field .../></Group>`）
+- 在 `SideCard` 正文内可用 [`Group`](./fields/fields#group) 将多字段并排（例如 `<Group separator="-"><Field .../><Field .../></Group>`）
 
 ## 统一的工具栏激活状态
 
@@ -514,16 +475,17 @@ import { SideList } from "@/components/views/shared/side-panel/SideList";
 | `labelName`         | `string`                   | 否   | -       | 覆盖表格头部主标题。省略时默认 `metaModel.labelName`。 |
 | `description`       | `string`                   | 否   | -       | 覆盖表格头部副标题。省略时默认 `metaModel.description`。 |
 | `inlineEdit`        | `boolean`                  | 否   | `false` | 启用按行点击的内联编辑模式。启用后，活跃行的可编辑单元格会渲染 `Field`，而不是跳转详情页。 |
-| `orders`            | `OrderCondition`           | 否   | -       | 推荐的默认排序入口。支持单个元组（`["createdTime", "DESC"]`）或多个元组。 |
-| `initialParams`     | `QueryParamsWithoutFields` | 否   | -       | 高级初始查询设置，例如 `filters`、`pageSize`、`groupBy`、`effectiveDate`。顶层 `orders` 优先级更高。 |
-| `children`          | `ReactNode`                | 否   | -       | 按顺序声明的 `<Field />`，以及可选 `<Action />`、`<BulkAction />`，和至多一个侧栏（`<SideTree>` / `<SideCard>` / `<SideList>`）。运行时至少需要一个可见 `<Field />`。 |
+| `orders`            | `OrderCondition`           | 否   | -       | 推荐的默认排序。支持单个元组（`["createdTime", "DESC"]`）或多个元组。优先于 `initialParams.orders` 与 `MultiView.Tab.orders`（上下文）。 |
+| `filters`           | `FilterCondition`          | 否   | -       | 推荐的基础筛选。优先于 `initialParams.filters` 与 `MultiView.Tab.filters`（上下文）。运行时会与工作区、搜索、列、侧栏及工具栏筛选按 `AND` 合并。参见 [筛选与排序优先级](../multi-view#filter--order-precedence)。 |
+| `initialParams`     | `QueryParamsWithoutFields` | 否   | -       | 高级初始查询（`pageSize`、`groupBy`、`effectiveDate`、`subQueries`、`splitBy`、`aggFunctions`、`summary` 等）。`filters` / `orders` 建议使用顶层 props。 |
+| `children`          | `ReactNode`                | 否   | -       | 按顺序的 `<Field />` 声明，以及可选 `<Action />`、`<BulkAction />`，和至多一个侧栏（`<SideTree>` / `<SideCard>` / `<SideList>`）。运行时至少需要一个可见 `<Field />`。 |
 | `enableBulkDelete`  | `boolean`                  | 否   | `true`  | 是否启用内置批量删除入口。 |
 | `enableCreate`      | `boolean`                  | 否   | `true`  | 是否启用内置新建按钮。 |
 | `enableImport`      | `boolean`                  | 否   | `true`  | 是否在 More 菜单中启用内置导入对话框入口。 |
 | `enableExport`      | `boolean`                  | 否   | `true`  | 是否在 More 菜单中启用内置导出对话框入口。 |
 | `bulkEditFields`    | `string[]`                 | 否   | -       | 可选的批量编辑字段白名单。若省略，内置 Bulk Edit 使用全部元数据字段。 |
 | `excludeFields`     | `string[]`                 | 否   | -       | 可选的批量编辑字段黑名单。内置 Bulk Edit 会始终排除这些字段（以及保留字段）。 |
-| `tabs`              | `ModelTableTab[]`          | 否   | -       | 头部级别的可选 tab 过滤器。 |
+| `linkTo`            | `string`                   | 否   | -       | 行点击导航用的单一路径段（子目录名）。跳转到 `${pathname}/${linkTo}/${id}?mode=read`。省略则为默认 `${pathname}/${id}?mode=read`。 |
 | `freezeColumnIndex` | `number`                   | 否   | `1`     | 初始左侧冻结的数据列数量。启用选择列时，它会固定在冻结区之前。 |
 
 ## 内置导入 / 导出
@@ -581,10 +543,7 @@ type initialParams = QueryParamsWithoutFields;
 ### 最小示例
 
 ```tsx
-<ModelTable
-  modelName="UserAccount"
-  orders={["updatedTime", "DESC"]}
->
+<ModelTable modelName="UserAccount" orders={["updatedTime", "DESC"]} >
   <Field fieldName="username" />
   <Field fieldName="email" />
   <Field fieldName="status" />
@@ -592,18 +551,14 @@ type initialParams = QueryParamsWithoutFields;
 </ModelTable>
 ```
 
-### 高级示例
+### 推荐示例（顶层 `filters` + `orders`）
 
 ```tsx
 <ModelTable
   modelName="UserAccount"
-  initialParams={{
-    filters: [["status", "!=", "Deleted"], "AND", ["locked", "=", false]],
-    orders: ["updatedTime", "DESC"],
-    pageNumber: 1,
-    pageSize: 50,
-    effectiveDate: "2026-03-01",
-  }}
+  filters={[["status", "!=", "Deleted"], "AND", ["locked", "=", false]]}
+  orders={["updatedTime", "DESC"]}
+  initialParams={{ pageSize: 50, effectiveDate: "2026-03-01" }}
 >
   <Field fieldName="username" />
   <Field fieldName="email" />
@@ -613,13 +568,15 @@ type initialParams = QueryParamsWithoutFields;
 </ModelTable>
 ```
 
+`filters` 与 `orders` 写在顶层；`initialParams` 承载其余高级字段。
+
 ### 高级示例（`groupBy` / `aggFunctions` / `subQueries`）
 
 ```tsx
 <ModelTable
   modelName="UserAccount"
+  filters={["status", "=", "Active"]}
   initialParams={{
-    filters: ["status", "=", "Active"],
     groupBy: ["departmentId"],
     aggFunctions: [["COUNT", "*", "count"]],
     subQueries: {
@@ -636,16 +593,22 @@ type initialParams = QueryParamsWithoutFields;
 </ModelTable>
 ```
 
-### 过滤条件合并行为（重要）
+### 筛选优先级与合并行为
 
-`initialParams.filters` 只是基础过滤条件。运行时过滤会通过 `AND` 合并：
+基础筛选通过**按顺序选取**第一个非 `undefined` 的来源来确定（该层内部不做合并）：
 
-- 基础过滤（`initialParams.filters`）
-- 当前 tab 过滤
-- 侧栏树过滤
-- 搜索过滤（`["searchName", "CONTAINS", keyword]`）
-- 列过滤
-- 工具栏条件过滤
+```
+顶层 filters  >  initialParams.filters  >  MultiView.Tab.filters（上下文）
+```
+
+确定后的基础筛选再在运行时被**与**以下所有来源 **AND 合并**：
+
+- 上述选中的基础筛选
+- 工作区筛选（`useWorkspaceFilter()` — 安全 / 作用域）
+- 侧栏筛选（`SideTree` / `SideCard` / `SideList` 选择）
+- 搜索筛选（`["searchName", "CONTAINS", keyword]`）
+- 列过滤标签
+- 工具栏条件筛选
 
 合并后的条件示例：
 
@@ -658,6 +621,8 @@ type initialParams = QueryParamsWithoutFields;
   ["searchName", "CONTAINS", "alice"],
 ];
 ```
+
+完整分层模型（含 `MultiView.Tab.filters` 如何参与）见 [筛选与排序优先级](../multi-view#filter--order-precedence)。
 
 ## 动作
 
@@ -799,7 +764,3 @@ function UnlockDialog() {
 - `SideCard` / `SideList` 中的 `Field` 子节点通过 `RecordContext` 以展示模式渲染，无需 `FieldPropsContext`
 - `SideTree` 封装 `TreePanel`；`searchMode` 默认 `"local"`，启用 `remoteSearch` 时为 `"server"`
 - `SideCard` 与 `SideList` 也可用于 `ModelSideForm` 作为数据源面板（参见 [ModelSideForm](./sideForm)）
-
-## PageTabs
-
-若要在**共享标签栏**下放置多个**有独立路由**的视图，请参见 [PageTabs](./components#pagetabs)。

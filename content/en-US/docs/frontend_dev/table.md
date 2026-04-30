@@ -242,50 +242,13 @@ Behavior in `ModelTable` inline edit:
 - response `readonly` / `required` apply only to the current row and override local effective state
 - remote rule state is cleared when the row is saved, cancelled, reloaded, or when editing switches to another row
 
+## Tab filters
+
+`ModelTable` itself does not have a `tabs` prop. For tab-based filter switching
+(or mixed view kinds like Board + Table under one header), wrap the table in
+`<MultiView>` — see [MultiView](../multi-view).
+
 ## Developer Types
-
-`ModelTableTab` is a **type**, not a component.
-
-```ts
-interface ModelTableTab {
-  id: string;
-  label: string;
-  icon?: ReactNode;
-  filter?: FilterCondition;
-}
-```
-
-| Prop     | Type              | Required | Default | Notes                                               |
-| -------- | ----------------- | -------- | ------- | --------------------------------------------------- |
-| `id`     | `string`          | Yes      | -       | Stable tab key used by `activeTabId`.               |
-| `label`  | `string`          | Yes      | -       | UI label displayed in table header tabs.            |
-| `icon`   | `ReactNode`       | No       | -       | Optional tab icon shown before tab label in header. |
-| `filter` | `FilterCondition` | No       | -       | Extra base filter applied when this tab is active.  |
-
-`tabs` usage example:
-
-```tsx
-import type { ModelTableTab } from "@/components/views/table/types/types";
-import { Lock, ShieldCheck } from "lucide-react";
-
-const tabs: ModelTableTab[] = [
-  { id: "all", label: "All" },
-  {
-    id: "active",
-    label: "Active",
-    icon: <ShieldCheck className="ui-icon-sm" />,
-    filter: ["status", "=", "active"],
-  },
-  {
-    id: "locked",
-    label: "Locked",
-    icon: <Lock className="ui-icon-sm" />,
-    filter: ["locked", "=", true],
-  },
-];
-
-<ModelTable modelName="UserAccount" tabs={tabs} />;
-```
 
 `ModelTableRowWith<TExtra>` is useful when you want strong row typing:
 
@@ -514,8 +477,9 @@ Toolbar active state area can show and clear:
 | `labelName`        | `string`                   | No       | -       | Overrides the page title shown in the table header. Defaults to `metaModel.labelName` when omitted.                                        |
 | `description`      | `string`                   | No       | -       | Overrides the subtitle shown in the table header. Defaults to `metaModel.description` when omitted.                                        |
 | `inlineEdit`       | `boolean`                  | No       | `false` | Enable row-click inline edit mode. When enabled, active-row editable cells render `Field` components instead of navigating to detail.      |
-| `orders`           | `OrderCondition`           | No       | -       | Recommended default sort entry. Supports a single tuple (`["createdTime", "DESC"]`) or multiple tuples.                                  |
-| `initialParams`    | `QueryParamsWithoutFields` | No       | -       | Advanced initial query settings such as `filters`, `pageSize`, `groupBy`, `effectiveDate`. Top-level `orders` takes precedence.          |
+| `orders`           | `OrderCondition`           | No       | -       | Recommended default sort. Supports a single tuple (`["createdTime", "DESC"]`) or multiple tuples. Wins over `initialParams.orders` and `MultiView.Tab.orders` (context). |
+| `filters`          | `FilterCondition`          | No       | -       | Recommended base filter. Wins over `initialParams.filters` and `MultiView.Tab.filters` (context). AND-merged with workspace, search, column, side-panel, and toolbar filters at runtime. See [precedence rules](../multi-view#filter--order-precedence). |
+| `initialParams`    | `QueryParamsWithoutFields` | No       | -       | Advanced initial query settings (`pageSize`, `groupBy`, `effectiveDate`, `subQueries`, `splitBy`, `aggFunctions`, `summary`). For `filters` / `orders`, prefer the top-level props. |
 | `children`         | `ReactNode`                | No       | -       | Ordered `<Field />` declarations plus optional `<Action />`, `<BulkAction />`, and one side panel (`<SideTree>`, `<SideCard>`, or `<SideList>`). At least one visible `<Field />` is required at runtime. |
 | `enableBulkDelete` | `boolean`                  | No       | `true`  | Enable built-in bulk delete entry.                                                                                                         |
 | `enableCreate`     | `boolean`                  | No       | `true`  | Enable built-in create button.                                                                                                             |
@@ -523,7 +487,7 @@ Toolbar active state area can show and clear:
 | `enableExport`     | `boolean`                  | No       | `true`  | Enable built-in export dialog entry in More menu.                                                                                          |
 | `bulkEditFields`   | `string[]`                 | No       | -       | Optional bulk-edit allowlist. If omitted, built-in Bulk Edit uses all metadata fields.                                                     |
 | `excludeFields`    | `string[]`                 | No       | -       | Optional bulk-edit denylist. Always excluded from built-in Bulk Edit (in addition to reserved fields).                                     |
-| `tabs`             | `ModelTableTab[]`          | No       | -       | Optional tab filters at header level.                                                                                                      |
+| `linkTo`           | `string`                   | No       | -       | Subdirectory name (single segment) for row click navigation. Goes to `${pathname}/${linkTo}/${id}?mode=read`. Omit for default `${pathname}/${id}?mode=read`. |
 | `freezeColumnIndex`| `number`                   | No       | `1`     | Initial count of left-side data columns kept frozen. The select column remains pinned ahead of the frozen range when enabled.             |
 
 ## Built-in Import / Export
@@ -589,17 +553,14 @@ Query bootstrap defaults:
 </ModelTable>
 ```
 
-### Advanced Example
+### Recommended Example (top-level `filters` + `orders`)
 
 ```tsx
-<ModelTable modelName="UserAccount"
-  initialParams={{
-    filters: [["status", "!=", "Deleted"], "AND", ["locked", "=", false]],
-    orders: ["updatedTime", "DESC"],
-    pageNumber: 1,
-    pageSize: 50,
-    effectiveDate: "2026-03-01",
-  }}
+<ModelTable
+  modelName="UserAccount"
+  filters={[["status", "!=", "Deleted"], "AND", ["locked", "=", false]]}
+  orders={["updatedTime", "DESC"]}
+  initialParams={{ pageSize: 50, effectiveDate: "2026-03-01" }}
 >
   <Field fieldName="username" />
   <Field fieldName="email" />
@@ -609,13 +570,16 @@ Query bootstrap defaults:
 </ModelTable>
 ```
 
+`filters` and `orders` go on the top level. `initialParams` carries the
+remaining advanced fields.
+
 ### Advanced Example (`groupBy` / `aggFunctions` / `subQueries`)
 
 ```tsx
 <ModelTable
   modelName="UserAccount"
+  filters={["status", "=", "Active"]}
   initialParams={{
-    filters: ["status", "=", "Active"],
     groupBy: ["departmentId"],
     aggFunctions: [["COUNT", "*", "count"]],
     subQueries: {
@@ -632,15 +596,23 @@ Query bootstrap defaults:
 </ModelTable>
 ```
 
-### Filter Merge Behavior (Important)
+### Filter precedence and merge behavior
 
-`initialParams.filters` is only the base filter. Runtime filters are merged with `AND`:
+The base filter is resolved by **picking** the first non-undefined source
+(no merge within this layer):
 
-- base filter (`initialParams.filters`)
-- active tab filter
-- side tree filter
+```
+top-level filters  >  initialParams.filters  >  MultiView.Tab.filters (context)
+```
+
+The chosen base is then **AND-merged** with all other filter sources at
+runtime:
+
+- chosen base filter (above)
+- workspace filter (`useWorkspaceFilter()` — security/scope)
+- side panel filter (`SideTree` / `SideCard` / `SideList` selection)
 - search filter (`["searchName", "CONTAINS", keyword]`)
-- column filters
+- column filter tags
 - toolbar condition filter
 
 Example merged condition:
@@ -654,6 +626,10 @@ Example merged condition:
   ["searchName", "CONTAINS", "alice"],
 ];
 ```
+
+For the full layered model (including how `MultiView.Tab.filters` interacts
+with this), see
+[Filter & order precedence](../multi-view#filter--order-precedence).
 
 ## Actions
 
@@ -795,7 +771,3 @@ Built-in reserved fields are always excluded:
 - `SideCard` / `SideList` `Field` children render in display mode via `RecordContext` — no `FieldPropsContext` is needed.
 - `SideTree` wraps the existing `TreePanel`; `searchMode` defaults to `"local"`, or `"server"` when `remoteSearch` is enabled.
 - `SideCard` and `SideList` can also be used inside `ModelSideForm` as the data source panel (see [ModelSideForm](./sideForm)).
-
-## PageTabs
-
-For placing multiple routed views under a shared tab bar, see [PageTabs](./components#pagetabs).
