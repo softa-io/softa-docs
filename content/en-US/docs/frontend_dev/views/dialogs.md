@@ -19,7 +19,7 @@ Relation-field `filters` in dialog content follow the same rule as `ModelForm`:
 `Field.onChange` remote linkage is different:
 
 - implemented today for `ModelForm`, dialog-based editors (`ActionDialog`, `ModelDialog`), `ModelTable` inline row, and `RelationTable` inline row
-- see [Fields](./fields/fields), [ModelForm](./form), and [ModelTable](./table) for the current remote linkage contract
+- see [Fields](../fields/fields), [ModelForm](./form), and [ModelTable](./table) for the current remote linkage contract
 
 ## Import
 
