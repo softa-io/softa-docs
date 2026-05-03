@@ -49,7 +49,7 @@ import {
 
 内部说明：
 
-- `ResolvedFields` 属于内部实现，应保留在基础设施代码之后，而不是成为面向业务的字段 API
+- `ResolvedFields` 为内部能力，应只留在基础设施代码一侧，而不应成为面向业务的字段 API
 
 ## 字段渲染模式
 
@@ -272,7 +272,7 @@ import { dependsOn, Field } from "@/components/fields";
 
 <Field fieldName="status" readonly={true} />
 
-<Field fieldName="itemColor" hidden={["active", "=", false]} />
+<Field fieldName="itemTone" hidden={["active", "=", false]} />
 
 <Field
   fieldName="description"
@@ -314,7 +314,7 @@ import { dependsOn, Field } from "@/components/fields";
 
 优先级建议：先用 `boolean`，再用 `FilterCondition` 表达声明式业务规则，只有真正需要计算逻辑时再使用 `dependsOn(...)`。
 
-## filters
+## `filters`
 
 `filters` 用于：
 
@@ -399,7 +399,7 @@ type FieldOnChangeProp =
 常见示例：
 
 ```tsx
-<Field fieldName="itemCode" onChange={["itemName", "itemColor"]} />
+<Field fieldName="itemCode" onChange={["itemName", "itemTone"]} />
 
 <Field
   fieldName="itemCode"
@@ -461,13 +461,13 @@ POST /<modelName>/onChange/<fieldName>
 {
   "values": {
     "itemName": "Open",
-    "itemColor": "#22c55e"
+    "itemTone": "Success"
   },
   "readonly": {
     "itemName": true
   },
   "required": {
-    "itemColor": true
+    "itemTone": true
   }
 }
 ```
@@ -566,18 +566,16 @@ companyId.cascadedField = "employeeId.department.companyId";
 - `CheckBox`
 - `Radio`
 - `StatusBar`
-- `Badge` — 只读徽章展示；按选中项将值渲染为一枚或多枚彩色 `StatusBadge`
+- `StatusIcon` — 只读、仅图标的指示器，由选项元数据中的 `itemTone` 与 `itemIcon` 驱动
 
-表格只读行为：
-
-- 当 `OptionReference.itemColor` 有值时，`Option` 与 `MultiOption` 单元格会自动按 `StatusBadge` 渲染，无需 `widgetType="StatusBar"`
-- 完整颜色映射见 [Widgets — 选项颜色与徽章自动渲染](./widgets#option-color--badge-auto-rendering)
+只读展示是 **自动的**——`Option` / `MultiOption` 在任何只读上下文（表格单元格、卡片 / 看板单元格、只读表单）中渲染时，若选项带有 `itemTone` 会自动采用彩色 `StatusBadge`，否则为纯文本。无需声明 `widgetType`。
 
 ```tsx
 <Field fieldName="active" />
 <Field fieldName="active" widgetType="CheckBox" />
 <Field fieldName="status" widgetType="Radio" />
-<Field fieldName="status" widgetType="Badge" />
+<Field fieldName="status" />            // 只读上下文 → 自动 Badge / 文本
+<Field fieldName="status" widgetType="StatusIcon" />
 ```
 
 ### 日期与时间类型

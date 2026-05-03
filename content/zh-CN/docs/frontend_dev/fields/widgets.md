@@ -13,30 +13,30 @@
 
 ## FieldType -> WidgetType 矩阵
 
-| FieldType     | 默认行为                   | 支持的 WidgetType                                                                                   |
-| ------------- | -------------------------- | --------------------------------------------------------------------------------------------------- |
-| `String`      | 单行输入                   | `URL`, `Email`, `Text`, `RichText`, `TemplateEditor`, `Markdown`, `Code`, `Color`, `yyyy-MM`, `MM-dd`, `CronEditor` |
-| `MultiString` | 逗号 / 回车提交的标签式输入 | -                                                                                                   |
-| `Integer`     | 数字输入                   | `Monetary`, `Percentage`, `Slider`                                                                  |
-| `Long`        | 数字输入                   | `Monetary`, `Percentage`, `Slider`                                                                  |
-| `Double`      | 数字输入                   | `Monetary`, `Percentage`, `Slider`                                                                  |
-| `BigDecimal`  | 十进制字符串输入           | `Monetary`, `Percentage`, `Slider`                                                                  |
-| `Boolean`     | 开关                       | `CheckBox`                                                                                          |
-| `Date`        | 日期选择器                 | -                                                                                                   |
-| `DateTime`    | 日期时间输入               | -                                                                                                   |
-| `Time`        | 时间输入                   | `HH:mm:ss`, `HH:mm`                                                                                 |
-| `Option`      | 单选                       | `Radio`, `StatusBar`, `Badge`                                                                       |
-| `MultiOption` | 复选框组                   | `CheckBox`, `Badge`                                                                                 |
-| `ManyToOne`   | 引用选择                   | `SelectTree`                                                                                        |
-| `OneToOne`    | 引用选择                   | `SelectTree`                                                                                        |
-| `ManyToMany`  | 关联表格 + 选择器对话框    | `SelectTree`, `TagList`                                                                             |
-| `OneToMany`   | 关联表格                   | -                                                                                                   |
-| `File`        | 文件上传                   | `Image`                                                                                             |
-| `MultiFile`   | 多文件上传                 | `MultiImage`                                                                                        |
-| `JSON`        | CodeMirror JSON 编辑器     | `JsonTree`                                                                                          |
-| `Filters`     | 过滤构建器                 | -                                                                                                   |
-| `Orders`      | 排序构建器                 | -                                                                                                   |
-| `DTO`         | CodeMirror JSON 编辑器     | `JsonTree`                                                                                          |
+| FieldType     | 默认行为                       | 支持的 WidgetType                                                              |
+| ------------- | ------------------------------ | ------------------------------------------------------------------------------- |
+| `String`      | 单行文本输入                   | `URL`, `Email`, `Text`, `RichText`, `TemplateEditor`, `Markdown`, `Code`, `Color`, `yyyy-MM`, `MM-dd`, `CronEditor` |
+| `MultiString` | 标签式逗号/回车输入            | -                                                                                 |
+| `Integer`     | 数字输入                       | `Monetary`, `Percentage`, `Slider`                                                |
+| `Long`        | 数字输入                       | `Monetary`, `Percentage`, `Slider`                                                |
+| `Double`      | 数字输入                       | `Monetary`, `Percentage`, `Slider`                                                |
+| `BigDecimal`  | 十进制字符串输入               | `Monetary`, `Percentage`, `Slider`                                                |
+| `Boolean`     | 开关                           | `CheckBox`                                                                        |
+| `Date`        | 日期选择器                     | -                                                                                 |
+| `DateTime`    | 日期时间输入                   | -                                                                                 |
+| `Time`        | 时间输入                       | `HH:mm:ss`, `HH:mm`                                                               |
+| `Option`      | 单选下拉                       | `Radio`, `StatusBar`, `StatusIcon`                                                |
+| `MultiOption` | 复选组风格多选                 | `CheckBox`                                                                        |
+| `ManyToOne`   | 引用选择                       | `SelectTree`                                                                      |
+| `OneToOne`    | 引用选择                       | `SelectTree`                                                                      |
+| `ManyToMany`  | 关联表格 + 选择器对话框        | `SelectTree`, `TagList`                                                           |
+| `OneToMany`   | 关联表格                       | -                                                                                 |
+| `File`        | 文件上传                       | `Image`                                                                           |
+| `MultiFile`   | 多文件上传                     | `MultiImage`                                                                      |
+| `JSON`        | CodeMirror JSON 编辑器         | `JsonTree`                                                                        |
+| `Filters`     | 过滤构建器                     | -                                                                                 |
+| `Orders`      | 排序构建器                     | -                                                                                 |
+| `DTO`         | CodeMirror JSON 编辑器         | `JsonTree`                                                                        |
 
 ## 字符串类 Widgets
 
@@ -315,7 +315,7 @@
 
 ## 布尔与选项类 Widgets
 
-`Option` 与 `MultiOption` 的交互类 widget（`OptionSelect`、`Radio`、`StatusBar`、`CheckBox`）支持通过 `Field.filters` 在客户端过滤选项——过滤条件按每条选项的 `itemCode` 匹配。`Badge` 为纯展示，不受影响。详见 [Fields → `filters`](./fields#filters)。
+`Option` 与 `MultiOption` 的交互类 widget（`OptionSelect`、`Radio`、`StatusBar`、`CheckBox`）支持通过 `Field.filters` 在客户端按选项的 `itemCode` 过滤。`Badge` 为纯展示，不受影响。详见 [Fields → `filters`](./fields#filters)。
 
 ### `CheckBox`
 
@@ -347,44 +347,85 @@
 | ------ | --------- | ------ | -------------------- |
 | `wrap` | `boolean` | `true` | 是否允许状态项换行。 |
 
-### `Badge`
+### 只读展示（默认）
 
-用于 `Option`、`MultiOption` 的只读徽章展示。使用 `getOptionStatusBadgeVariant` 将当前值渲染为彩色 `StatusBadge`，与表格单元格自动渲染使用同一套颜色逻辑。
+`Option` / `MultiOption` 在周围上下文为只读时 **会自动** 按只读展示渲染——无需声明 `widgetType`。
 
-- **`Option`** — 为当前选中值渲染单个徽章。
-- **`MultiOption`** — 为每个选中值各渲染一个徽章。
+- 任一选中项带 `itemTone` → 彩色 `StatusBadge`。
+- 选中项均无 `itemTone` → 纯文本（`itemName`；`MultiOption` 为逗号分隔）。
+- 空值 → `-`。
 
 ```tsx
-<Field fieldName="status" widgetType="Badge" />
-<Field fieldName="tags" widgetType="Badge" />
+// 卡片正文、看板卡片、表格单元格或只读表单中：
+<Field fieldName="status" />
+<Field fieldName="tags" />
 ```
 
-无 widget props。徽章变体由 `itemColor` / 文本规则推导（见下表）。
+### `StatusIcon`
 
-### 选项颜色 → 徽章自动渲染
+用于 `Option` 的紧凑纯图标指示器。适合密集表格单元格、看板卡片和状态条等场景，彩色图标比带标签徽章更直接。
 
-当 `OptionReference.itemColor` 有值时，`Option` 与 `MultiOption` 表格单元格会自动渲染为 `StatusBadge`，无需 `widgetType="StatusBar"`。
+```tsx
+<Field fieldName="deployStatus" widgetType="StatusIcon" />
+```
 
-支持的 `itemColor` 关键字与徽章变体：
+**零页面级配置**——颜色与图标完全来自选项集的 `itemTone`、`itemIcon` 元数据。调整状态外观请改选项集，而非页面。
 
-| `itemColor` 关键字 | 徽章变体  | 视觉                               |
-| ------------------ | --------- | ---------------------------------- |
-| `green`            | `success` | 绿色描边 / 背景 / 文字             |
-| `yellow`、`orange` | `warning` | 琥珀色描边 / 背景 / 文字           |
-| `red`              | `error`   | 红色描边 / 背景 / 文字             |
-| `blue`             | `info`    | 蓝色描边 / 背景 / 文字             |
-| _（其他 / 空）_    | `neutral` | 石板色描边 / 背景 / 文字           |
+`StatusIcon` widget props：
 
-颜色匹配不区分大小写，且使用 `includes`，故 `"Green"`、`"light-green"`、`"#green-500"` 等均能匹配。
+| Prop            | 类型     | 默认值 | 说明                                       |
+| --------------- | -------- | ------- | ------------------------------------------- |
+| `iconClassName` | `string` | -       | 附加到渲染图标的额外 className。 |
 
-当 `itemColor` 为空时，映射器会回退到对 `itemName` / `itemCode` 的文本模式匹配：
+在 `Field` 之外、按值驱动的场景（例如值来自旁路数据且没有外层 `RecordContext`），可直接使用底层原语：
 
-| `itemName` 或 `itemCode` 中的文本模式                 | 徽章变体  |
-| ----------------------------------------------------- | --------- |
-| `success`、`active`、`enabled`、`approved`            | `success` |
-| `pending`、`warning`、`draft`                         | `warning` |
-| `error`、`failed`、`inactive`、`disabled`、`rejected` | `error`   |
-| `processing`、`running`、`published`                  | `info`    |
+```tsx
+import { StatusIcon } from "@/components/fields/widgets/option/StatusIconWidget";
+
+<StatusIcon value={lastDeployment.deployStatus} />
+```
+
+#### 选项元数据 → 展示
+
+驱动所有展示的 `OptionReference` 形态：
+
+```ts
+{
+  itemCode: string;
+  itemName: string;
+  itemTone?: "Success" | "Warning" | "Error" | "Info" | "Neutral";
+  itemIcon?: string;  // STATUS_ICON_REGISTRY 中的 key
+}
+```
+
+色调代码与后端 `OptionItemTone` 枚举一致（首字母大写）。`itemTone` 会解析为颜色预设：
+
+| `itemTone` | 文字颜色                | 默认图标                    |
+| ---------- | ----------------------- | --------------------------- |
+| `Success`  | `text-emerald-600`      | `Check`（`CheckCircle2`）   |
+| `Warning`  | `text-amber-600`        | `Alert`（`AlertCircle`）    |
+| `Error`    | `text-destructive`      | `X`（`XCircle`）            |
+| `Info`     | `text-sky-600`          | `Info`（`Info`）            |
+| `Neutral`  | `text-muted-foreground` | `Pending`（`CircleDashed`） |
+
+`itemIcon` 的 key 与后端 `OptionItemIcon` 枚举对应，并经由前端的 `STATUS_ICON_REGISTRY` 解析。当前注册表 key：
+
+| Key       | 组件           | 说明                              |
+| --------- | -------------- | --------------------------------- |
+| `Check`   | `CheckCircle2` |                                   |
+| `X`       | `XCircle`      |                                   |
+| `Ban`     | `Ban`          |                                   |
+| `Alert`   | `AlertCircle`  |                                   |
+| `Pause`   | `PauseCircle`  |                                   |
+| `Info`    | `Info`         |                                   |
+| `Eye`     | `Eye`          |                                   |
+| `Loader`  | `Loader2`      | 默认带动画（`spin: true`）         |
+| `Clock`   | `Clock`        |                                   |
+| `Pending` | `CircleDashed` |                                   |
+| `Undo`    | `Undo2`        |                                   |
+| `Lock`    | `Lock`         |                                   |
+
+新增图标 key 需要：(a) 在后端 `OptionItemIcon` 枚举与系统选项集中添加代码；(b) 在 `icon-registry.ts` 中添加入口。保持集合精简——多数场景五种色调默认图标已够用。
 
 ## 日期与时间类 Widgets
 

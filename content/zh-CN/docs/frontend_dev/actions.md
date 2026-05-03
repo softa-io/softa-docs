@@ -69,9 +69,10 @@ type ActionValue<T> =
 | 组件行为                           | 必填行为 Props         | 默认值 | 说明 |
 | ---------------------------------- | ---------------------- | ------ | ---- |
 | 省略 `type` 或 `type="default"` | `operation` | - | 调用 `POST /{modelName}/{operation}`，当前记录 `id` 通过 query 参数传递。 |
-| `type="dialog"` | `operation`, `component` | - | `component={MyDialogComponent}`。打开/关闭、operation 与成功提示由 `Action` 注入；失败时使用接口返回的 toast。 |
-| `type="link"` | `href` | 当前标签页打开（`target="_self"`） | `href` 支持模板字符串（见下文）或 `({ id, modelName }) => string`。使用 `target="_blank"` 在新标签页打开。 |
-| `type="custom"` | `onClick` | - | 纯 UI / 本地行为。签名：`onClick({ id, modelName, scope, mode, isDirty, values, row }) => void`。 |
+| `type="dialog"`                    | `operation`, `component`    | -                                       | `component={MyDialogComponent}`。打开/关闭、operation 与成功提示由 `Action` 注入；失败时使用接口返回的 toast。 |
+| `type="view"`                      | `component`                 | -                                       | 面向当前记录的自由内容对话框。组件直接接收 `{ open, onOpenChange, recordId, record }` props——不调用 operation。适用于审计日志查看器、差异报告、预览面板、历史记录对话框等。 |
+| `type="link"`                      | `href`                      | 当前标签页打开（`target="_self"`） | `href` 支持模板字符串（见下文）或 `({ id, modelName }) => string`。使用 `target="_blank"` 在新标签页打开。 |
+| `type="custom"`                    | `onClick`                   | -                                       | 纯 UI / 本地行为。签名：`onClick({ id, modelName, scope, mode, isDirty, values, row }) => void`。若副作用是「针对该行打开对话框」，优先使用 `type="view"`——可减少页面级状态。 |
 | `type="form"` | `component`, `relatedField` | - | 在对话框中打开独立的 `ModelForm`。`component` 渲染子表单视图；`relatedField` 为子模型指向父记录的字段名。父级 `id` 会自动写入 `ModelForm.defaultValues` 的 `{ [relatedField]: parentId }`，并包含在创建/更新 API 的请求体中。 |
 
 ### 动作执行上下文

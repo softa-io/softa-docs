@@ -25,8 +25,8 @@ Related docs:
 | `Date`        | date picker                    | -                                                                                 |
 | `DateTime`    | datetime input                 | -                                                                                 |
 | `Time`        | time input                     | `HH:mm:ss`, `HH:mm`                                                               |
-| `Option`      | single select                  | `Radio`, `StatusBar`, `Badge`                                                     |
-| `MultiOption` | checkbox group                 | `CheckBox`, `Badge`                                                               |
+| `Option`      | single select                  | `Radio`, `StatusBar`, `StatusIcon`                                                |
+| `MultiOption` | checkbox group                 | `CheckBox`                                                                        |
 | `ManyToOne`   | reference select               | `SelectTree`                                                                      |
 | `OneToOne`    | reference select               | `SelectTree`                                                                      |
 | `ManyToMany`  | relation table + picker dialog | `SelectTree`, `TagList`                                                           |
@@ -347,44 +347,85 @@ When read-only and the value is empty (or whitespace only), the editor body show
 | ------ | --------- | ------- | --------------------------- |
 | `wrap` | `boolean` | `true`  | Allow status items to wrap. |
 
-### `Badge`
+### Read-only display (default)
 
-Read-only badge display for `Option` and `MultiOption` fields. Renders the current value as colored `StatusBadge`(s) using `getOptionStatusBadgeVariant` — the same color logic as table cell auto-rendering.
+`Option` / `MultiOption` fields **automatically** render as a read-only display when the surrounding context is read-only — no `widgetType` declaration needed.
 
-- **`Option`** — renders a single badge for the selected value.
-- **`MultiOption`** — renders one badge per selected value.
+- Any selected option carrying `itemTone` → coloured `StatusBadge`.
+- No `itemTone` on any selected option → plain text (`itemName`, comma-separated for MultiOption).
+- Empty value → `-`.
 
 ```tsx
-<Field fieldName="status" widgetType="Badge" />
-<Field fieldName="tags" widgetType="Badge" />
+// In a card body, board card, table cell, or read-only form:
+<Field fieldName="status" />
+<Field fieldName="tags" />
 ```
 
-No widget props. Badge variant is derived from `itemColor` / text patterns (see table below).
+### `StatusIcon`
 
-### Option Color → Badge Auto-Rendering
+Compact icon-only indicator for `Option` fields. Use this in dense table cells, board cards, and status strips where a colored icon conveys the state more directly than a labeled badge.
 
-When `OptionReference.itemColor` has a value, `Option` and `MultiOption` table cells automatically render as `StatusBadge` — no `widgetType="StatusBar"` required.
+```tsx
+<Field fieldName="deployStatus" widgetType="StatusIcon" />
+```
 
-Supported `itemColor` values and their badge variants:
+**Zero per-page config** — colour and icon are read entirely from the option-set's `itemTone` and `itemIcon` metadata. To change the visual for a status, edit the option-set, not the page.
 
-| `itemColor` keyword | Badge variant | Visual                           |
-| ------------------- | ------------- | -------------------------------- |
-| `green`             | `success`     | green border / background / text |
-| `yellow`, `orange`  | `warning`     | amber border / background / text |
-| `red`               | `error`       | red border / background / text   |
-| `blue`              | `info`        | blue border / background / text  |
-| _(other / empty)_   | `neutral`     | slate border / background / text |
+`StatusIcon` widget props:
 
-Color matching is case-insensitive and uses `includes`, so values like `"Green"`, `"light-green"`, or `"#green-500"` all match.
+| Prop            | Type     | Default | Notes                                       |
+| --------------- | -------- | ------- | ------------------------------------------- |
+| `iconClassName` | `string` | -       | Extra className applied to the rendered icon. |
 
-When `itemColor` is empty, the mapper also falls back to `itemName` / `itemCode` text pattern matching:
+For value-driven use outside a `Field` (e.g. when the value comes from sidecar data with no surrounding `RecordContext`), import the underlying primitive directly:
 
-| Text pattern (in `itemName` or `itemCode`)            | Badge variant |
-| ----------------------------------------------------- | ------------- |
-| `success`, `active`, `enabled`, `approved`            | `success`     |
-| `pending`, `warning`, `draft`                         | `warning`     |
-| `error`, `failed`, `inactive`, `disabled`, `rejected` | `error`       |
-| `processing`, `running`, `published`                  | `info`        |
+```tsx
+import { StatusIcon } from "@/components/fields/widgets/option/StatusIconWidget";
+
+<StatusIcon value={lastDeployment.deployStatus} />
+```
+
+#### Option metadata → presentation
+
+The `OptionReference` shape that drives all presentation:
+
+```ts
+{
+  itemCode: string;
+  itemName: string;
+  itemTone?: "Success" | "Warning" | "Error" | "Info" | "Neutral";
+  itemIcon?: string;  // key into STATUS_ICON_REGISTRY
+}
+```
+
+Tone codes match the backend `OptionItemTone` enum (Title-Case). `itemTone` resolves to a colour preset:
+
+| `itemTone` | Text colour                | Default icon                |
+| ---------- | -------------------------- | --------------------------- |
+| `Success`  | `text-emerald-600`         | `Check` (`CheckCircle2`)    |
+| `Warning`  | `text-amber-600`           | `Alert` (`AlertCircle`)     |
+| `Error`    | `text-destructive`         | `X` (`XCircle`)             |
+| `Info`     | `text-sky-600`             | `Info` (`Info`)             |
+| `Neutral`  | `text-muted-foreground`    | `Pending` (`CircleDashed`)  |
+
+`itemIcon` keys match the backend `OptionItemIcon` enum and resolve through the frontend's `STATUS_ICON_REGISTRY`. Current registry keys:
+
+| Key       | Component       | Notes                              |
+| --------- | --------------- | ---------------------------------- |
+| `Check`   | `CheckCircle2`  |                                    |
+| `X`       | `XCircle`       |                                    |
+| `Ban`     | `Ban`           |                                    |
+| `Alert`   | `AlertCircle`   |                                    |
+| `Pause`   | `PauseCircle`   |                                    |
+| `Info`    | `Info`          |                                    |
+| `Eye`     | `Eye`           |                                    |
+| `Loader`  | `Loader2`       | Animates by default (`spin: true`) |
+| `Clock`   | `Clock`         |                                    |
+| `Pending` | `CircleDashed`  |                                    |
+| `Undo`    | `Undo2`         |                                    |
+| `Lock`    | `Lock`          |                                    |
+
+Adding a new icon key requires (a) adding the code to the backend `OptionItemIcon` enum + the system option-set, (b) adding the entry to `icon-registry.ts`. Keep the set small — most cases are covered by the 5 tone-default icons.
 
 ## Date And Time Widgets
 

@@ -274,7 +274,7 @@ import { dependsOn, Field } from "@/components/fields";
 
 <Field fieldName="status" readonly={true} />
 
-<Field fieldName="itemColor" hidden={["active", "=", false]} />
+<Field fieldName="itemTone" hidden={["active", "=", false]} />
 
 <Field
   fieldName="description"
@@ -401,7 +401,7 @@ type FieldOnChangeProp =
 Common examples:
 
 ```tsx
-<Field fieldName="itemCode" onChange={["itemName", "itemColor"]} />
+<Field fieldName="itemCode" onChange={["itemName", "itemTone"]} />
 
 <Field
   fieldName="itemCode"
@@ -463,13 +463,13 @@ Response payload:
 {
   "values": {
     "itemName": "Open",
-    "itemColor": "#22c55e"
+    "itemTone": "Success"
   },
   "readonly": {
     "itemName": true
   },
   "required": {
-    "itemColor": true
+    "itemTone": true
   }
 }
 ```
@@ -568,18 +568,16 @@ Common widget variants:
 - `CheckBox`
 - `Radio`
 - `StatusBar`
-- `Badge` — read-only badge display; renders value(s) as colored `StatusBadge`(s)
+- `StatusIcon` — read-only icon-only indicator driven by `itemTone` + `itemIcon` metadata
 
-Table read behavior:
-
-- when `OptionReference.itemColor` has a value, `Option` and `MultiOption` cells auto-render as `StatusBadge` without requiring `widgetType="StatusBar"`
-- see [Widgets — Option Color → Badge Auto-Rendering](./widgets#option-color--badge-auto-rendering) for the full color mapping
+Read-only display is **automatic** — `Option` / `MultiOption` fields rendered in any read-only context (table cells, card / board cells, read-only forms) auto-pick a coloured `StatusBadge` when the option has `itemTone`, plain text otherwise. No `widgetType` needed.
 
 ```tsx
 <Field fieldName="active" />
 <Field fieldName="active" widgetType="CheckBox" />
 <Field fieldName="status" widgetType="Radio" />
-<Field fieldName="status" widgetType="Badge" />
+<Field fieldName="status" />            // read-only context → auto Badge / text
+<Field fieldName="status" widgetType="StatusIcon" />
 ```
 
 ### Date And Time Types
