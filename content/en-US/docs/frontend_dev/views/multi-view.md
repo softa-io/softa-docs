@@ -1,9 +1,6 @@
 # MultiView
 
-**Category:** Page composer — **not** a data view. MultiView wraps a single
-`page.tsx` in a shared header + tab bar; it doesn't render data itself, it
-**composes** other views (Model\* / custom dashboards / etc.) into a
-tabbed page.
+**Category:** Page composer — **not** a data view. MultiView wraps a single `page.tsx` in a shared header + tab bar; it doesn't render data itself, it **composes** other views (Model\* / custom dashboards / etc.) into a tabbed page.
 
 | Layer | Scope | Examples |
 | ----- | ----- | -------- |
@@ -30,9 +27,7 @@ What MultiView gives you:
 
 ## Quick Start
 
-Each tab body is extracted into its own `<view-kind>-view.tsx` file (e.g.
-`board-view.tsx`, `table-view.tsx`) that exports a component. The page
-composes them via MultiView:
+Each tab body is extracted into its own `<view-kind>-view.tsx` file (e.g. `board-view.tsx`, `table-view.tsx`) that exports a component. The page composes them via MultiView:
 
 ```tsx
 // design-app-version/board-view.tsx
@@ -56,7 +51,7 @@ export function BoardView() {
     >
       <ModelBoard.Header>
         <Field fieldName="name" />
-        <Field fieldName="versionType" widgetType="Badge" />
+        <Field fieldName="versionType" />
       </ModelBoard.Header>
       <Field fieldName="sealedTime" />
     </ModelBoard>
@@ -105,37 +100,24 @@ export default function DesignAppVersionPage() {
 }
 ```
 
-`labelName` is the page title text shown in the header. MultiView is
-model-agnostic and does not fetch metadata — pass title text directly. Each
-view component reads `filters` / `orders` / `linkTo` / `embedded` from
-`useMultiViewContext()` (Model\* views do this internally).
+`labelName` is the page title text shown in the header. MultiView is model-agnostic and does not fetch metadata — pass title text directly. Each view component reads `filters` / `orders` / `linkTo` / `embedded` from `useMultiViewContext()` (Model\* views do this internally).
 
-The active tab id is automatically synced to `?tab=<id>`. First visit reads
-the URL on mount; clicking a tab updates the URL via `router.push` (so
-browser back/forward navigates between tabs). No opt-in flag needed.
+The active tab id is automatically synced to `?tab=<id>`. First visit reads the URL on mount; clicking a tab updates the URL via `router.push` (so browser back/forward navigates between tabs). No opt-in flag needed.
 
 ## Concepts
 
 ### Tab `view` is a `ComponentType`
 
-`view` is a **component reference** (not an element). MultiView instantiates
-it as `<view />` when its tab is active. The component:
+`view` is a **component reference** (not an element). MultiView instantiates it as `<view />` when its tab is active. The component:
 
-- typically wraps a single Model\* view (`ModelTable` / `ModelBoard` /
-  `ModelCard`) — those Model\* components read `orders` / `filters` from the
-  active tab via context
-- can be any other component (custom dashboard, chart, third-party) —
-  rendered as-is
+- typically wraps a single Model\* view (`ModelTable` / `ModelBoard` / `ModelCard`) — those Model\* components read `orders` / `filters` from the active tab via context
+- can be any other component (custom dashboard, chart, third-party) — rendered as-is
 
-`MultiView.Tab` does not accept `children`. Everything that belongs to the
-tab body lives inside the view component. View-specific props (`groupBy`,
-`columns`, etc.) stay on the inner Model\* element where they belong.
+`MultiView.Tab` does not accept `children`. Everything that belongs to the tab body lives inside the view component. View-specific props (`groupBy`, `columns`, etc.) stay on the inner Model\* element where they belong.
 
 ### Per-tab `filters` and `orders`
 
-`filters` and `orders` declared on `MultiView.Tab` are exposed via React
-Context. A Model\* element inside the tab's view component will pick them up
-automatically:
+`filters` and `orders` declared on `MultiView.Tab` are exposed via React Context. A Model\* element inside the tab's view component will pick them up automatically:
 
 ```tsx
 // sys-model/table-view.tsx
@@ -173,17 +155,13 @@ export function TableView() {
 </MultiView>
 ```
 
-The same `TableView` component is reused across both tabs. Filters / orders
-differ per tab via context; the body remounts on switch via `key={active.id}`.
+The same `TableView` component is reused across both tabs. Filters / orders differ per tab via context; the body remounts on switch via `key={active.id}`.
 
-For full precedence rules (within a layer + across layers), see
-[Filter & order precedence](#filter--order-precedence) below.
+For full precedence rules (within a layer + across layers), see [Filter & order precedence](#filter--order-precedence) below.
 
 ### Different models per tab
 
-Each view component provides its own `modelName` on its inner Model\*
-element, so different tabs may show different models. Pair this with per-tab
-`linkTo` so each tab's row clicks navigate to the correct detail subdirectory:
+Each view component provides its own `modelName` on its inner Model\* element, so different tabs may show different models. Pair this with per-tab `linkTo` so each tab's row clicks navigate to the correct detail subdirectory:
 
 ```tsx
 // app-overview/page.tsx
@@ -204,26 +182,15 @@ import { EnvsView } from "./envs/table-view";
     view={EnvsView}
   />
 </MultiView>
-
-// File structure:
-//   /studio/app/[appId]/app-overview/page.tsx              ← MultiView
-//   /studio/app/[appId]/app-overview/versions/table-view.tsx
-//   /studio/app/[appId]/app-overview/versions/[id]/page.tsx
-//   /studio/app/[appId]/app-overview/envs/table-view.tsx
-//   /studio/app/[appId]/app-overview/envs/[id]/page.tsx
 ```
 
-The shared header (title + description) is page-level text — it is not
-derived from any model's metadata. Pass `labelName` / `description` directly.
+The shared header (title + description) is page-level text — it is not derived from any model's metadata. Pass `labelName` / `description` directly.
 
 ### Click navigation (`linkTo`)
 
-By default, clicking a record navigates to `${pathname}/${id}?mode=read` —
-the current directory's `[id]/page.tsx`. This works for single-model pages
-where the detail page lives directly under the list.
+By default, clicking a record navigates to `${pathname}/${id}?mode=read` — the current directory's `[id]/page.tsx`. This works for single-model pages where the detail page lives directly under the list.
 
-For multi-model MultiView (or any case where the detail page lives in a
-subdirectory), use `linkTo` to specify the subdirectory name:
+For multi-model MultiView (or any case where the detail page lives in a subdirectory), use `linkTo` to specify the subdirectory name:
 
 | Where set                          | Effect                                                          |
 | ---------------------------------- | --------------------------------------------------------------- |
@@ -231,15 +198,9 @@ subdirectory), use `linkTo` to specify the subdirectory name:
 | `<ModelTable linkTo="x">` (etc.)   | Used directly. Wins over the Tab-level value if both are set.   |
 | Omitted everywhere                 | Default: `${pathname}/${id}?mode=read`.                         |
 
-`linkTo` must be a **single subdirectory name** matching `/^[a-zA-Z0-9_-]+$/`
-(no slashes, no `..`, no leading dot). Invalid values fall back to the
-default and emit a `console.warn` in development.
+`linkTo` must be a **single subdirectory name** matching `/^[a-zA-Z0-9_-]+$/` (no slashes, no `..`, no leading dot). Invalid values fall back to the default and emit a `console.warn` in development.
 
-This constraint is intentional: click navigation always stays within the
-current route subtree, aligned with permission boundaries. Free-form click
-handlers and cross-route URLs are not supported on Model\* views — if you
-genuinely need that, the page-level click can be implemented around the view
-(not on it).
+This constraint is intentional: click navigation always stays within the current route subtree, aligned with permission boundaries. Free-form click handlers and cross-route URLs are not supported on Model\* views — if you genuinely need that, the page-level click can be implemented around the view (not on it).
 
 ### Custom (non-model) views
 
@@ -260,9 +221,7 @@ import { TableView } from "./table-view";
 </MultiView>
 ```
 
-The shared header is owned by `MultiView`. If your custom view also renders
-a title block, gate it on `useMultiViewContext()?.embedded` to avoid a
-double header:
+The shared header is owned by `MultiView`. If your custom view also renders a title block, gate it on `useMultiViewContext()?.embedded` to avoid a double header:
 
 ```tsx
 import { useMultiViewContext } from "@/components/views/multi-view";
@@ -287,43 +246,30 @@ export function EnvDashboard() {
 
 Active tab id is always synced to `?tab=<id>`:
 
-- on mount, the URL value is read; if it matches a known tab id it becomes the
-  initial active tab. Otherwise the first declared tab wins.
-- on tab click, the active id is pushed via `router.push` so each switch
-  creates a history entry — browser back / forward navigate between tabs.
+- on mount, the URL value is read; if it matches a known tab id it becomes the initial active tab. Otherwise the first declared tab wins.
+- on tab click, the active id is pushed via `router.push` so each switch creates a history entry — browser back / forward navigate between tabs.
 - on external URL changes (back / forward), the active tab updates to match.
 
-Multiple `MultiView`s on the same page share the `?tab` param. If their tab
-ids are disjoint (e.g. `board` / `table` for one, `dashboard` / `chart` for
-another), they coexist cleanly — each ignores values it does not recognise.
+Multiple `MultiView`s on the same page share the `?tab` param. If their tab ids are disjoint (e.g. `board` / `table` for one, `dashboard` / `chart` for another), they coexist cleanly — each ignores values it does not recognise.
 
 ### Tab switching and caching
 
-Switching tabs unmounts the previous view (`key={active.id}` on the body) and
-mounts the new one. Inner Model\* views re-initialize their query hooks.
-Whether a network call fires depends on TanStack Query caching:
+Switching tabs unmounts the previous view (`key={active.id}` on the body) and mounts the new one. Inner Model\* views re-initialize their query hooks. Whether a network call fires depends on TanStack Query caching:
 
 | Query type                            | `staleTime` | Behavior across tab switches                                                                  |
 | ------------------------------------- | ----------- | --------------------------------------------------------------------------------------------- |
 | Metadata (`useMetadataQuery`)         | `Infinity`  | Cached forever per modelName. Each model's metadata is fetched at most once per page lifecycle. |
 | List / count / lookup (data queries)  | 5 minutes   | First activation of each tab fires a network call (different `filters` / `orders` → different queryKey → independent cache entries). Re-activating the same tab within 5 minutes is a cache hit (no network, instant render). After 5 minutes, the cache returns immediately and refetches in the background. |
 
-Defaults are configured globally in `query-provider.tsx`. Tab switching does
-not coalesce or share toolbar state across tabs in v1; each tab gets fresh
-state on mount.
+Defaults are configured globally in `query-provider.tsx`. Tab switching does not coalesce or share toolbar state across tabs in v1; each tab gets fresh state on mount.
 
 ### Tab state isolation
 
-Switching tabs unmounts the previous view and mounts the new one. Toolbar
-filter, sort, search, pagination, and selection all reset on switch. There is
-no shared state across tabs in v1. The `key={active.id}` remount makes this
-guaranteed even when two tabs share the same view component (sys-model,
-sys-field).
+Switching tabs unmounts the previous view and mounts the new one. Toolbar filter, sort, search, pagination, and selection all reset on switch. There is no shared state across tabs in v1. The `key={active.id}` remount makes this guaranteed even when two tabs share the same view component (sys-model, sys-field).
 
 ## Filter & order precedence
 
-`filters` and `orders` show up at multiple layers — knowing when they
-**override** vs when they **merge** is important.
+`filters` and `orders` show up at multiple layers — knowing when they **override** vs when they **merge** is important.
 
 ### Three layers
 
@@ -341,9 +287,7 @@ sys-field).
 top-level filters  >  initialParams.filters  >  MultiView.Tab.filters (context)
 ```
 
-If `<ModelTable filters={X}>` is rendered inside `<MultiView.Tab filters={Y}>`,
-the effective base is `X` — `Y` is **overridden**, not AND-merged. Override
-semantics avoid surprising "both filters silently combined" behavior.
+If `<ModelTable filters={X}>` is rendered inside `<MultiView.Tab filters={Y}>`, the effective base is `X` — `Y` is **overridden**, not AND-merged. Override semantics avoid surprising "both filters silently combined" behavior.
 
 **Across layers** (everything AND-merged):
 
@@ -353,8 +297,7 @@ finalFilter = (Layer A: chosen base)
         AND  (Layer C: tree filter, search, column filters, toolbar filters)
 ```
 
-Each layer adds its own constraint; the final query satisfies them all. This
-is implemented in `buildModelTableFilterCondition`.
+Each layer adds its own constraint; the final query satisfies them all. This is implemented in `buildModelTableFilterCondition`.
 
 ### Orders: within Layer A → override; user runtime → replacement
 
@@ -369,13 +312,9 @@ At runtime (replacement, not merge):
   (whichever the user touches replaces the previous sort entirely)
 ```
 
-`workspaceFilter` does not participate in orders (it is a row-visibility
-constraint, not a sort hint).
+`workspaceFilter` does not participate in orders (it is a row-visibility constraint, not a sort hint).
 
-Why "replacement" and not "merge" at runtime? Sort always has a single
-effective ordering (a list of priorities is still one ordering). When the
-user picks a new sort, they are changing their mind, not adding constraints —
-the previous sort is replaced.
+Why "replacement" and not "merge" at runtime? Sort always has a single effective ordering (a list of priorities is still one ordering). When the user picks a new sort, they are changing their mind, not adding constraints — the previous sort is replaced.
 
 ### Common pitfall — Tab `filters` does NOT merge with inner `filters`
 
@@ -410,9 +349,7 @@ the previous sort is replaced.
 | `className`   | `string`    | No       | `"flex h-full flex-col"` | Outer wrapper className.                                             |
 | `children`    | `ReactNode` | Yes      | -                        | One or more `<MultiView.Tab>` markers. Non-Tab children are ignored. |
 
-Active tab tracking, default tab, and URL sync are managed internally — there
-is no controlled-mode escape hatch. The first declared tab is the default
-when the URL has no `?tab` param.
+Active tab tracking, default tab, and URL sync are managed internally — there is no controlled-mode escape hatch. The first declared tab is the default when the URL has no `?tab` param.
 
 ### `<MultiView.Tab>` props
 
@@ -440,8 +377,7 @@ type MultiViewContextValue = {
 };
 ```
 
-Inner Model\* views read this hook internally — most callers do not need it.
-Custom views (dashboards, charts) read it to:
+Inner Model\* views read this hook internally — most callers do not need it. Custom views (dashboards, charts) read it to:
 
 - skip a duplicate title block when embedded
 - branch on whether they are inside a multi-view container
@@ -480,35 +416,47 @@ For multi-model MultiView with per-tab detail subdirectories:
     └── [id]/page.tsx       # detail for entity B
 ```
 
-When two view files in the same page export the same name (`TableView`), use
-import aliases at the call site:
+When two view files in the same page export the same name (`TableView`), use import aliases at the call site:
 
 ```tsx
 import { TableView as LoginHistoryView } from "./login-history/table-view";
 import { TableView as AuthFailuresView } from "./auth-failures/table-view";
 ```
 
+### Alternative layouts (consolidated / inline)
+
+The default per-folder layout pays for itself when each tab has its own `[id]/page.tsx` — the view file co-locates with its detail page. When all tabs share a **single** `[id]/page.tsx` (e.g. status-filter tabs over the same model), per-folder structure adds overhead without that payoff and two alternatives become viable:
+
+**1. Single consolidated file** — `<page>/table-views.tsx` exporting one component per tab:
+
+```
+<page>/
+├── page.tsx           # MultiView composition
+├── table-views.tsx    # exports PendingView, HiredView, CancelledView
+└── [id]/page.tsx      # shared detail page for all tabs
+```
+
+**2. Inline in `page.tsx`** — declare the view components in the same file as `MultiView`.
+
+The decision is **structural**, gated on the heaviest view, not on total line count:
+
+| Condition                                                        | Layout                          |
+| ---------------------------------------------------------------- | ------------------------------- |
+| Each tab has its own `[id]/page.tsx`                             | Per-folder (default)            |
+| Shared `[id]/page.tsx`, **any** view has dialogs / handlers / significant state | Per-folder (all tabs)  |
+| Shared `[id]/page.tsx`, every view ≲ 80 lines (filter + Fields + Actions, no per-tab state) | Consolidated `table-views.tsx`  |
+| Shared `[id]/page.tsx`, every view ≲ 20 lines (bare `ModelTable` + Fields)       | Inline in `page.tsx`            |
+
+If a single tab needs handlers / dialogs, prefer per-folder for **all** tabs rather than mixing layouts (one heavy file + one consolidated file is harder to navigate than three uniform folders).
+
+Tabs with shared `[id]` should also omit `linkTo` on `MultiView.Tab` so the default `${pathname}/${id}` route hits the shared detail page.
+
 ## Limitations (v1)
 
-- No shared state across tabs. Each tab is fully unmounted on switch and
-  toolbar filter / sort / search / pagination / selection are reset. A
-  `keepMounted` option is the planned escape hatch if a future page needs
-  cross-tab state preservation.
-- The shared header renders only title + description + tab pills. Header-level
-  action slots (an extra button beside the title, for example) are not
-  supported — put per-view toolbars inside the view body instead. EnvDashboard
-  does this with its Refresh button.
-- Custom views that need the embedded flag must read `useMultiViewContext()`
-  themselves. There is no prop injection (no `cloneElement`), so unrelated
-  components never receive surprise props.
-- Click navigation on Model\* views is constrained to `${pathname}/${linkTo?}/${id}`.
-  No `onClick` / `href` escape hatches. If a view legitimately needs to
-  navigate elsewhere, do it from a page-level wrapper rather than the view.
-- URL sync uses Next.js `router.push`, so each tab click creates a history
-  entry. This is intentional — browser back navigates to the previous tab.
-- Multiple `MultiView`s on the same page share the `?tab` param. Use disjoint
-  tab ids if you need them to coexist independently.
-- `view` must be a component reference (e.g. `view={TableView}`), not a JSX
-  element (`view={<TableView />}`). MultiView instantiates the component
-  internally; this prevents the props-baked-in-at-element-creation pattern
-  that would conflict with the context-injection model.
+- No shared state across tabs. Each tab is fully unmounted on switch and toolbar filter / sort / search / pagination / selection are reset. A `keepMounted` option is the planned escape hatch if a future page needs cross-tab state preservation.
+- The shared header renders only title + description + tab pills. Header-level action slots (an extra button beside the title, for example) are not supported — put per-view toolbars inside the view body instead. EnvDashboard does this with its Refresh button.
+- Custom views that need the embedded flag must read `useMultiViewContext()` themselves. There is no prop injection (no `cloneElement`), so unrelated components never receive surprise props.
+- Click navigation on Model\* views is constrained to `${pathname}/${linkTo?}/${id}`. No `onClick` / `href` escape hatches. If a view legitimately needs to navigate elsewhere, do it from a page-level wrapper rather than the view.
+- URL sync uses Next.js `router.push`, so each tab click creates a history entry. This is intentional — browser back navigates to the previous tab.
+- Multiple `MultiView`s on the same page share the `?tab` param. Use disjoint tab ids if you need them to coexist independently.
+- `view` must be a component reference (e.g. `view={TableView}`), not a JSX element (`view={<TableView />}`). MultiView instantiates the component internally; this prevents the props-baked-in-at-element-creation pattern that would conflict with the context-injection model.

@@ -129,7 +129,6 @@ export default function SettingPage() {
     filterField="modelId"
     labelField="labelName"
     parentField="parentId"
-    sortField="modelName"
     selectionMode="single"
     defaultExpandedLevel={2}
   />
@@ -195,14 +194,13 @@ function WorkItemListItem() {
   <SideCard
     modelName="DesignApp"
     filterField="appId"
-    sortField="appName"
     searchable
   >
     <SideCard.Header>
       <Field fieldName="appName" />
     </SideCard.Header>
     <SideCard.Header align="right">
-      <Field fieldName="status" widgetType="Badge" />
+      <Field fieldName="status" />
     </SideCard.Header>
     <Field fieldName="appCode" />
     <SideCard.Footer>

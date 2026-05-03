@@ -202,7 +202,7 @@ function WorkItemListItem() {
       <Field fieldName="appName" />
     </SideCard.Header>
     <SideCard.Header align="right">
-      <Field fieldName="status" widgetType="Badge" />
+      <Field fieldName="status" />
     </SideCard.Header>
     <Field fieldName="appCode" />
     <SideCard.Footer>

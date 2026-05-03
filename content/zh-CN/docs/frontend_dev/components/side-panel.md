@@ -63,7 +63,7 @@ import { Action } from "@/components/actions/Action";
       <Field fieldName="appName" />
     </SideCard.Header>
     <SideCard.Header align="right">
-      <Field fieldName="status" widgetType="Badge" />
+      <Field fieldName="status" />
     </SideCard.Header>
     <Group separator="-">
       <Field fieldName="appCode" />

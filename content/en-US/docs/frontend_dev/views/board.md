@@ -36,7 +36,7 @@ export default function VersionsPage() {
     >
       <ModelBoard.Header>
         <Field fieldName="name" />
-        <Field fieldName="versionType" widgetType="Badge" />
+        <Field fieldName="versionType" />
       </ModelBoard.Header>
       <Field fieldName="sealedTime" />
     </ModelBoard>
@@ -67,7 +67,7 @@ Each column corresponds to one `value` in `groupBy.columns`. Records whose
 >
   <ModelBoard.Header>
     <Field fieldName="targetVersionId" />
-    <Field fieldName="deployStatus" widgetType="Badge" />
+    <Field fieldName="deployStatus" />
   </ModelBoard.Header>
   <Field fieldName="startedTime" />
 </ModelBoard>
@@ -145,7 +145,11 @@ Table" switch wrap both views in a `<Tabs>`:
 | `enableDelete`     | `boolean`                                                    | No       | `false` | Show `...` delete action on each card.                                                             |
 | `initialFetchSize` | `number`                                                     | No       | `100`   | Main query `pageSize`. Records are grouped client-side.                                            |
 | `loadMorePageSize` | `number`                                                     | No       | `20`    | Page size for `Load more` requests.                                                                |
+| `disableLoadMore`  | `boolean`                                                    | No       | `false` | Hide the per-column "Load more" button even when `count > rendered`. Use when the backend cannot paginate by `cardFilterField`; column count still reflects the true total. |
+| `enableDragDrop`   | `boolean`                                                    | No       | `false` | Enable drag-and-drop reassignment between columns. See [Drag-and-drop column reassignment](#drag-and-drop-column-reassignment). |
+| `onCardMove`       | `(ctx: CardMoveContext) => void \| Promise<void>`            | No       | -       | Custom move handler invoked instead of the default `updateOne` when a card is dropped on a different column. |
 | `linkTo`           | `string`                                                     | No       | -       | Subdirectory name (single segment) for click navigation. Goes to `${pathname}/${linkTo}/${id}?mode=read`. Omit for default `${pathname}/${id}?mode=read`. |
+| `sidecars`         | `SidecarConfig[]`                                            | No       | -       | Auxiliary records joined to each card by primary id. Adds a Refresh button to the toolbar that invalidates the main query and every sidecar model. See [ModelSidecar](../components/model-sidecar). |
 | `children`         | `ReactNode`                                                  | No       | -       | `ModelBoard.Header`, `Field` / any node, `ModelBoard.Footer`, `Action` elements.                   |
 
 ## When to use Board vs Card vs Table

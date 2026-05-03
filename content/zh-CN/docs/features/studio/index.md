@@ -166,7 +166,7 @@ Workbench 常用动作：
 `Option Sets` 用于配置枚举类业务值：
 
 - 选项集维护 `name`、`optionSetCode`、`appId` 和描述。
-- 选项项维护 `itemCode`、`itemName`、`sequence`、`parentItemCode`、`itemColor`、`active` 和描述。
+- 选项项维护 `itemCode`、`itemName`、`sequence`、`parentItemCode`、`itemTone`、`itemIcon`、`active` 和描述。
 
 `Views` 用于配置模型视图：
 

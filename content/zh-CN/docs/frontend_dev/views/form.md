@@ -172,7 +172,7 @@ import { dependsOn, Field } from "@/components/fields";
 
 <Field fieldName="status" readonly={true} />
 
-<Field fieldName="itemColor" hidden={["active", "=", false]} />
+<Field fieldName="itemTone" hidden={["active", "=", false]} />
 
 <Field
   fieldName="description"
@@ -194,7 +194,7 @@ import { dependsOn, Field } from "@/components/fields";
 远程字段联动示例：
 
 ```tsx
-<Field fieldName="itemCode" onChange={["itemName", "itemColor"]} />
+<Field fieldName="itemCode" onChange={["itemName", "itemTone"]} />
 
 <Field
   fieldName="itemCode"

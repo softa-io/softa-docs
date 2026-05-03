@@ -53,7 +53,7 @@ export function BoardView() {
     >
       <ModelBoard.Header>
         <Field fieldName="name" />
-        <Field fieldName="versionType" widgetType="Badge" />
+        <Field fieldName="versionType" />
       </ModelBoard.Header>
       <Field fieldName="sealedTime" />
     </ModelBoard>
@@ -102,7 +102,7 @@ export default function DesignAppVersionPage() {
 }
 ```
 
-`labelName` 是页头展示的标题文案。MultiView 不拉元数据——标题请直接传入字符串。
+`labelName` 是页头展示的标题文案。MultiView **与模型无关**，不拉取元数据——标题请直接传入字符串。
 各视图组件从 `useMultiViewContext()` 读取 `filters` / `orders` / `linkTo` / `embedded`（Model\* 内部已处理）。
 
 当前标签 id 会自动同步到 `?tab=<id>`。首次进入在 mount 时读 URL；点击标签通过 `router.push` 更新 URL（因此前进/后退可切换标签）。无需额外开关。
@@ -162,7 +162,7 @@ export function TableView() {
 
 同一个 `TableView` 可在两个标签复用。各标签通过上下文区分 filters/orders；切换时正文通过 `key={active.id}` 重挂载。
 
-完整优先级（层内 + 跨层）见下文 [Filter & order precedence](#filter--order-precedence)。
+层内与跨层的完整优先级规则见下文 [Filter & order precedence](#filter--order-precedence)。
 
 ### 每个标签不同模型
 
@@ -187,32 +187,25 @@ import { EnvsView } from "./envs/table-view";
     view={EnvsView}
   />
 </MultiView>
-
-// 文件结构：
-//   /studio/app/[appId]/app-overview/page.tsx              ← MultiView
-//   /studio/app/[appId]/app-overview/versions/table-view.tsx
-//   /studio/app/[appId]/app-overview/versions/[id]/page.tsx
-//   /studio/app/[appId]/app-overview/envs/table-view.tsx
-//   /studio/app/[appId]/app-overview/envs/[id]/page.tsx
 ```
 
 共享页头（标题 + 描述）是**页面级**文案——不从任何模型元数据推导。请直接传 `labelName` / `description`。
 
 ### 点击导航（`linkTo`）
 
-默认点击记录跳 `${pathname}/{id}?mode=read`——对应当前目录下的 `[id]/page.tsx`。适用于单模型且详情在列表正下方。
+默认点击记录会导航到 `${pathname}/{id}?mode=read`，即当前目录下的 `[id]/page.tsx`。适用于详情页直接在列表同级的单模型页面。
 
-多模型 MultiView（或详情在子目录）时，用 `linkTo` 指定子目录名：
+多模型 MultiView（或详情页落在子目录）时，用 `linkTo` 指定子目录名：
 
-| 设置位置 | 效果 |
-| ---------------------------------- | --------------------------------------------------------------- |
-| `<MultiView.Tab linkTo="x">` | 通过上下文传给当前激活视图。 |
-| `<ModelTable linkTo="x">` 等 | 直接使用。若与 Tab 同时设置，以内层为准。 |
-| 全部省略 | 默认：`${pathname}/{id}?mode=read`。 |
+| 设置位置                         | 说明                                                         |
+| -------------------------------- | ------------------------------------------------------------ |
+| `<MultiView.Tab linkTo="x">`     | 经上下文传给当前激活视图。                                   |
+| `<ModelTable linkTo="x">` 等   | 直接使用；若与 Tab 同时设置，**以内层为准**。               |
+| 全部省略                         | 默认：`${pathname}/{id}?mode=read`。                         |
 
-`linkTo` 必须是匹配 `/^[a-zA-Z0-9_-]+$/` 的**单一路径段**（无斜杠、无 `..`、无句点前缀）。非法值回退默认并在开发环境 `console.warn`。
+`linkTo` 必须是匹配 `/^[a-zA-Z0-9_-]+$/` 的**单子目录名**（无斜杠、无 `..`、无句点前导）。非法值回退为默认行为，并在开发环境输出 `console.warn`。
 
-此约束有意为之：点击导航始终留在当前路由子树，与权限边界一致。Model\* 视图不支持自由 `onClick` / 跨路由 `href`——若确实需要，请在页面层包一层实现。
+此约束有意为之：点击导航始终留在当前路由子树内，与权限边界一致。Model\* 视图上不提供自由形式的点击处理与跨路由 URL——若确实需要，应在**页面层**围绕视图实现点击逻辑，而不是写在视图本身上。
 
 ### 自定义（非模型）视图
 
@@ -266,7 +259,7 @@ export function EnvDashboard() {
 
 ### 标签切换与缓存
 
-切换标签会卸载前一视图（正文 `key={active.id}`）并挂载新视图。内层 Model\* 会重新初始化查询钩子。是否发请求取决于 TanStack Query 缓存：
+切换标签会卸载前一视图（正文使用 `key={active.id}`）并挂载新视图。内层 Model\* 会重新初始化查询钩子。是否发网络请求取决于 TanStack Query 缓存：
 
 | 查询类型 | `staleTime` | 跨标签切换行为 |
 | ------------------------------------- | ----------- | --------------------------------------------------------------------------------------------- |
@@ -299,8 +292,7 @@ export function EnvDashboard() {
 顶层 filters  >  initialParams.filters  >  MultiView.Tab.filters（上下文）
 ```
 
-若 `<MultiView.Tab filters={Y}>` 内渲染 `<ModelTable filters={X}>`，
-有效基础为 `X`——`Y` 被**覆盖**，不会做 AND。避免「两套筛选静默合并」的意外。
+若在 `<MultiView.Tab filters={Y}>` 内渲染 `<ModelTable filters={X}>`，则有效基础为 `X`——`Y` 被**覆盖**，不会做 AND 合并，从而避免「两套筛选被静默合并」的意外。
 
 **跨层**（全部 AND）：
 
@@ -310,7 +302,7 @@ finalFilter =（A 层：选中的基础）
         AND （C 层：树筛选、搜索、列筛选、工具栏筛选）
 ```
 
-实现于 `buildModelTableFilterCondition`。
+每一层都会追加自身约束；最终查询需同时满足所有层。该逻辑在 `buildModelTableFilterCondition` 中实现。
 
 ### Orders：A 层内 → 覆盖；用户运行时 → 替换
 
@@ -318,11 +310,11 @@ finalFilter =（A 层：选中的基础）
 A 层内（取第一个非 undefined）：
   顶层 orders  >  initialParams.orders  >  MultiView.Tab.orders（上下文）
                                               ↓
-                                  （作为初始排序状态）
+                                  （为初始排序状态提供种子）
                                               ↓
 运行时（替换，非合并）：
   用户工具栏排序  >  列头点击排序
-  （用户最后一次操作会完整替换前一排序）
+  （用户实际操作的那一侧会完整替换先前的排序）
 ```
 
 `workspaceFilter` 不参与排序（它是行可见性约束，不是排序提示）。
@@ -332,12 +324,12 @@ A 层内（取第一个非 undefined）：
 ### 常见陷阱 — Tab `filters` 不会与内层 `filters` 合并
 
 ```tsx
-// ❌ 多半不是预期
+// ❌ 多半不是你想要的行为
 <MultiView.Tab filters={[["active", "=", true]]} view={SomeTable} />
-// 而 SomeTable 内：
+// SomeTable 内为：
 <ModelTable filters={[["status", "=", "Live"]]} />
 // 有效基础筛选：  [["status", "=", "Live"]]
-//（Tab 的 [["active","=",true]] 被覆盖 —— 不会 AND）
+//（Tab 的 [["active","=",true]] 被覆盖 —— 不会做 AND 合并）
 
 // ✅ 内层 ModelTable 不要重复声明；让 Tab 的 filter 透传
 <MultiView.Tab filters={[["active", "=", true]]} view={SomeTable} />
@@ -360,7 +352,7 @@ A 层内（取第一个非 undefined）：
 | `labelName`   | `string`    | No       | -                        | 共享页头标题。 |
 | `description` | `string`    | No       | -                        | 共享页头副标题。 |
 | `className`   | `string`    | No       | `"flex h-full flex-col"` | 外层 wrapper `className`。 |
-| `children`    | `ReactNode` | Yes      | -                        | 一个或多个 `<MultiView.Tab>`。非 Tab 子节点会被忽略。 |
+| `children`    | `ReactNode` | Yes      | -                        | 一个或多个 `<MultiView.Tab>` 标记。非 Tab 子节点会被忽略。 |
 
 激活标签跟踪、默认标签与 URL 同步由内部管理——无受控模式出口。URL 无 `?tab` 时以第一个声明的标签为默认。
 
@@ -437,9 +429,37 @@ import { TableView as LoginHistoryView } from "./login-history/table-view";
 import { TableView as AuthFailuresView } from "./auth-failures/table-view";
 ```
 
+### 备选目录结构（合并文件 / 内联）
+
+默认「每路由文件夹一份视图」在**每个标签各有独立** `[id]/page.tsx` 时最划算——视图文件与详情页同目录。若所有标签**共用同一个** `[id]/page.tsx`（例如同一模型上的状态筛选标签），按文件夹拆分会增加心智负担却得不到详情拆分收益，此时可考虑两种替代方案：
+
+**1. 单文件合并导出** — 在 `<page>/table-views.tsx` 中为每个标签导出一个组件：
+
+```
+<page>/
+├── page.tsx           # MultiView 组合
+├── table-views.tsx    # 导出 PendingView、HiredView、CancelledView 等
+└── [id]/page.tsx      # 所有标签共用的详情页
+```
+
+**2. 在 `page.tsx` 内联** — 在与 `MultiView` 同一文件中声明视图组件。
+
+如何选型看**最重的那份视图**的结构复杂度，而非总行数：
+
+| 条件 | 建议目录结构 |
+| ---------------------------------------------------------------- | ------------------------------- |
+| 每个标签各有自己的 `[id]/page.tsx` | 按文件夹（默认） |
+| 共用 `[id]/page.tsx`，且**任意**标签的视图含对话框 / 处理函数 / 较重状态 | 按文件夹（覆盖**全部**标签） |
+| 共用 `[id]/page.tsx`，每个视图 ≲ 80 行（筛选 + Fields + Actions，无每标签独立状态） | 合并为 `table-views.tsx` |
+| 共用 `[id]/page.tsx`，每个视图 ≲ 20 行（几乎只有 `ModelTable` + Fields） | 在 `page.tsx` 内联 |
+
+若某个标签需要独立处理函数或对话框，建议**所有**标签统一用按文件夹结构，而不要混用（一个特重文件 + 一个合并文件往往比多个统一文件夹更难读）。
+
+共用 `[id]` 时，还应省略 `MultiView.Tab` 上的 `linkTo`，让默认 `${pathname}/{id}` 命中共享详情页。
+
 ## 限制（v1）
 
-- 标签间不共享状态。切换时整标签卸载，工具栏筛选/排序/搜索/分页/选择重置。若将来需跨标签保留状态，计划提供 `keepMounted` 等逃生口。
+- 标签间不共享状态。切换时整标签卸载，工具栏筛选/排序/搜索/分页/选择重置。若将来某页需要跨标签保留状态，计划以 `keepMounted` 等形式提供逃生口。
 - 共享页头仅标题 + 描述 + 标签 pill。不支持页头级动作位（例如标题旁额外按钮）——请把各视图工具栏放在视图正文内。EnvDashboard 的 Refresh 即如此。
 - 需要 `embedded` 的自定义视图须自行调用 `useMultiViewContext()`。无 props 注入（无 `cloneElement`），无关组件不会被动接收 props。
 - Model\* 点击导航限定在 `${pathname}/${linkTo?}/${id}`。无 `onClick` / `href` 逃生口。确需跳别处时请在页面层包装，而非改视图。

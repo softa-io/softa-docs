@@ -166,7 +166,7 @@ The model detail page provides:
 `Option Sets` are used for enum-like business values:
 
 - The option set maintains `name`, `optionSetCode`, `appId`, and description.
-- Option items maintain `itemCode`, `itemName`, `sequence`, `parentItemCode`, `itemColor`, `active`, and description.
+- Option items maintain `itemCode`, `itemName`, `sequence`, `parentItemCode`, `itemTone`, `itemIcon`, `active`, and description.
 
 `Views` configure model views:
 
