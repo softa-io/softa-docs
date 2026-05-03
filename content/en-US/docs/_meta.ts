@@ -6,6 +6,7 @@ export default {
   features: "Features",
   backend_dev: "Backend Development",
   frontend_dev: "Frontend Development",
+  guideline: "User Guide",
   contribution: "Contribution",
   faq: "FAQ"
 }

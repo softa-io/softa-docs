@@ -6,6 +6,7 @@ export default {
   features: "特性",
   backend_dev: "后端开发",
   frontend_dev: "前端开发",
+  guideline: "用户指南",
   contribution: "参与贡献",
   faq: "常见问题"
 }
