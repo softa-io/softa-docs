@@ -1,5 +1,3 @@
-# Softa Base
-
 ## Debug: Use Cases and Usage
 
 `debug` is used to enable debug context (`Context.debug=true`) during a request or a specific method execution. A common use is printing SQL logs and returning more detailed exception information.
@@ -43,3 +41,26 @@
 - `?debug=` and `@Debug` are request/method-level switches for the current execution context.
 - `debug: true` in `application*.yml` is an application-level switch that affects global logging behavior.
 - Debug logs may contain sensitive data; use only in development/testing or temporary troubleshooting.
+
+### 5. Frontend Debug Settings
+
+The app supports a global **debug flag** that, when enabled, attaches `X-Debug: true` to every outgoing API request via the axios interceptor. This is intended for diagnosing issues in coordination with backend logs — it should not be left on in production for normal users.
+
+#### Environment variable
+
+`NEXT_PUBLIC_DEBUG` (defined in [`.env.example`](.env.example)) is a build-time flag:
+
+- `true` — debug subsystem is enabled. The header toggle is exposed in non-dev environments, and `X-Debug: true` is sent by default until the user toggles it off.
+- `false` / unset — debug subsystem is disabled outside of dev. The header toggle is hidden, and `X-Debug` is never sent.
+
+#### Visibility rules
+
+| Environment | `NEXT_PUBLIC_DEBUG` | Toggle visible | Initial value | `X-Debug` can be sent |
+| --- | --- | --- | --- | --- |
+| `pnpm dev` | (any) | Yes | `false` (or `true` if env=true) | Yes, controlled by toggle |
+| Non-dev build | `true` | Yes | `true` | Yes, controlled by toggle |
+| Non-dev build | unset / `false` | No | `false` | **Never** |
+
+#### Runtime toggle
+
+When the debug subsystem is enabled, a bug-icon button appears in the app header next to the density switcher. Clicking it flips the flag; the choice is persisted in `localStorage["app:debug"]` and survives reloads. The active state uses a destructive-tinted style as a deliberate visual warning.
