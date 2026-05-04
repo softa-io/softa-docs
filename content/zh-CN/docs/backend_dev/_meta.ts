@@ -8,5 +8,5 @@ export default {
   tenant: "多租户",
   cron: "定时任务",
   exception: "异常处理",
-  debug: "调试",
+  debug: "调试模式",
 }
