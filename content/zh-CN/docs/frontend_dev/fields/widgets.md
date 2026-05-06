@@ -164,21 +164,60 @@
 
 ### `yyyy-MM`
 
-以 `"yyyy-MM"` 字符串存储的年月选择器（例如 `"2024-03"`）。弹出面板含年份导航（箭头）与月份网格。点击年份标签进入年份网格视图；点击某年回到该年的月份网格。
+以 `"yyyy-MM"` 字符串存储的年月选择器（例如 `"2024-03"`）。弹出面板含年份导航（箭头）与月份网格。点击年份标签进入年份网格分页；点击某年回到该年的月份网格。
 
 ```tsx
 <Field fieldName="period" widgetType="yyyy-MM" />
+
+<Field
+  fieldName="reportPeriod"
+  widgetType="yyyy-MM"
+  widgetProps={{ min: "2020-01", max: "2030-12", defaultPanelYear: 2026 }}
+/>
 ```
+
+`yyyy-MM` widget props：
+
+| Prop               | 类型      | 默认值       | 说明                                                                                  |
+| ------------------ | --------- | ------------ | ------------------------------------------------------------------------------------- |
+| `min`              | `string`  | `"1900-01"`  | 下界（含）。格式：`"yyyy-MM"`。无效则回退为默认值。                                   |
+| `max`              | `string`  | `"2100-12"`  | 上界（含）。                                                                          |
+| `clearable`        | `boolean` | `true`       | 面板底部是否显示 **Clear**。                                                          |
+| `showQuickPick`    | `boolean` | `true`       | 是否显示 **This month** 快捷按钮（当前月份不在 `[min, max]` 内时禁用）。              |
+| `yearStep`         | `number`  | `1`          | 年份网格步进。设为 `5` 时年份视图为 1900、1905、1910……                                |
+| `defaultPanelYear` | `number`  | 当前年       | 字段无值时首次打开面板定位的年份。会钳制在 `[min 的年份, max 的年份]` 之间。           |
+| `yearsPerPage`     | `number`  | `12`         | 年份网格每页条数。常见替代值：16、20。                                                |
+
+超出 `[min, max]` 的月份在月份网格中仍会渲染但为禁用状态；年份网格中超范围的同年份同理。
 
 值契约：`"yyyy-MM"` 格式的 `string`，清空时为 `undefined`。
 
 ### `MM-dd`
 
-以 `"MM-dd"` 字符串存储的月日选择器（例如 `"03-15"`）。弹出面板为日期网格日历。点击表头月份标签进入月份网格；点击某月回到该月的日期网格。2 月 29 日始终可选（与年份无关的字段）。
+以 `"MM-dd"` 字符串存储的月日选择器（例如 `"03-15"`）。弹出面板为日期网格日历。点击表头月份标签进入月份网格视图；点击某月回到该月的日期网格。2 月 29 日始终可选（与年份无关的字段）。
 
 ```tsx
 <Field fieldName="anniversary" widgetType="MM-dd" />
+
+<Field
+  fieldName="fiscalYearStart"
+  widgetType="MM-dd"
+  widgetProps={{ min: "01-01", max: "06-30", firstDayOfWeek: 1 }}
+/>
 ```
+
+`MM-dd` widget props：
+
+| Prop                | 类型                              | 默认值       | 说明                                                                                                                |
+| ------------------- | --------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------- |
+| `min`               | `string`                          | `"01-01"`    | 下界（含）。格式：`"MM-dd"`。                                                                                       |
+| `max`               | `string`                          | `"12-31"`    | 上界（含）。跨年区间（`min > max`，例如 `"10-01"` → `"03-31"`）不支持，会回退为默认行为。                           |
+| `clearable`         | `boolean`                         | `true`       | 是否显示 **Clear**。                                                                                               |
+| `showQuickPick`     | `boolean`                         | `true`       | 是否显示 **Today** 快捷按钮（「今天」不在 `[min, max]` 内时禁用）。                                                   |
+| `firstDayOfWeek`    | `0 \| 1 \| 2 \| 3 \| 4 \| 5 \| 6` | `0`（周日）  | 周起始日。默认 `0` 与产品国际化取向一致；需 ISO / 周一起始可设为 `1` 等。                                           |
+| `defaultPanelMonth` | `1..12`                           | 当前月份     | 字段无值时首次打开面板定位的月份。会钳制在 `[min 的月份, max 的月份]` 范围内。                                     |
+
+超出 `[min, max]` 的日期与月份仍会渲染但为禁用。
 
 值契约：`"MM-dd"` 格式的 `string`，清空时为 `undefined`。
 
@@ -429,10 +468,54 @@ import { StatusIcon } from "@/components/fields/widgets/option/StatusIconWidget"
 
 ## 日期与时间类 Widgets
 
+### `HH:mm` / `HH:mm:ss`
+
+存储为 `"HH:mm"`（如 `"09:30"`）或 `"HH:mm:ss"`（如 `"09:30:15"`）的时间选择器。弹出 **列式列表** 面板：按时 / 分 /（可选）秒分列，按步长生成候选；点选某一格即提交该单位的新取值，跨列边界的禁用逻辑会严格将最终结果约束在 `[min, max]` 内。为跨浏览器一致性，用以替代原生 `<input type="time">`。
+
 ```tsx
 <Field fieldName="startTime" widgetType="HH:mm" />
-<Field fieldName="startTime" widgetType="HH:mm:ss" />
+
+<Field
+  fieldName="meetingTime"
+  widgetType="HH:mm"
+  widgetProps={{
+    min: "09:00",
+    max: "18:00",
+    minuteStep: 15,
+    quickOptions: ["09:00", "10:30", "14:00", "16:30"],
+  }}
+/>
+
+<Field
+  fieldName="processStartTime"
+  widgetType="HH:mm:ss"
+  widgetProps={{ secondStep: 15, defaultTime: "00:00:00" }}
+/>
 ```
+
+`HH:mm` / `HH:mm:ss` widget props：
+
+| Prop            | 类型       | 默认值                   | 说明                                                                                                                                                            |
+| --------------- | ---------- | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `min`           | `string`   | `"00:00"` / `"00:00:00"` | 下界（含）。格式与控件自身格式一致。                                                                                                                           |
+| `max`           | `string`   | `"23:59"` / `"23:59:59"` | 上界（含）。                                                                                                                                                    |
+| `clearable`     | `boolean`  | `true`                   | 是否显示 **Clear**。                                                                                                                                           |
+| `showQuickPick` | `boolean`  | `true`                   | 是否显示 **Now** 快捷按钮（当前时刻不在 `[min, max]` 内时禁用）。                                                                                               |
+| `minuteStep`    | `number`   | `1`                      | 分钟候选粒度。合法取值：`1, 2, 3, 4, 5, 6, 10, 12, 15, 20, 30`。非法值回退为 `1` 并在开发模式告警。                                                               |
+| `secondStep`    | `number`   | `1`                      | 秒候选粒度。仅 `HH:mm:ss` 生效；`HH:mm` 忽略。合法集合同 `minuteStep`。                                                                                           |
+| `defaultTime`   | `string`   | -                        | 字段无值时首次打开的预填值。会按步长网格对齐；若无法落入 `[min, max]` 则回退到 `min`。                                                                             |
+| `quickOptions`  | `string[]` | -                        | 列上方的自定义预设片（例如 `["09:00", "12:00", "18:00"]`）。每项须在 `[min, max]` 内且对齐步长网格，否则禁用。                                                       |
+| `use12Hours`    | `boolean`  | `false`                  | 类型占位——本版本未实现。                                                                                                                                        |
+
+底部行为：
+
+- **Apply**（✓，始终可见）：确认当前面板状态并关闭浮层。若字段为空，会先填入 `min` 再提交。
+- **Now**（`showQuickPick=true` 时）：写入当前时钟时间，受 `[min, max]` 约束。不关闭浮层，便于继续微调后再 Apply。
+- **Clear**（`clearable=true` 时）：清空字段。不关闭浮层。
+
+已有存盘值若在网格外（例如保存了 `"09:23"` 而 `minuteStep=15`），触发按钮上会原样保留展示；列表列不会对「落在网格外」的成分显示选中高亮；从网格点选则会吸附到网格。
+
+值契约：与控件格式一致的 `string`，清空时为 `undefined`。
 
 ### `Relative`
 

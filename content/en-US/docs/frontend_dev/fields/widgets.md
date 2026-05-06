@@ -168,7 +168,27 @@ Month-year picker stored as a `"yyyy-MM"` string (e.g. `"2024-03"`). Renders a p
 
 ```tsx
 <Field fieldName="period" widgetType="yyyy-MM" />
+
+<Field
+  fieldName="reportPeriod"
+  widgetType="yyyy-MM"
+  widgetProps={{ min: "2020-01", max: "2030-12", defaultPanelYear: 2026 }}
+/>
 ```
+
+`yyyy-MM` widget props:
+
+| Prop               | Type      | Default      | Notes                                                                                  |
+| ------------------ | --------- | ------------ | -------------------------------------------------------------------------------------- |
+| `min`              | `string`  | `"1900-01"`  | Lower bound, inclusive. Format: `"yyyy-MM"`. Falls back to default if invalid.         |
+| `max`              | `string`  | `"2100-12"`  | Upper bound, inclusive.                                                                |
+| `clearable`        | `boolean` | `true`       | Show **Clear** button in the panel footer.                                             |
+| `showQuickPick`    | `boolean` | `true`       | Show **This month** quick button (disabled when current month is out of `[min, max]`). |
+| `yearStep`         | `number`  | `1`          | Year-grid stepping. `5` lays out 1900, 1905, 1910, … in the year view.                 |
+| `defaultPanelYear` | `number`  | current year | First-open panel year when the field has no value. Clamped to `[min.year, max.year]`.  |
+| `yearsPerPage`     | `number`  | `12`         | Year-grid page size. Common alternates: 16, 20.                                        |
+
+Months outside `[min, max]` are rendered but disabled in the month grid; same for years outside the range in the year grid.
 
 Value contract: `string` in `"yyyy-MM"` format, or `undefined` when cleared.
 
@@ -178,7 +198,26 @@ Month-day picker stored as a `"MM-dd"` string (e.g. `"03-15"`). Renders a popove
 
 ```tsx
 <Field fieldName="anniversary" widgetType="MM-dd" />
+
+<Field
+  fieldName="fiscalYearStart"
+  widgetType="MM-dd"
+  widgetProps={{ min: "01-01", max: "06-30", firstDayOfWeek: 1 }}
+/>
 ```
+
+`MM-dd` widget props:
+
+| Prop                | Type                                | Default       | Notes                                                                                                                |
+| ------------------- | ----------------------------------- | ------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `min`               | `string`                            | `"01-01"`     | Lower bound, inclusive. Format: `"MM-dd"`.                                                                           |
+| `max`               | `string`                            | `"12-31"`     | Upper bound, inclusive. Cross-year ranges (`min > max`, e.g. `"10-01"` → `"03-31"`) are not supported and fall back. |
+| `clearable`         | `boolean`                           | `true`        | Show **Clear** button.                                                                                               |
+| `showQuickPick`     | `boolean`                           | `true`        | Show **Today** quick button (disabled when today is out of `[min, max]`).                                            |
+| `firstDayOfWeek`    | `0 \| 1 \| 2 \| 3 \| 4 \| 5 \| 6`   | `0` (Sunday)  | Week start. Default `0` matches the international product positioning; set `1` for ISO/Monday, etc.                  |
+| `defaultPanelMonth` | `1..12`                             | current month | First-open panel month when the field has no value. Clamped to `[min.month, max.month]`.                             |
+
+Days and months outside `[min, max]` are rendered but disabled.
 
 Value contract: `string` in `"MM-dd"` format, or `undefined` when cleared.
 
@@ -429,10 +468,54 @@ Adding a new icon key requires (a) adding the code to the backend `OptionItemIco
 
 ## Date And Time Widgets
 
+### `HH:mm` / `HH:mm:ss`
+
+Time picker stored as `"HH:mm"` (e.g. `"09:30"`) or `"HH:mm:ss"` (e.g. `"09:30:15"`). Renders a popover with a column-list panel — one column per unit (hours / minutes / [seconds]) where candidates are generated from the configured step. Selecting a cell commits the new value; cross-column boundary disabling enforces `[min, max]` exactly. Replaces the native `<input type="time">` for cross-browser consistency.
+
 ```tsx
 <Field fieldName="startTime" widgetType="HH:mm" />
-<Field fieldName="startTime" widgetType="HH:mm:ss" />
+
+<Field
+  fieldName="meetingTime"
+  widgetType="HH:mm"
+  widgetProps={{
+    min: "09:00",
+    max: "18:00",
+    minuteStep: 15,
+    quickOptions: ["09:00", "10:30", "14:00", "16:30"],
+  }}
+/>
+
+<Field
+  fieldName="processStartTime"
+  widgetType="HH:mm:ss"
+  widgetProps={{ secondStep: 15, defaultTime: "00:00:00" }}
+/>
 ```
+
+`HH:mm` / `HH:mm:ss` widget props:
+
+| Prop            | Type       | Default                  | Notes                                                                                                                                                            |
+| --------------- | ---------- | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `min`           | `string`   | `"00:00"` / `"00:00:00"` | Lower bound, inclusive. Format matches the widget's own format string.                                                                                           |
+| `max`           | `string`   | `"23:59"` / `"23:59:59"` | Upper bound, inclusive.                                                                                                                                          |
+| `clearable`     | `boolean`  | `true`                   | Show **Clear** button.                                                                                                                                           |
+| `showQuickPick` | `boolean`  | `true`                   | Show **Now** quick button (disabled when current time is out of `[min, max]`).                                                                                   |
+| `minuteStep`    | `number`   | `1`                      | Minute candidate granularity. Legal: `1, 2, 3, 4, 5, 6, 10, 12, 15, 20, 30`. Out-of-set values fall back to `1` with a dev-mode warn.                            |
+| `secondStep`    | `number`   | `1`                      | Second candidate granularity. Only used by `HH:mm:ss`; ignored for `HH:mm`. Same legal set as `minuteStep`.                                                      |
+| `defaultTime`   | `string`   | -                        | First-open prefilled value when the field has no value. Snapped up to the step grid; falls back to `min` if it can't fit in `[min, max]`.                        |
+| `quickOptions`  | `string[]` | -                        | Custom preset chips above the columns (e.g. `["09:00", "12:00", "18:00"]`). Each option must be in `[min, max]` and aligned to the step grid; otherwise disabled. |
+| `use12Hours`    | `boolean`  | `false`                  | Type-only placeholder — not implemented in this version.                                                                                                         |
+
+Footer behavior:
+
+- **Apply** (✓ icon, always shown): Confirms current panel state and closes the popover. If the field is empty, fills with `min` first.
+- **Now** (when `showQuickPick=true`): Sets the wall-clock time, subject to `[min, max]`. Does not close the popover, so the user can adjust further before Apply.
+- **Clear** (when `clearable=true`): Sets the field to empty. Does not close the popover.
+
+Off-grid existing values (e.g. saved `"09:23"` with `minuteStep=15`) are preserved on the trigger button verbatim. The columns won't show a "selected" highlight for off-grid components; picking from the grid snaps to the grid.
+
+Value contract: `string` in the widget's format, or `undefined` when cleared.
 
 ### `Relative`
 
