@@ -466,27 +466,54 @@ import { RelativeTimeDisplay } from "@/components/fields/widgets/relative";
 
 ### 快捷范围筛选（列头）
 
-`Date` / `DateTime` 列在列表头筛选浮层中除了标准「操作符 + 取值」表单外，还提供日期范围预设区。用户可一键选中语义区间，需要精细控制时仍可使用具体操作符路径。
+`Date` / `DateTime` 列在列表头筛选浮层中除了标准「操作符 + 取值」表单外，还提供日期范围预设区。用户可一键选中语义区间；需要精细控制时仍可使用具体操作符路径。
 
 **预设清单**
 
-| 分组   | 项 |
-| ------ | --- |
-| Quick  | `Today`、`Yesterday` |
-| Past   | `Last 7 / 15 / 30 / 60 / 90 days`（滚动窗口，**含今天**） |
-| Period | `This week`、`This month`、`This year` |
-| Unary  | `Is set`、`Is not set`（一键触发，无需填写取值） |
+预设条目带有 `direction`（`past` / `future` / `neutral`），以便面板按字段的时间属性自适应展示。`neutral` 类预设始终显示；`past` / `future` 类则按面板的 `mode` 决定是否展示。
+
+| 分区   | 方向    | 项 |
+| ------ | ------- | --- |
+| Quick  | mixed   | `Today`（neutral）、`Yesterday`（past）、`Tomorrow`（future） |
+| Past   | past    | `Last 7 / 15 / 30 / 60 / 90 days`（滚动窗口，**含今天**） |
+| Period | neutral | `This week`、`This month`、`This year` |
+| Future | future  | `Next 7 / 15 / 30 / 60 / 90 days`（滚动窗口，**含今天**，与 Past 对称） |
+| Unary  | —       | `Is set`、`Is not set`（一键触发，无需填写取值） |
+
+**`filterDateRange` —— 过去 / 将来 / 双向**
+
+在 `ModelTable` / `RelationTable` 内的 `<Field />` 上设置 `filterDateRange`，可控制该列浮层展示哪些时间方向的预设：
+
+```tsx
+// 默认（不传）— past + neutral。适合创建/更新时间、入职日期等。
+<Field fieldName="createdTime" />
+
+// future + neutral — 适合截止日期、计划事件、合同到期等。
+<Field fieldName="contractEndDate" filterDateRange="future" />
+
+// both — 适合「双向」日期字段（生日、纪念日等）。
+<Field fieldName="birthdayDate" filterDateRange="both" />
+```
+
+典型场景：筛出未来 30 天内过生日的员工——使用 `<Field fieldName="birthdayDate" filterDateRange="both" />`，再点选 `Next 30 days` 即可。
+
+`filterDateRange` 仅为 **UI 声明**（该列应如何呈现列头筛选），不属于后端元数据。其思路与 `filterBySource` 类似——由调用方决定，不应写进模型定义。在非表格场景下无效果。
 
 **交互**
 
 - 点击预设会自动切到 `BETWEEN`（或对应一元操作符）、应用并关闭浮层，无需手动打开操作符下拉。
 - 若手动修改操作符或起止日期，会清除预设高亮，需再点明确的 `Apply` 才提交。
-- 高亮由当前 `(operator, value)` 对照注册表反推。「昨天保存的 Today 筛选」隔天再打开会因语义变化显示为 「Yesterday」，而不是死记当初点击的标签。
+- 高亮由当前 `(operator, value)` 对照注册表反推。「昨天保存的 Today 筛选」隔天再打开会因语义变化显示为 `Yesterday`——反映的是**当下语义**，而不是当初点选时的标签。
 
 **时区与周起始**
 
 - 区间按 `configs.timeZone`（未配置则用浏览器时区）解析，`@date-fns/tz` 处理 DST 边界。
 - `weekStartsOn` 默认为周一（`1`），可按调用覆盖。
+
+**滚动窗口语义**
+
+- `Last N days` 与 `Next N days` 均 **包含今天**。因此 `Last 7 days` = `[today − 6, today]`，`Next 7 days` = `[today, today + 6]`，各覆盖 7 个自然日。
+- 若需要「严格意义上不含今天的未来 N 天」，可组合使用 `Tomorrow` 与 `Next N days` 等。
 
 **持久化语义**
 
@@ -497,7 +524,8 @@ import { RelativeTimeDisplay } from "@/components/fields/widgets/relative";
 
 - `resolvePresetRange(id, options?)` —— 预设 id → `{ start, end }` Date 对
 - `matchPreset(bounds, options?)` —— 边界 → 预设 id 或 `null`（用于 UI 高亮）
-- `DATE_RANGE_PRESETS` —— UI 遍历用的有序注册表
+- `filterPresetsByMode(presets, mode)` —— 按 `"past" | "future" | "both"` 过滤注册表
+- `DATE_RANGE_PRESETS` —— UI 遍历用的有序注册表；每条记录带有 `direction`
 
 ## 关联类 Widgets
 

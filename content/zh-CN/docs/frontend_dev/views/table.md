@@ -283,7 +283,7 @@ type UserAccountRow = ModelTableRowWith<{
 
 可用操作符由每列的 `fieldType` 推导。单一事实来源为 `src/components/views/table/utils/filter-operators.ts`。一元操作符（`IS SET` / `IS NOT SET`）无需填写取值。
 
-`Date` / `DateTime` 列还会在相同浮层中额外提供 **快捷日期范围预设**（Today、Last N days、本周 / 本月 / 本年等）以及一键 `Is set` / `Is not set` 入口。预设清单、交互规则、时区处理与持久化语义见 [日期与时间类 Widget → 快捷范围筛选（列头）](../fields/widgets#quick-range-filter-column-header)。
+`Date` / `DateTime` 列还会在相同浮层中额外提供 **快捷日期范围预设**（Today、Last N days、Next N days、本周 / 本月 / 本年等）以及一键 `Is set` / `Is not set` 入口。预设清单、交互规则、时区处理与持久化语义见 [日期与时间类 Widget → 快捷范围筛选（列头）](../fields/widgets#quick-range-filter-column-header)。
 
 ## 统一的工具栏激活状态
 

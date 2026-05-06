@@ -468,12 +468,34 @@ import { RelativeTimeDisplay } from "@/components/fields/widgets/relative";
 
 **Preset registry**
 
-| Group  | Items                                                                  |
-| ------ | ---------------------------------------------------------------------- |
-| Quick  | `Today`, `Yesterday`                                                   |
-| Past   | `Last 7 / 15 / 30 / 60 / 90 days` (rolling window, **includes today**) |
-| Period | `This week`, `This month`, `This year`                                 |
-| Unary  | `Is set`, `Is not set` (one-click, no value required)                  |
+Presets are tagged with a `direction` (`past` / `future` / `neutral`) so the panel can adapt to the field's temporal nature. `neutral` presets always show; `past` / `future` show based on the panel's `mode`.
+
+| Section | Direction | Items                                                                    |
+| ------- | --------- | ------------------------------------------------------------------------ |
+| Quick   | mixed     | `Today` (neutral), `Yesterday` (past), `Tomorrow` (future)               |
+| Past    | past      | `Last 7 / 15 / 30 / 60 / 90 days` (rolling, **includes today**)          |
+| Period  | neutral   | `This week`, `This month`, `This year`                                   |
+| Future  | future    | `Next 7 / 15 / 30 / 60 / 90 days` (rolling, **includes today**, mirror)  |
+| Unary   | —         | `Is set`, `Is not set` (one-click, no value required)                    |
+
+**`filterDateRange` — choosing past / future / both**
+
+Set `filterDateRange` on `<Field />` inside `ModelTable` / `RelationTable` to control which directions surface in that column's filter:
+
+```tsx
+// Default (no prop) — past + neutral. Right for created/updated time, hire date, etc.
+<Field fieldName="createdTime" />
+
+// Future + neutral — right for due dates, scheduled events, contract end.
+<Field fieldName="contractEndDate" filterDateRange="future" />
+
+// Both — right for double-sided fields (birthday, anniversary).
+<Field fieldName="birthdayDate" filterDateRange="both" />
+```
+
+Concrete use case: surfacing employees whose birthday falls in the next 30 days is one click — `<Field fieldName="birthdayDate" filterDateRange="both" />` then pick `Next 30 days`.
+
+`filterDateRange` is a UI-only declaration ("how should this column surface filters"), not backend metadata. It mirrors `filterBySource` in spirit — a call-site decision that does not belong in the model definition. Has no effect outside table contexts.
 
 **Interaction**
 
@@ -486,6 +508,11 @@ import { RelativeTimeDisplay } from "@/components/fields/widgets/relative";
 - Ranges resolve in `configs.timeZone` (or browser tz when unset), via `@date-fns/tz` for DST-safe boundaries.
 - `weekStartsOn` defaults to Monday (`1`) and is overridable per call.
 
+**Rolling-window semantics**
+
+- Both `Last N days` and `Next N days` **include today**. So `Last 7 days` = `[today − 6, today]` and `Next 7 days` = `[today, today + 6]`, each spanning 7 calendar days.
+- "Strictly future N days" can be expressed by combining `Tomorrow` + `Next N days` if needed.
+
 **Persistence semantics**
 
 - Presets are snapshotted to absolute `yyyy-MM-dd` start / end at click time. Saved views and shared URLs do not drift over time.
@@ -495,7 +522,8 @@ import { RelativeTimeDisplay } from "@/components/fields/widgets/relative";
 
 - `resolvePresetRange(id, options?)` — preset id → `{ start, end }` Date pair
 - `matchPreset(bounds, options?)` — bounds → preset id or `null` (used for UI highlight)
-- `DATE_RANGE_PRESETS` — ordered registry for UI iteration
+- `filterPresetsByMode(presets, mode)` — filter registry by `"past" | "future" | "both"`
+- `DATE_RANGE_PRESETS` — ordered registry for UI iteration; each entry carries `direction`
 
 ## Relation Widgets
 
