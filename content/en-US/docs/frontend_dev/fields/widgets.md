@@ -22,8 +22,8 @@ Related docs:
 | `Double`      | numeric input                  | `Monetary`, `Percentage`, `Slider`                                                |
 | `BigDecimal`  | decimal string input           | `Monetary`, `Percentage`, `Slider`                                                |
 | `Boolean`     | switch                         | `CheckBox`                                                                        |
-| `Date`        | date picker                    | -                                                                                 |
-| `DateTime`    | datetime input                 | -                                                                                 |
+| `Date`        | date picker                    | `Relative`                                                                        |
+| `DateTime`    | datetime input                 | `Relative`                                                                        |
 | `Time`        | time input                     | `HH:mm:ss`, `HH:mm`                                                               |
 | `Option`      | single select                  | `Radio`, `StatusBar`, `StatusIcon`                                                |
 | `MultiOption` | checkbox group                 | `CheckBox`                                                                        |
@@ -432,6 +432,34 @@ Adding a new icon key requires (a) adding the code to the backend `OptionItemIco
 ```tsx
 <Field fieldName="startTime" widgetType="HH:mm" />
 <Field fieldName="startTime" widgetType="HH:mm:ss" />
+```
+
+### `Relative`
+
+Renders a `Date` / `DateTime` value as a human-readable distance from now (e.g. `"2 days ago"`, `"in 3 hours"`). The absolute timestamp is exposed via the `title` attribute as a hover tooltip so precise time stays accessible.
+
+```tsx
+<Field fieldName="updatedTime" widgetType="Relative" />
+<Field fieldName="dueDate" widgetType="Relative" widgetProps={{ strict: false }} />
+```
+
+**Display-only widget.** Never exposes an editor — even on editable fields. Apply only to readonly fields or read-only surfaces (cards, tables, read-only forms). On an editable field the value will appear as plain text and the user cannot change it.
+
+`Relative` widget props:
+
+| Prop        | Type      | Default | Notes                                                                                          |
+| ----------- | --------- | ------- | ---------------------------------------------------------------------------------------------- |
+| `addSuffix` | `boolean` | `true`  | Include the `"ago"` / `"in"` modifier. Set `false` for raw distance like `"5 minutes"`.        |
+| `strict`    | `boolean` | `true`  | Strict unit (`"2 days"`) vs natural phrasing (`"about 2 days"`). Strict avoids the `"about"` qualifier and uses a single unit. |
+
+The relative phrase is rendered once at mount; it does not auto-update with the wall clock. The hover tooltip with the absolute timestamp is the affordance for precision, which is sufficient for typical card / table surfaces. If you need ticking updates, drive a re-render from the parent component (e.g. an interval) — the widget will pick up the new "now" on each render.
+
+For value-driven use outside a `Field` (e.g. when the value comes from sidecar data with no surrounding form context), import the underlying primitive directly:
+
+```tsx
+import { RelativeTimeDisplay } from "@/components/fields/widgets/relative";
+
+<RelativeTimeDisplay value={drift.lastCheckedTime} className="text-muted-foreground" />
 ```
 
 ## Relation Widgets

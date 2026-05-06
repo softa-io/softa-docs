@@ -22,8 +22,8 @@
 | `Double`      | 数字输入                       | `Monetary`, `Percentage`, `Slider`                                                |
 | `BigDecimal`  | 十进制字符串输入               | `Monetary`, `Percentage`, `Slider`                                                |
 | `Boolean`     | 开关                           | `CheckBox`                                                                        |
-| `Date`        | 日期选择器                     | -                                                                                 |
-| `DateTime`    | 日期时间输入                   | -                                                                                 |
+| `Date`        | 日期选择器                     | `Relative`                                                                        |
+| `DateTime`    | 日期时间输入                   | `Relative`                                                                        |
 | `Time`        | 时间输入                       | `HH:mm:ss`, `HH:mm`                                                               |
 | `Option`      | 单选下拉                       | `Radio`, `StatusBar`, `StatusIcon`                                                |
 | `MultiOption` | 复选组风格多选                 | `CheckBox`                                                                        |
@@ -432,6 +432,34 @@ import { StatusIcon } from "@/components/fields/widgets/option/StatusIconWidget"
 ```tsx
 <Field fieldName="startTime" widgetType="HH:mm" />
 <Field fieldName="startTime" widgetType="HH:mm:ss" />
+```
+
+### `Relative`
+
+将 `Date` / `DateTime` 值渲染为相对当前时间的可读距离（例如 `"2 days ago"`、`"in 3 hours"`）。绝对时间戳通过 `title` 属性在悬停提示中展示，便于查看精确时间。
+
+```tsx
+<Field fieldName="updatedTime" widgetType="Relative" />
+<Field fieldName="dueDate" widgetType="Relative" widgetProps={{ strict: false }} />
+```
+
+**仅展示用 widget。** 从不提供编辑器——即使在可编辑字段上也是如此。请仅用于只读字段或只读界面（卡片、表格、只读表单）。若在可编辑字段上使用，值会以纯文本显示，用户无法修改。
+
+`Relative` widget props：
+
+| Prop        | 类型      | 默认值 | 说明                                                                                          |
+| ----------- | --------- | ------ | --------------------------------------------------------------------------------------------- |
+| `addSuffix` | `boolean` | `true` | 是否包含 `"ago"` / `"in"` 这类后缀。设为 `false` 可得到如 `"5 minutes"` 这类原始距离表述。      |
+| `strict`    | `boolean` | `true` | 严格单位（如 `"2 days"`）与自然表述（如 `"about 2 days"`）。严格模式避免 `"about"`，且只使用单一单位。 |
+
+相对时间文案在挂载时计算一次，不会随系统时钟自动刷新。悬停提示中的绝对时间戳用于满足精度需求，对常见卡片 / 表格场景通常足够。若需要定时刷新，请由父组件驱动重渲染（例如用定时器）——每次渲染时 widget 会采用新的「当前时间」。
+
+在 `Field` 之外、按值驱动的场景（例如值来自旁路数据且没有外层表单上下文），可直接使用底层原语：
+
+```tsx
+import { RelativeTimeDisplay } from "@/components/fields/widgets/relative";
+
+<RelativeTimeDisplay value={drift.lastCheckedTime} className="text-muted-foreground" />
 ```
 
 ## 关联类 Widgets
