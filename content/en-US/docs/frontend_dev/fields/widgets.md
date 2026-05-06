@@ -462,6 +462,41 @@ import { RelativeTimeDisplay } from "@/components/fields/widgets/relative";
 <RelativeTimeDisplay value={drift.lastCheckedTime} className="text-muted-foreground" />
 ```
 
+### Quick range filter (column header)
+
+`Date` / `DateTime` columns expose a date-range preset panel inside the column-header filter popover, sitting alongside the standard operator + value form. Users pick a semantic range with one click; the precise operator path stays available for fine control.
+
+**Preset registry**
+
+| Group  | Items                                                                  |
+| ------ | ---------------------------------------------------------------------- |
+| Quick  | `Today`, `Yesterday`                                                   |
+| Past   | `Last 7 / 15 / 30 / 60 / 90 days` (rolling window, **includes today**) |
+| Period | `This week`, `This month`, `This year`                                 |
+| Unary  | `Is set`, `Is not set` (one-click, no value required)                  |
+
+**Interaction**
+
+- Clicking a preset auto-switches the operator to `BETWEEN` (or the matching unary), applies, and closes the popover. The operator dropdown does not need to be touched.
+- Editing the operator or start / end date manually clears the preset highlight and waits for the explicit `Apply` button.
+- Highlight is derived from the current `(operator, value)` against the registry. A "Today" filter saved yesterday opens highlighted as "Yesterday" the next day — reflecting current semantics rather than the original click.
+
+**Time zone & week**
+
+- Ranges resolve in `configs.timeZone` (or browser tz when unset), via `@date-fns/tz` for DST-safe boundaries.
+- `weekStartsOn` defaults to Monday (`1`) and is overridable per call.
+
+**Persistence semantics**
+
+- Presets are snapshotted to absolute `yyyy-MM-dd` start / end at click time. Saved views and shared URLs do not drift over time.
+- Backend contract is unchanged: presets are sent as standard `BETWEEN` / `IS SET` / `IS NOT SET` `FilterCondition` units; no new operator is introduced.
+
+**Single-source helpers** live at `src/components/views/table/utils/date-range-presets.ts`:
+
+- `resolvePresetRange(id, options?)` — preset id → `{ start, end }` Date pair
+- `matchPreset(bounds, options?)` — bounds → preset id or `null` (used for UI highlight)
+- `DATE_RANGE_PRESETS` — ordered registry for UI iteration
+
 ## Relation Widgets
 
 ### `SelectTree`

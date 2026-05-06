@@ -281,6 +281,14 @@ type UserAccountRow = ModelTableRowWith<{
 For full reference (props, slots, custom panels), see
 [Side Panel](../components/side-panel).
 
+## Column Header Filter
+
+Each column header exposes a filter popover (the funnel icon) that produces a `ColumnFilterValue`. Column filters feed into the same merge pipeline as the top-level `filters`, workspace, side panel, and toolbar filters — see [Filter precedence](#filter-precedence-and-merge-behavior).
+
+Available operators are derived from each column's `fieldType`. The single source of truth is `src/components/views/table/utils/filter-operators.ts`. Unary operators (`IS SET` / `IS NOT SET`) require no value.
+
+`Date` / `DateTime` columns additionally expose **quick range presets** (Today, Last N days, This week / month / year, etc.) and one-click `Is set` / `Is not set` entries inside the same popover. See [Date And Time Widgets → Quick range filter](../fields/widgets#quick-range-filter-column-header) for the preset registry, interaction rules, time-zone handling, and persistence semantics.
+
 ## Unified Active Toolbar State
 
 Toolbar active state area can show and clear:

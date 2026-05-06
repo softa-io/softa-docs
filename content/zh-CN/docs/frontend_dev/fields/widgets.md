@@ -462,6 +462,43 @@ import { RelativeTimeDisplay } from "@/components/fields/widgets/relative";
 <RelativeTimeDisplay value={drift.lastCheckedTime} className="text-muted-foreground" />
 ```
 
+<a id="quick-range-filter-column-header"></a>
+
+### 快捷范围筛选（列头）
+
+`Date` / `DateTime` 列在列表头筛选浮层中除了标准「操作符 + 取值」表单外，还提供日期范围预设区。用户可一键选中语义区间，需要精细控制时仍可使用具体操作符路径。
+
+**预设清单**
+
+| 分组   | 项 |
+| ------ | --- |
+| Quick  | `Today`、`Yesterday` |
+| Past   | `Last 7 / 15 / 30 / 60 / 90 days`（滚动窗口，**含今天**） |
+| Period | `This week`、`This month`、`This year` |
+| Unary  | `Is set`、`Is not set`（一键触发，无需填写取值） |
+
+**交互**
+
+- 点击预设会自动切到 `BETWEEN`（或对应一元操作符）、应用并关闭浮层，无需手动打开操作符下拉。
+- 若手动修改操作符或起止日期，会清除预设高亮，需再点明确的 `Apply` 才提交。
+- 高亮由当前 `(operator, value)` 对照注册表反推。「昨天保存的 Today 筛选」隔天再打开会因语义变化显示为 「Yesterday」，而不是死记当初点击的标签。
+
+**时区与周起始**
+
+- 区间按 `configs.timeZone`（未配置则用浏览器时区）解析，`@date-fns/tz` 处理 DST 边界。
+- `weekStartsOn` 默认为周一（`1`），可按调用覆盖。
+
+**持久化语义**
+
+- 预设点击瞬间会快照为绝对 `yyyy-MM-dd` 起止；保存视图与分享 URL 不会随时间漂移。
+- 后端契约不变：仍以标准 `BETWEEN` / `IS SET` / `IS NOT SET` 形式的 `FilterCondition` 下发，不引入新操作符。
+
+**单一来源辅助函数** 位于 `src/components/views/table/utils/date-range-presets.ts`：
+
+- `resolvePresetRange(id, options?)` —— 预设 id → `{ start, end }` Date 对
+- `matchPreset(bounds, options?)` —— 边界 → 预设 id 或 `null`（用于 UI 高亮）
+- `DATE_RANGE_PRESETS` —— UI 遍历用的有序注册表
+
 ## 关联类 Widgets
 
 ### `SelectTree`
