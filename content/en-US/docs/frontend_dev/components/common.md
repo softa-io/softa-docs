@@ -18,8 +18,11 @@ For the broader taxonomy (where `common/` sits among the five layers), see
 | `user-avatar.tsx` | `UserAvatar` | Status / identity |
 | `timeline.tsx` | `Timeline` | Display |
 | `check-list.tsx` | `CheckList` | Display |
+| `date-picker.tsx` | `DatePicker` | Input |
 | `datetime-picker.tsx` | `DateTimePicker` | Input |
 | `time-picker.tsx` | `TimePicker` | Input |
+| `time-column-panel.tsx` | `TimeColumnPanel` | Input (building block) |
+| `time-utils.ts` | `resolveTimeConfig`, types | Utility |
 | `option-select.tsx` | `OptionSelect` | Input |
 | `density-switcher.tsx` | `DensitySwitcher` | App control |
 
@@ -226,46 +229,108 @@ Vertical checklist. Checked items show a green check + line-through; unchecked s
 
 ## Input
 
-### `DateTimePicker`
+All three pickers (`DatePicker` / `DateTimePicker` / `TimePicker`) share the same shape: **string in, string out**. The trigger label can be rendered in a different display format (e.g. 12-hour or locale-specific) via `displayFormat`, but the machine value always uses the canonical machine format so downstream pipelines (form values, `FilterCondition`, backend contract) never need to know about display mode.
 
-Calendar + time-of-day picker (combined). Controlled.
+The `triggerWrapper` prop lets a form adapter inject `<FormControl>{button}</FormControl>` so react-hook-form's a11y wiring (id / aria-describedby / aria-invalid) reaches the trigger button. Standalone callers omit it and the button is the trigger directly.
+
+### `DatePicker`
+
+Calendar-only date picker.
 
 ```tsx
-<DateTimePicker
-  value={selectedDate}
-  onChange={setSelectedDate}
-  timeFormat="hh:mm:ss"
-  defaultTime="09:00:00"
-  onApply={handleApply}
+<DatePicker value={value} onChange={setValue} />
+<DatePicker value={value} onChange={setValue} dateFormat="yyyy-MM" />
+```
+
+| Prop | Type | Required | Default | Notes |
+| ---- | ---- | -------- | ------- | ----- |
+| `value` | `string` | Yes | - | Date string in `dateFormat`; `""` = no selection |
+| `onChange` | `(next: string) => void` | Yes | - | New value; `""` when cleared |
+| `dateFormat` | `string` | No | `configs.dateTimeFormats.date` (`yyyy-MM-dd`) | Machine format. Pass `"yyyy-MM"` / `"MM-dd"` for partial-date pickers |
+| `displayFormat` | `string` | No | = `dateFormat` | Trigger-label format |
+| `disabled` | `boolean` | No | `false` | |
+| `placeholder` | `string` | No | `"Pick a date"` | |
+| `className` | `string` | No | - | Applied to trigger button |
+| `triggerWrapper` | `(button) => ReactElement` | No | - | Form adapter wraps with `<FormControl>` |
+| `triggerStyle` | `CSSProperties` | No | - | Inline style on trigger button |
+
+### `DateTimePicker`
+
+Calendar + 24h time-column panel side-by-side. Footer hosts Clear / Now / Apply.
+
+```tsx
+<DateTimePicker value={value} onChange={setValue} />
+<DateTimePicker value={value} onChange={setValue} defaultTime="23:59:59" />
+```
+
+Machine format is fixed at `yyyy-MM-dd HH:mm:ss` (matches `configs.dateTimeFormats.dateTime`).
+
+| Prop | Type | Required | Default | Notes |
+| ---- | ---- | -------- | ------- | ----- |
+| `value` | `string` | Yes | - | `yyyy-MM-dd HH:mm:ss`; `""` = no selection |
+| `onChange` | `(next: string) => void` | Yes | - | |
+| `displayFormat` | `string` | No | `configs.dateTimeFormats.dateTime` | Trigger-label format. Pass e.g. `"yyyy-MM-dd hh:mm:ss a"` for 12-hour |
+| `defaultTime` | `string` | No | `"00:00:00"` | Time-of-day to seed when the user picks a date but value has no time yet. Range filter end-points pass `"23:59:59"` |
+| `disabled` | `boolean` | No | `false` | |
+| `placeholder` | `string` | No | `"Pick date & time"` | |
+| `className` | `string` | No | - | |
+| `triggerWrapper` | `(button) => ReactElement` | No | - | |
+| `triggerStyle` | `CSSProperties` | No | - | |
+
+### `TimePicker`
+
+Time-only picker (no calendar). Renders `TimeColumnPanel` inside a popover.
+
+```tsx
+<TimePicker value={value} onChange={setValue} timeFormat="HH:mm:ss" />
+<TimePicker
+  value={value}
+  onChange={setValue}
+  timeFormat="HH:mm"
+  config={resolveTimeConfig({ min: "08:00", max: "18:00", minuteStep: 15 }, "HH:mm")}
 />
 ```
 
 | Prop | Type | Required | Default | Notes |
 | ---- | ---- | -------- | ------- | ----- |
-| `value` | `Date` | No | - | Selected date+time |
-| `onChange` | `(date: Date \| undefined) => void` | Yes | - | Fires on calendar pick or time edit |
-| `timeFormat` | `"hh:mm" \| "hh:mm:ss"` | No | `"hh:mm:ss"` | Time precision |
-| `defaultTime` | `string` | No | - | Initial time when `value` is unset; format must match `timeFormat` |
+| `value` | `string` | Yes | - | 24h ISO string in `timeFormat`; `""` = no selection |
+| `onChange` | `(next: string) => void` | Yes | - | |
+| `timeFormat` | `"HH:mm" \| "HH:mm:ss"` | Yes | - | Machine format; the panel's columns always render 24h |
+| `displayFormat` | `string` | No | = `timeFormat` | date-fns format for the trigger label (e.g. `"hh:mm:ss a"` for 12h) |
+| `config` | `ResolvedTimeConfig` | No | `resolveTimeConfig(undefined, timeFormat)` | Bounds / quick-options |
 | `disabled` | `boolean` | No | `false` | |
-| `onApply` | `() => void` | No | - | Apply button click — typically closes the picker |
+| `placeholder` | `string` | No | `"Pick time"` | |
 | `className` | `string` | No | - | |
+| `triggerWrapper` | `(button) => ReactElement` | No | - | |
+| `triggerStyle` | `CSSProperties` | No | - | |
 
-### `TimePicker`
+### `TimeColumnPanel`
 
-Time-only picker (no calendar). Same UX as `DateTimePicker`'s footer.
+The bare scrollable HH / mm / (ss) column panel that powers `TimePicker` and `DateTimePicker`. Use directly only when you need the columns embedded in custom layout. Footer (Clear / Now / Apply) is conditional on `onClear` / `onApply` / `config.clearable` / `config.showQuickPick`.
 
-```tsx
-<TimePicker
-  value={selectedTime}
-  onChange={setSelectedTime}
-  timeFormat="HH:mm"
-  defaultTime="08:00"
-  onApply={handleApply}
-/>
+### `resolveTimeConfig`
+
+Pure resolver (no widget knowledge) for `TimePicker` / `TimeColumnPanel` config. Takes `Partial<TimePickerConfig>` and a `TimeFormat`, returns `ResolvedTimeConfig` with bounds parsed, step values validated, and `defaultTime` snapped to the step grid.
+
+```ts
+import { resolveTimeConfig } from "@/components/common/time-utils";
+
+const config = resolveTimeConfig(
+  { min: "08:00", max: "18:00", minuteStep: 15, quickOptions: ["09:00", "12:00"] },
+  "HH:mm",
+);
 ```
 
-Props mirror `DateTimePicker` except `timeFormat` uses uppercase `"HH:mm"` /
-`"HH:mm:ss"`.
+`TimePickerConfig` shape:
+
+| Field | Type | Notes |
+| ----- | ---- | ----- |
+| `min` / `max` | `string` | Inclusive bounds in `timeFormat` |
+| `minuteStep` / `secondStep` | `number` | One of `[1,2,3,4,5,6,10,12,15,20,30]` (divisors of 60); invalid values warn and fall back to 1 |
+| `defaultTime` | `string` | Pre-fill on first open; auto-snapped UP to step grid |
+| `quickOptions` | `string[]` | Quick-pick buttons rendered above the columns; out-of-range / off-grid entries auto-disable |
+| `clearable` | `boolean` | Show Clear in footer (default `true`) |
+| `showQuickPick` | `boolean` | Show Now in footer (default `true`) |
 
 ### `OptionSelect`
 

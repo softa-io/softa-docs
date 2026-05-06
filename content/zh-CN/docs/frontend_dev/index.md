@@ -60,7 +60,7 @@
 → [views/table/](./views/table) · [views/board/](./views/board) · [views/card/](./views/card) · [views/form/](./views/form) · [views/side-form/](./views/side-form)
 
 以上组件均接受顶层 `filters` / `orders`；嵌套时继承 `MultiView.Tab`。跨层规则见
-[filter 与排序优先级](./views/multi-view#filter--order-precedence)。
+[筛选与排序优先级](./views/multi-view#filter--order-precedence)。
 
 ## 4. 构建块
 
@@ -77,7 +77,7 @@
 | `status-badge` | 彩色状态徽标 |
 | `user-avatar` | 用户头像 + 名称 |
 | `timeline` | 纵向事件时间线 |
-| `datetime-picker` / `time-picker` | 日期 / 时间输入 |
+| `date-picker` / `datetime-picker` / `time-picker` | 日期 / 时间输入（字符串入出，可选 `triggerWrapper` 供表单适配器使用） |
 | `density-switcher` | 界面密度切换 |
 | `loading-skeleton` / `full-screen-loading` | 加载态 |
 | `check-list` / `option-select` | 选择类输入 |

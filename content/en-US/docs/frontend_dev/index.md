@@ -83,7 +83,7 @@ Plain visual widgets — input is simple data, no `modelName` / `FilterCondition
 | `status-badge` | Colored status pill |
 | `user-avatar` | User avatar + name |
 | `timeline` | Vertical event timeline |
-| `datetime-picker` / `time-picker` | Date/time inputs |
+| `date-picker` / `datetime-picker` / `time-picker` | Date / time inputs (string in / out, optional `triggerWrapper` for form adapters) |
 | `density-switcher` | UI density toggle |
 | `loading-skeleton` / `full-screen-loading` | Loading states |
 | `check-list` / `option-select` | Selection inputs |

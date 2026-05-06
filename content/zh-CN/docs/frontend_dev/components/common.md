@@ -14,8 +14,11 @@
 | `user-avatar.tsx` | `UserAvatar` | 状态 / 标识 |
 | `timeline.tsx` | `Timeline` | 展示 |
 | `check-list.tsx` | `CheckList` | 展示 |
+| `date-picker.tsx` | `DatePicker` | 输入 |
 | `datetime-picker.tsx` | `DateTimePicker` | 输入 |
 | `time-picker.tsx` | `TimePicker` | 输入 |
+| `time-column-panel.tsx` | `TimeColumnPanel` | 输入（构建块） |
+| `time-utils.ts` | `resolveTimeConfig`、类型 | 工具 |
 | `option-select.tsx` | `OptionSelect` | 输入 |
 | `density-switcher.tsx` | `DensitySwitcher` | 应用控件 |
 
@@ -146,7 +149,7 @@ import FullScreenLoading from "@/components/common/full-screen-loading";
 
 ### `Timeline`
 
-竖向事件时间线，中间有连接线。第一项高亮；后续项弱化显示。
+竖向事件时间线，中间有连接线。首条事件高亮；后续事件以弱化颜色渲染。
 
 ```tsx
 <Timeline
@@ -214,45 +217,108 @@ import FullScreenLoading from "@/components/common/full-screen-loading";
 
 ## 输入
 
-### `DateTimePicker`
+三种选择器（`DatePicker` / `DateTimePicker` / `TimePicker`）形态一致：**字符串入、字符串出**。触发器上的文案可用 `displayFormat` 设为另一种展示格式（例如 12 小时制或与区域相关的格式），但机器值始终使用规范机器格式，下游链路（表单值、`FilterCondition`、后端约定）无需了解展示模式。
 
-日历 + 时刻选择（合一）。受控组件。
+`triggerWrapper` 可供表单适配器注入 `<FormControl>{button}</FormControl>`，使 react-hook-form 的无障碍挂钩（id / aria-describedby / aria-invalid）作用于触发按钮。独立调用方省略该项时，按钮即作为触发器。
+
+### `DatePicker`
+
+纯日历日期选择。
 
 ```tsx
-<DateTimePicker
-  value={selectedDate}
-  onChange={setSelectedDate}
-  timeFormat="hh:mm:ss"
-  defaultTime="09:00:00"
-  onApply={handleApply}
+<DatePicker value={value} onChange={setValue} />
+<DatePicker value={value} onChange={setValue} dateFormat="yyyy-MM" />
+```
+
+| 属性 | 类型 | 必填 | 默认值 | 说明 |
+| ---- | ---- | ---- | ------ | ---- |
+| `value` | `string` | 是 | - | `dateFormat` 下的日期字符串；`""` 表示未选 |
+| `onChange` | `(next: string) => void` | 是 | - | 新值；清空时为 `""` |
+| `dateFormat` | `string` | 否 | `configs.dateTimeFormats.date`（`yyyy-MM-dd`） | 机器格式。可传 `"yyyy-MM"` / `"MM-dd"` 等部分日期选择器 |
+| `displayFormat` | `string` | 否 | = `dateFormat` | 触发器标签格式 |
+| `disabled` | `boolean` | 否 | `false` | |
+| `placeholder` | `string` | 否 | `"Pick a date"` | |
+| `className` | `string` | 否 | - | 作用于触发按钮 |
+| `triggerWrapper` | `(button) => ReactElement` | 否 | - | 表单适配器用 `<FormControl>` 包裹 |
+| `triggerStyle` | `CSSProperties` | 否 | - | 触发按钮行内样式 |
+
+### `DateTimePicker`
+
+日历与 24 小时时刻列并排。页脚提供清除 / 现在 / 应用。
+
+```tsx
+<DateTimePicker value={value} onChange={setValue} />
+<DateTimePicker value={value} onChange={setValue} defaultTime="23:59:59" />
+```
+
+机器格式固定为 `yyyy-MM-dd HH:mm:ss`（与 `configs.dateTimeFormats.dateTime` 一致）。
+
+| 属性 | 类型 | 必填 | 默认值 | 说明 |
+| ---- | ---- | ---- | ------ | ---- |
+| `value` | `string` | 是 | - | `yyyy-MM-dd HH:mm:ss`；`""` 表示未选 |
+| `onChange` | `(next: string) => void` | 是 | - | |
+| `displayFormat` | `string` | 否 | `configs.dateTimeFormats.dateTime` | 触发器标签格式。可传如 `"yyyy-MM-dd hh:mm:ss a"` 表示 12 小时制 |
+| `defaultTime` | `string` | 否 | `"00:00:00"` | 用户选日期但值尚无时间时填充的时刻。范围筛选端点可传 `"23:59:59"` |
+| `disabled` | `boolean` | 否 | `false` | |
+| `placeholder` | `string` | 否 | `"Pick date & time"` | |
+| `className` | `string` | 否 | - | |
+| `triggerWrapper` | `(button) => ReactElement` | 否 | - | |
+| `triggerStyle` | `CSSProperties` | 否 | - | |
+
+### `TimePicker`
+
+仅时间（无日历）。在浮层内渲染 `TimeColumnPanel`。
+
+```tsx
+<TimePicker value={value} onChange={setValue} timeFormat="HH:mm:ss" />
+<TimePicker
+  value={value}
+  onChange={setValue}
+  timeFormat="HH:mm"
+  config={resolveTimeConfig({ min: "08:00", max: "18:00", minuteStep: 15 }, "HH:mm")}
 />
 ```
 
 | 属性 | 类型 | 必填 | 默认值 | 说明 |
 | ---- | ---- | ---- | ------ | ---- |
-| `value` | `Date` | 否 | - | 选中的日期与时间 |
-| `onChange` | `(date: Date \| undefined) => void` | 是 | - | 日历点选或时间编辑时触发 |
-| `timeFormat` | `"hh:mm" \| "hh:mm:ss"` | 否 | `"hh:mm:ss"` | 时间精度 |
-| `defaultTime` | `string` | 否 | - | `value` 为空时的初始时间；格式须与 `timeFormat` 一致 |
+| `value` | `string` | 是 | - | `timeFormat` 下的 24 小时字符串；`""` 表示未选 |
+| `onChange` | `(next: string) => void` | 是 | - | |
+| `timeFormat` | `"HH:mm" \| "HH:mm:ss"` | 是 | - | 机器格式；面板列始终以 24 小时渲染 |
+| `displayFormat` | `string` | 否 | = `timeFormat` | date-fns 格式的触发标签（例如 `"hh:mm:ss a"` 表示 12 小时制） |
+| `config` | `ResolvedTimeConfig` | 否 | `resolveTimeConfig(undefined, timeFormat)` | 边界 / 快捷选项 |
 | `disabled` | `boolean` | 否 | `false` | |
-| `onApply` | `() => void` | 否 | - | 点击应用——通常用于关闭选择器 |
+| `placeholder` | `string` | 否 | `"Pick time"` | |
 | `className` | `string` | 否 | - | |
+| `triggerWrapper` | `(button) => ReactElement` | 否 | - | |
+| `triggerStyle` | `CSSProperties` | 否 | - | |
 
-### `TimePicker`
+### `TimeColumnPanel`
 
-仅时间（无日历）。交互与 `DateTimePicker` 底部一致。
+可滚动的小时 / 分 /（秒）列面板，供 `TimePicker` 与 `DateTimePicker` 使用。仅在需将列嵌入自定义布局时直接使用。页脚「清除 / 现在 / 应用」是否出现取决于 `onClear` / `onApply` / `config.clearable` / `config.showQuickPick`。
 
-```tsx
-<TimePicker
-  value={selectedTime}
-  onChange={setSelectedTime}
-  timeFormat="HH:mm"
-  defaultTime="08:00"
-  onApply={handleApply}
-/>
+### `resolveTimeConfig`
+
+解析 `TimePicker` / `TimeColumnPanel` 配置的纯函数（不含组件逻辑）。接收 `Partial<TimePickerConfig>` 与 `TimeFormat`，返回已解析边界、校验步长并将 `defaultTime` 对齐到步长网格的 `ResolvedTimeConfig`。
+
+```ts
+import { resolveTimeConfig } from "@/components/common/time-utils";
+
+const config = resolveTimeConfig(
+  { min: "08:00", max: "18:00", minuteStep: 15, quickOptions: ["09:00", "12:00"] },
+  "HH:mm",
+);
 ```
 
-除 `timeFormat` 使用大写 `"HH:mm"` / `"HH:mm:ss"` 外，其余与 `DateTimePicker` 对齐。
+`TimePickerConfig` 结构：
+
+| 字段 | 类型 | 说明 |
+| ----- | ---- | ---- |
+| `min` / `max` | `string` | 含边界的上下界，格式为 `timeFormat` |
+| `minuteStep` / `secondStep` | `number` | 取值之一为 `[1,2,3,4,5,6,10,12,15,20,30]`（60 的因数）；非法值将告警并退回 1 |
+| `defaultTime` | `string` | 首次打开时预填；自动向上对齐到步长网格 |
+| `quickOptions` | `string[]` | 列上方的快捷按钮；超出范围或不在网格上的项自动禁用 |
+| `clearable` | `boolean` | 页脚是否显示清除（默认 `true`） |
+| `showQuickPick` | `boolean` | 页脚是否显示「现在」（默认 `true`） |
 
 ### `OptionSelect`
 
