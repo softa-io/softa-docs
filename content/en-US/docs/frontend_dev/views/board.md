@@ -5,7 +5,7 @@ Composable Kanban / multi-column board view with:
 - metadata-driven card rendering via `RecordContext` (delegated to `ModelCardItem`)
 - one-shot main query with **client-side grouping**
 - per-column count + per-column "Load more"
-- **two column-source modes**: static enum field, or dynamic lookup from another model
+- **metadata-driven column source**: `Option` field → option-set; `ManyToOne` / `OneToOne` field → related model
 - compound-component slot system shared with `ModelCard` (Header / body / Footer / Action)
 
 ## Related Docs
@@ -13,7 +13,9 @@ Composable Kanban / multi-column board view with:
 - [ModelCard](./card) — card grid view (shares card item rendering, slot layout, action system)
 - [ModelTable](./table) — tabular view; pair Board with Table via `<Tabs>` for power-user fallback
 
-## Quick Start — Enum form (static columns)
+## Quick Start
+
+The only required `groupBy` field is `field` — the record field the board groups by. The board reads its metadata to decide where the columns come from.
 
 ```tsx
 import { Field } from "@/components/fields";
@@ -24,15 +26,7 @@ export default function VersionsPage() {
     <ModelBoard
       modelName="DesignAppVersion"
       orders={["updatedTime", "DESC"]}
-      groupBy={{
-        type: "enum",
-        field: "status",
-        columns: [
-          { value: "Draft", label: "Draft" },
-          { value: "Sealed", label: "Sealed" },
-          { value: "Frozen", label: "Frozen" },
-        ],
-      }}
+      groupBy={{ field: "status" }}
     >
       <ModelBoard.Header>
         <Field fieldName="name" />
@@ -44,24 +38,28 @@ export default function VersionsPage() {
 }
 ```
 
-Each column corresponds to one `value` in `groupBy.columns`. Records whose
-`groupBy.field` value is not in the listed values are dropped.
+`status` is an `Option` field, so the board fetches its option-set and renders one column per item, in the option-set's own order.
 
-## Quick Start — Lookup form (dynamic columns)
+## Field metadata drives column source
+
+| `metaField.fieldType`       | Column source                                     | Column id          | Column label                                  | Match predicate                                |
+| --------------------------- | ------------------------------------------------- | ------------------ | --------------------------------------------- | ---------------------------------------------- |
+| `Option`                    | `useOptionSet(metaField.optionSetCode)`           | `item.itemCode`    | `item.itemName`                               | `getOptionCode(record[field]) === itemCode`    |
+| `ManyToOne` / `OneToOne`    | `searchList(metaField.relatedModel)`              | `record.id`        | `record[metaField.relatedField ?? "name"]`    | `getModelRefId(record[field]) === id`          |
+| Anything else               | Throws at render. Pass `groupBy.columns` to opt out. | —              | —                                             | —                                              |
+
+`groupBy.sourceFilters` overrides `metaField.filters` for lookup mode. The active workspace filter is always AND-merged on top so the source is scoped to the current app/portfolio.
+
+## Lookup-mode example with custom column header
 
 ```tsx
 <ModelBoard
   modelName="DesignDeployment"
-  initialParams={{ filters: ["appId", "=", appId] }}
   orders={["createdTime", "DESC"]}
   groupBy={{
-    type: "lookup",
-    sourceModel: "DesignAppEnv",
-    sourceFilters: [["appId", "=", appId], "AND", ["active", "=", true]],
+    field: "envId",
+    sourceFilters: ["active", "=", true],
     sourceOrders: ["sequence", "ASC"],
-    columnIdField: "id",         // env.id → column id
-    columnLabelField: "name",    // env.name → column header text
-    cardFilterField: "envId",    // deployment.envId → which column
     columnHeaderRender: (env) => <EnvColumnHeader env={env} />,
   }}
 >
@@ -73,23 +71,22 @@ Each column corresponds to one `value` in `groupBy.columns`. Records whose
 </ModelBoard>
 ```
 
-The board first queries `sourceModel` to derive columns, then runs the main
-query. Each column's filter is `[cardFilterField, "=", columnId]`.
+`envId` is a `ManyToOne` to `DesignAppEnv`; the board fetches the related envs and uses each as a column. `columnHeaderRender` receives the source record (option item in Option mode).
 
 ## Data flow
 
-1. Resolve columns:
-   - **enum**: synchronously from props.
-   - **lookup**: fetch `sourceModel` records via `searchList` (`limitSize = 200`) and map each to a column.
-2. **Main bulk fetch** (`searchList`, one call): `limitSize = initialFetchSize` (default 100), filters/orders from props plus the search term. No pagination — bulk read for client-side grouping.
-3. **Group in memory**: each main-batch record falls into the column whose `matches` predicate returns true.
-4. **Per-column count** (one call total): a single `count` call with `groupBy: [groupByField]` returns counts for every column at once. The board parses array-of-rows or record-map response shapes.
-5. **Load more** (`searchPage`, on demand): when a column's `count > rendered`, a "Load more" button appears. Click runs a paged `searchPage` request scoped to that column starting just past the main batch boundary (`floor(baseInColumn / loadMorePageSize) + 1`). Records are appended after deduplicating by id against both the main batch and prior expansions.
+1. Resolve metadata: `useMetadataQuery(modelName)` → look up `metaField` for `groupBy.field`.
+2. Resolve columns from the field's metadata:
+   - **Option**: fetch option-set via `useOptionSet`. Items are returned in the set's own order.
+   - **Lookup**: fetch related-model records via `searchList` (`limitSize = 200`).
+3. **Main bulk fetch** (`searchList`, one call): `limitSize = initialFetchSize` (default 100), filters/orders from props plus the search term. No pagination — bulk read for client-side grouping. Gated on column readiness.
+4. **Group in memory**: each main-batch record falls into the column whose `matches` predicate returns true.
+5. **Per-column count** (one call total): a single `count` call with `groupBy: [field]` returns counts for every column at once. The board parses array-of-rows or record-map response shapes.
+6. **Load more** (`searchPage`, on demand): when a column's `count > rendered`, a "Load more" button appears. Click runs a paged `searchPage` request scoped to that column starting just past the main batch boundary (`floor(baseInColumn / loadMorePageSize) + 1`). Records are appended after deduplicating by id against both the main batch and prior expansions.
 
 ## Slot system
 
-`ModelBoard.Header`, top-level body children, `ModelBoard.Footer`, and `Action`
-elements follow the same rules as `ModelCard`. See the [ModelCard README](./card#card-slot-declaration) for full details. In short:
+`ModelBoard.Header`, top-level body children, `ModelBoard.Footer`, and `Action` elements follow the same rules as `ModelCard`. See the [ModelCard README](./card#card-slot-declaration) for full details. In short:
 
 | Where defined                | Renders at                                | Effective placement |
 | ---------------------------- | ----------------------------------------- | ------------------- |
@@ -97,8 +94,7 @@ elements follow the same rules as `ModelCard`. See the [ModelCard README](./card
 | Top-level body child         | CardContent right side                    | `"inline"`          |
 | Either, with `placement="more"` | `...` dropdown (merged with Delete)    | `"more"`            |
 
-`Action` filtering by record condition (`hidden`, `disabled`) works the same as
-in `ModelCard` / `ModelTable`.
+`Action` filtering by record condition (`hidden`, `disabled`) works the same as in `ModelCard` / `ModelTable`.
 
 ## Click navigation
 
@@ -107,13 +103,11 @@ Click navigation is constrained to the current route subtree:
 1. `linkTo="x"` (or inherited from `<MultiView.Tab>`) → `${pathname}/x/{id}?mode=read`
 2. Default — `${pathname}/{id}?mode=read` (current directory's `[id]/page.tsx`)
 
-Free-form click handlers and cross-route URLs are intentionally not supported.
-This keeps every record click within the current route's permission scope.
+Free-form click handlers and cross-route URLs are intentionally not supported. This keeps every record click within the current route's permission scope.
 
 ## Pairing with Table view
 
-`ModelBoard` does not include a built-in view toggle. Pages that want a "Board /
-Table" switch wrap both views in a `<Tabs>`:
+`ModelBoard` does not include a built-in view toggle. Pages that want a "Board / Table" switch wrap both views in a `<Tabs>`:
 
 ```tsx
 <Tabs defaultValue="board">
@@ -135,7 +129,7 @@ Table" switch wrap both views in a `<Tabs>`:
 | Prop               | Type                                                         | Required | Default | Notes                                                                                              |
 | ------------------ | ------------------------------------------------------------ | -------- | ------- | -------------------------------------------------------------------------------------------------- |
 | `modelName`        | `string`                                                     | Yes      | -       | Model name for metadata and data API.                                                              |
-| `groupBy`          | `EnumGroupBy \| LookupGroupBy`                               | Yes      | -       | Column source.                                                                                     |
+| `groupBy`          | `ModelBoardGroupBy`                                          | Yes      | -       | At minimum `{ field }`. See [Field metadata drives column source](#field-metadata-drives-column-source). |
 | `labelName`        | `string`                                                     | No       | -       | Page title; defaults to `metaModel.labelName`.                                                     |
 | `description`      | `string`                                                     | No       | -       | Subtitle; defaults to `metaModel.description`.                                                     |
 | `orders`           | `OrderCondition`                                             | No       | -       | Recommended default sort. Wins over `initialParams.orders` and `MultiView.Tab.orders` (context).   |
@@ -145,12 +139,22 @@ Table" switch wrap both views in a `<Tabs>`:
 | `enableDelete`     | `boolean`                                                    | No       | `false` | Show `...` delete action on each card.                                                             |
 | `initialFetchSize` | `number`                                                     | No       | `100`   | Main query `pageSize`. Records are grouped client-side.                                            |
 | `loadMorePageSize` | `number`                                                     | No       | `20`    | Page size for `Load more` requests.                                                                |
-| `disableLoadMore`  | `boolean`                                                    | No       | `false` | Hide the per-column "Load more" button even when `count > rendered`. Use when the backend cannot paginate by `cardFilterField`; column count still reflects the true total. |
+| `disableLoadMore`  | `boolean`                                                    | No       | `false` | Hide the per-column "Load more" button even when `count > rendered`. Use when the backend cannot paginate by `groupBy.field`; column count still reflects the true total. |
 | `enableDragDrop`   | `boolean`                                                    | No       | `false` | Enable drag-and-drop reassignment between columns. See [Drag-and-drop column reassignment](#drag-and-drop-column-reassignment). |
 | `onCardMove`       | `(ctx: CardMoveContext) => void \| Promise<void>`            | No       | -       | Custom move handler invoked instead of the default `updateOne` when a card is dropped on a different column. |
 | `linkTo`           | `string`                                                     | No       | -       | Subdirectory name (single segment) for click navigation. Goes to `${pathname}/${linkTo}/${id}?mode=read`. Omit for default `${pathname}/${id}?mode=read`. |
 | `sidecars`         | `SidecarConfig[]`                                            | No       | -       | Auxiliary records joined to each card by primary id. Adds a Refresh button to the toolbar that invalidates the main query and every sidecar model. See [ModelSidecar](../components/model-sidecar). |
 | `children`         | `ReactNode`                                                  | No       | -       | `ModelBoard.Header`, `Field` / any node, `ModelBoard.Footer`, `Action` elements.                   |
+
+## `groupBy` props
+
+| Prop                  | Type                                              | Required | Default                                | Notes |
+| --------------------- | ------------------------------------------------- | -------- | -------------------------------------- | ----- |
+| `field`               | `string`                                          | Yes      | -                                      | Record field to group by. Its metadata picks the column source. |
+| `sourceFilters`       | `FilterCondition`                                 | No       | `metaField.filters` if present         | Lookup mode only. AND-merged with workspace filter. |
+| `sourceOrders`        | `OrderCondition`                                  | No       | -                                      | Lookup mode only. Option mode trusts the option-set's own order. |
+| `columns`             | `{ value, label }[]`                              | No       | derived from metadata                  | Bypass metadata-driven resolution. Useful for narrowing or relabelling. |
+| `columnHeaderRender`  | `(source: Record<string, unknown>) => ReactNode`  | No       | -                                      | Receives the option item (Option mode) or source record (lookup mode). Not invoked when `columns` is passed explicitly. |
 
 ## When to use Board vs Card vs Table
 
@@ -162,20 +166,15 @@ Table" switch wrap both views in a `<Tabs>`:
 
 ## Drag-and-drop column reassignment
 
-Set `enableDragDrop` to allow cards to be dragged between columns. By default,
-on drop the board calls:
+Set `enableDragDrop` to allow cards to be dragged between columns. By default, on drop the board calls:
 
 ```ts
-modelService.updateOne(modelName, { id, ...toColumn.movePatch })
+modelService.updateOne(modelName, { id, [groupBy.field]: column.id })
 ```
 
-where `movePatch` re-routes the record to the new column:
+`column.id` is the option `itemCode` (Option mode) or the related record's primary key (lookup mode).
 
-- enum form: `{ [groupBy.field]: column.value }` — the option-set code string
-- lookup form: `{ [cardFilterField]: column.id }` — the new lookup target id
-
-For business actions that need server-side validation (e.g. version state
-machine `Draft → Sealed`), supply a custom `onCardMove` handler instead:
+For business actions that need server-side validation (e.g. version state machine `Draft → Sealed`), supply a custom `onCardMove` handler instead:
 
 ```tsx
 <ModelBoard
@@ -189,18 +188,17 @@ machine `Draft → Sealed`), supply a custom `onCardMove` handler instead:
     }
     throw new Error(`Move from ${fromColumnId} to ${toColumnId} is not allowed`);
   }}
-  groupBy={{ ... }}
+  groupBy={{ field: "status" }}
 >
   ...
 </ModelBoard>
 ```
 
-After a successful move the board invalidates queries under `[modelName, ...]`
-so the main list, grouped count and any per-column expansions all re-fetch.
+After a successful move the board invalidates queries under `[modelName, ...]` so the main list, grouped count and any per-column expansions all re-fetch.
 
 ## Limitations (v1)
 
 - No filter / sort dialogs in the toolbar (use the paired `ModelTable` view for those).
 - No tabs or side panel filters.
-- Lookup source is fetched once with `limitSize = 200`; not paginated. If you have more than 200 candidate columns, pre-filter via `sourceFilters`.
+- Lookup source is fetched once with `limitSize = 200`; not paginated. If you have more than 200 candidate columns, narrow via `groupBy.sourceFilters`.
 - Grouped count assumes the backend honours `count({ filters, groupBy: [field] })` and returns either a `{value: count}` map or `[{field: value, count: N}, ...]` rows.
