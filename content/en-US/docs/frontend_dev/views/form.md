@@ -1043,6 +1043,29 @@ Inside `ModelForm` children, use `useModelFormContext()` to access:
 - `onCancel()`
 - `metaModel`, `id`
 
+## Cascaded Field Path
+
+`<Field fieldName="lastDeploymentId.deployStatus" />` (dot-notation) reads a related record's field and renders it read-only. The form plan walker collects every cascaded path declared in the body, calls `POST /metadata/resolveCascadedPaths` once to resolve all leaf metaFields, folds the matching SubQueries into `getById`, and exposes the resolutions to `<Field>` via `CascadedResolutionsProvider`.
+
+```tsx
+<ModelForm modelName="AppEnv" recordId={envId}>
+  <Field fieldName="name" />
+  <Field fieldName="lastDeploymentId" />                {/* normal ManyToOne */}
+  <Field fieldName="lastDeploymentId.deployStatus" />   {/* cascaded — readonly */}
+  <Field fieldName="lastDeploymentId.finishedTime" />   {/* shares base, auto-merged */}
+  <Field fieldName="ownerId.departmentId.name" />       {/* depth-3 */}
+</ModelForm>
+```
+
+Notes:
+
+- always read-only — never registers with RHF, never appears in `formState.dirtyFields`
+- effective metadata (fieldType / widgetType / labelName / optionSetCode) comes from the **leaf** field; `props.label` / `props.widgetType` still override
+- works inside `ModelSideForm` automatically (it composes `ModelForm`)
+- nested cascaded paths inside `formView` callbacks (depth > 0) are not yet resolved — dev `console.warn` and "-" placeholder
+
+Full reference & semantics: [Cascaded Field Path](../fields/fields#cascaded-field-path-display) in the fields README.
+
 ## Built-in Behavior
 
 - Create/edit mode defaults and reset handling.

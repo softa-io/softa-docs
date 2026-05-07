@@ -123,6 +123,22 @@ type ModelTableRowData = { id: string };
 
 更详细的字段值契约请见 [Field & Widget](../fields/fields)。
 
+### 级联列（关联字段）
+
+列可通过在 `fieldName` 中使用点号记法，从关联（`ManyToOne` / `OneToOne`）记录拉取值：
+
+```tsx
+<ModelTable modelName="AppEnv">
+  <Field fieldName="name" />
+  <Field fieldName="lastDeploymentId.deployStatus" widgetType="StatusIcon" />
+  <Field fieldName="ownerId.email" />
+</ModelTable>
+```
+
+列表查询控制器会自动将匹配的 SubQuery 折叠进 `searchPage` —— 展示的级联路径无需手搓 `initialParams.subQueries`。级联列始终只读（不支持内联编辑），渲染使用叶子字段的元数据（`fieldType` / `widgetType` / `labelName`）。手写的 `initialParams.subQueries` 仍会与自动收集的结果合并，供进阶场景使用。
+
+完整语义见字段 README 中的 [级联字段路径](../fields/fields#cascaded-field-path-display)。
+
 ## 文件与图片列
 
 表格侧文件渲染由 API 值驱动，而不是由表单 widget 状态驱动：

@@ -84,6 +84,20 @@ export default function VersionsPage() {
 5. **Per-column count** (one call total): a single `count` call with `groupBy: [field]` returns counts for every column at once. The board parses array-of-rows or record-map response shapes.
 6. **Load more** (`searchPage`, on demand): when a column's `count > rendered`, a "Load more" button appears. Click runs a paged `searchPage` request scoped to that column starting just past the main batch boundary (`floor(baseInColumn / loadMorePageSize) + 1`). Records are appended after deduplicating by id against both the main batch and prior expansions.
 
+## Cascaded fields in card body
+
+Body slots accept dot-notation `<Field>` declarations to pull related-record fields onto each card:
+
+```tsx
+<ModelBoard modelName="AppEnv" groupBy={{ field: "envType" }}>
+  <Field fieldName="name" />
+  <Field fieldName="lastDeploymentId.deployStatus" widgetType="StatusIcon" />
+  <Field fieldName="lastDeploymentId.finishedTime" widgetType="Relative" />
+</ModelBoard>
+```
+
+The board walker collects every cascaded path declared at the top level, calls `POST /metadata/resolveCascadedPaths` once per board mount, folds the matching SubQuery into the bulk `searchList` request, and exposes the resolutions to `<Field>` for display rendering. Cascaded paths inside a custom function component (e.g. a sub-component nested in body) are NOT visible to the walker — declare them at the top level. Full reference: [Cascaded Field Path](../fields/fields#cascaded-field-path-display).
+
 ## Slot system
 
 `ModelBoard.Header`, top-level body children, `ModelBoard.Footer`, and `Action` elements follow the same rules as `ModelCard`. See the [ModelCard README](./card#card-slot-declaration) for full details. In short:

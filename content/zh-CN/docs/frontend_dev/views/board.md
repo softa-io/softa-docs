@@ -84,6 +84,20 @@ export default function VersionsPage() {
 5. **按列计数**（总计一次调用）：单次 `count` 且 `groupBy: [field]`，一次性返回各列数量。看板兼容行数组或记录映射两种响应形状。
 6. **加载更多**（`searchPage`，按需）：当某列 `count > 已渲染` 时出现「加载更多」按钮。点击后对该列发起分页 `searchPage`，起始位置紧接主批次边界（`floor(baseInColumn / loadMorePageSize) + 1`）。结果在与主批次及历次扩展按 id 去重后追加。
 
+## 卡片正文中的级联字段
+
+正文插槽支持用点号记法声明 `<Field>`，以在每张卡片上拉取关联记录的字段：
+
+```tsx
+<ModelBoard modelName="AppEnv" groupBy={{ field: "envType" }}>
+  <Field fieldName="name" />
+  <Field fieldName="lastDeploymentId.deployStatus" widgetType="StatusIcon" />
+  <Field fieldName="lastDeploymentId.finishedTime" widgetType="Relative" />
+</ModelBoard>
+```
+
+看板遍历器会收集顶层声明的每一条级联路径，在每次看板挂载时对 `POST /metadata/resolveCascadedPaths` 调用一次，将匹配的 SubQuery 折叠进主批量 `searchList` 请求，并通过解析结果供 `<Field>` 展示。自定义函数组件内的级联路径（例如嵌套在正文中的子组件）对遍历器**不可见** —— 请在**顶层**声明。完整说明见 [级联字段路径](../fields/fields#cascaded-field-path-display)。
+
 ## 插槽系统
 
 `ModelBoard.Header`、顶层正文子节点、`ModelBoard.Footer` 与 `Action` 的用法与 `ModelCard` 相同。详见 [ModelCard 文档](./card#卡片插槽声明)。简言之：

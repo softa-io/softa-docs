@@ -827,12 +827,10 @@ export default function UserProfileFormPage() {
 **带展示模式子节点的 FormHeader：**
 
 ```tsx
-import { Group } from "@/components/fields/extend/Group";
-
 <FormHeader>
   <Group separator="·">
-    <Field fieldName="employeeCode" />
-    <Field fieldName="departmentName" />
+    <Field name="employeeCode" />
+    <Field name="departmentName" />
   </Group>
 </FormHeader>
 ```
@@ -1044,6 +1042,29 @@ function UnlockDialog() {
 - `form`（`react-hook-form` 实例）
 - `onCancel()`
 - `metaModel`、`id`
+
+## 级联字段路径 {#cascaded-field-path}
+
+`<Field fieldName="lastDeploymentId.deployStatus" />`（点号记法）读取关联记录上的字段并以只读展示。表单规划遍历器会收集正文中声明的每条级联路径，调用一次 `POST /metadata/resolveCascadedPaths` 解析全部叶子 `metaField`，将匹配的 SubQuery 折叠进 `getById`，并通过 `CascadedResolutionsProvider` 向 `<Field>` 暴露解析结果。
+
+```tsx
+<ModelForm modelName="AppEnv" recordId={envId}>
+  <Field fieldName="name" />
+  <Field fieldName="lastDeploymentId" />                {/* 普通 ManyToOne */}
+  <Field fieldName="lastDeploymentId.deployStatus" />   {/* 级联 — 只读 */}
+  <Field fieldName="lastDeploymentId.finishedTime" />   {/* 共享基点，自动合并 */}
+  <Field fieldName="ownerId.departmentId.name" />       {/* 三级深度 */}
+</ModelForm>
+```
+
+说明：
+
+- 始终只读 —— 不向 RHF 注册，不会出现在 `formState.dirtyFields`
+- 生效元数据（fieldType / widgetType / labelName / optionSetCode）来自**叶子**字段；`props.label` / `props.widgetType` 仍可覆盖
+- 在 `ModelSideForm` 中同样生效（其内部组合了 `ModelForm`）
+- `formView` 回调内嵌套的级联路径（深度 > 0）尚未解析 —— 开发环境 `console.warn`，展示占位 `"-"`
+
+完整语义见字段 README 中的 [级联字段路径](../fields/fields#cascaded-field-path-display)。
 
 ## 内置行为
 

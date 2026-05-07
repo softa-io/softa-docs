@@ -486,9 +486,48 @@ Scope notes:
 - in `ModelForm`, `with: "all"` uses current form submit shape; registered top-level relation fields use relation patch payloads instead of raw UI rows.
 - in `ModelTable` / `RelationTable` inline edit, `values` and `with: "all"` are the current row only, not the whole table or parent form.
 
-## Cascaded Fields
+## Cascaded Field Path (display)
 
-`MetaField.cascadedField` enables implicit auto-fill in edit scopes without requiring the source field to declare `Field.onChange`.
+Dot-notation in `fieldName` reads a field off a related record (through `ManyToOne` / `OneToOne`) and renders it read-only — no manual SubQuery, no extra display widget code, no hand-rolled hook.
+
+```tsx
+{/* Renders DesignDeployment.deployStatus on each AppEnv card */}
+<Field fieldName="lastDeploymentId.deployStatus" widgetType="StatusIcon" />
+
+{/* Depth 3: AppEnv → Owner → Department.name */}
+<Field fieldName="ownerId.departmentId.name" />
+```
+
+Behavior:
+
+- always read-only — never registers with react-hook-form, never appears in `formState.dirtyFields`, doesn't participate in validation
+- effective `metaField` is the **leaf** field on the deepest model (e.g. `DesignDeployment.deployStatus`); `fieldType` / `widgetType` / `optionSetCode` / `labelName` all come from the leaf, and props on `<Field>` (`label` / `widgetType` / `hideLabel` / `className`) override as usual
+- supported in `ModelForm`, `ModelSideForm`, `ModelTable`, `ModelBoard`, `ModelCard` — the host walker auto-folds the matching SubQuery into its data request and the `CascadedResolutionsProvider` injects per-path leaf metadata
+- intermediate `null` is rendered as the leaf type's empty placeholder (same as a plain null field), with no special tombstone for "deleted reference"
+- only traverses `*-to-One` relations; OneToMany / ManyToMany in the path is rejected by the backend (`TRAVERSE_TO_MANY`) and the field falls back to a "-" placeholder + dev `console.error`
+- maximum depth is enforced by the backend; the frontend doesn't pre-validate
+
+Imperative read for paths that need custom rendering / fallback:
+
+```tsx
+import { getValueAtPath } from "@/utils/object-path";
+
+function HealthDot() {
+  const { record } = useRecordContext();
+  const deployStatus = getValueAtPath(record, "lastDeploymentId.deployStatus");
+  // ...derive UI from deployStatus
+}
+```
+
+The `<Field fieldName="lastDeploymentId.deployStatus">` declaration somewhere in the host view's JSX is what registers the path with the walker so the SubQuery is folded — `getValueAtPath` is just the typed accessor for the resulting nested object.
+
+Limitations:
+
+- cascaded paths nested **inside `formView` callbacks** (depth > 0) are not yet resolved — the walker logs a dev `console.warn` and the field renders the empty placeholder. Use cascaded paths at the top-level form / list scope.
+
+## Cascaded Field Auto-Fill (write)
+
+`MetaField.cascadedField` enables implicit auto-fill in edit scopes without requiring the source field to declare `Field.onChange`. **This is a different mechanism from "Cascaded Field Path" above** — that one is read-side / display, this one is write-side / value-propagation on selection.
 
 Example:
 

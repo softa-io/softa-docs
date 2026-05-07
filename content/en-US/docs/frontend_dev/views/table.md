@@ -123,6 +123,22 @@ Table declaration notes:
 
 Detailed field value contracts are documented in [Field & Widget](../fields/fields).
 
+### Cascaded columns (related fields)
+
+A column can pull a value from a related (`ManyToOne` / `OneToOne`) record using dot-notation in `fieldName`:
+
+```tsx
+<ModelTable modelName="AppEnv">
+  <Field fieldName="name" />
+  <Field fieldName="lastDeploymentId.deployStatus" widgetType="StatusIcon" />
+  <Field fieldName="ownerId.email" />
+</ModelTable>
+```
+
+The list query controller folds the matching SubQuery into `searchPage` automatically — no need to hand-roll `initialParams.subQueries` for the displayed paths. Cascaded columns are always read-only (no inline-edit support) and use the leaf field's metadata (`fieldType` / `widgetType` / `labelName`) for rendering. Hand-rolled `initialParams.subQueries` still merges with the auto-collected ones for advanced cases.
+
+Full reference & semantics: [Cascaded Field Path](../fields/fields#cascaded-field-path-display) in the fields README.
+
 ## File And Image Columns
 
 Table-side file rendering is driven by API values, not by form widget state:

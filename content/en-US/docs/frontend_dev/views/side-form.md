@@ -57,6 +57,8 @@ export default function SettingPage() {
 6. If the form has **unsaved changes**, a confirmation dialog asks whether to discard before switching.
 7. When no record is selected, a placeholder message is shown.
 
+Cascaded `<Field fieldName="a.b">` declarations work inside `ModelSideForm` automatically because the embedded `ModelForm` handles the walker / resolve / provider plumbing — see [Cascaded Field Path in ModelForm](./form#cascaded-field-path).
+
 ## Props
 
 | Prop                   | Type        | Required | Default                                                   | Notes                                                                                                   |

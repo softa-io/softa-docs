@@ -484,11 +484,48 @@ POST /<modelName>/onChange/<fieldName>
 - 在 `ModelForm` 中，`with: "all"` 使用当前表单的提交形态；已注册的顶层关联字段会序列化为关联 patch payload，而不是原始 UI 行
 - 在 `ModelTable` / `RelationTable` 内联编辑中，`values` 和 `with: "all"` 都只针对当前行，而不是整个表格或父表单
 
-## 级联字段
+## 级联字段路径（展示） {#cascaded-field-path-display}
 
-`MetaField.cascadedField` 可以在编辑作用域中启用隐式自动回填，而无需源字段显式声明 `Field.onChange`。
+在 `fieldName` 中使用点号记法，可从关联记录（经 `ManyToOne` / `OneToOne`）读取字段并以只读展示 —— 无需手写 SubQuery、无需额外展示 widget、无需自研 hook。
 
-示例：
+```tsx
+{/* 在每条 AppEnv 卡片上渲染 DesignDeployment.deployStatus */}
+<Field fieldName="lastDeploymentId.deployStatus" widgetType="StatusIcon" />
+
+{/* 深度 3：AppEnv → Owner → Department.name */}
+<Field fieldName="ownerId.departmentId.name" />
+```
+
+行为：
+
+- 始终只读 —— 不向 react-hook-form 注册，不会出现在 `formState.dirtyFields`，不参与校验
+- 生效的 `metaField` 是**最深层**模型上的**叶子**字段（例如 `DesignDeployment.deployStatus`）；`fieldType` / `widgetType` / `optionSetCode` / `labelName` 均来自叶子，`<Field>` 上的 props（`label` / `widgetType` / `hideLabel` / `className`）照常覆盖
+- 支持于 `ModelForm`、`ModelSideForm`、`ModelTable`、`ModelBoard`、`ModelCard` —— 宿主遍历器自动将匹配的 SubQuery 折叠进数据请求，`CascadedResolutionsProvider` 为每条路径注入叶子元数据
+- 中间为 `null` 时按叶子类型的空占位渲染（与普通 null 字段一致），不为「已删除引用」单独渲染墓碑
+- 路径仅穿越 `*-to-One` 关联；路径中出现 OneToMany / ManyToMany 会被后端拒绝（`TRAVERSE_TO_MANY`），字段回退为 `"-"` 占位 + 开发态 `console.error`
+- 最大深度由后端约束；前端不做预校验
+
+需要自定义渲染 / 回退时可命令式读取路径：
+
+```tsx
+import { getValueAtPath } from "@/utils/object-path";
+
+function HealthDot() {
+  const { record } = useRecordContext();
+  const deployStatus = getValueAtPath(record, "lastDeploymentId.deployStatus");
+  // ... 根据 deployStatus 派生 UI
+}
+```
+
+在宿主视图 JSX 某处声明 `<Field fieldName="lastDeploymentId.deployStatus">` 才会向遍历器注册路径以便折叠 SubQuery —— `getValueAtPath` 只是对嵌套对象结果的类型化访问。
+
+限制：
+
+- 嵌套在 **`formView` 回调内部**的级联路径（深度 > 0）尚未解析 —— 遍历器会打开发态 `console.warn`，字段渲染空占位。请将级联路径放在顶层表单 / 列表作用域。
+
+## 级联字段自动回填（写入）
+
+`MetaField.cascadedField` 可以在编辑作用域中启用隐式自动回填，而无需源字段显式声明 `Field.onChange`。**这与上文「级联字段路径（展示）」不同** —— 前者是读侧 / 展示，本条是写侧 / 选型后的值传播。
 
 ```ts
 deptId.cascadedField = "employeeId.departmentId";

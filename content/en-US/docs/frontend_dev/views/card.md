@@ -69,6 +69,20 @@ Example with all slots:
 </ModelCard>
 ```
 
+### Cascaded fields
+
+Slots accept dot-notation `<Field>` declarations to read fields off related records:
+
+```tsx
+<ModelCard modelName="AppEnv">
+  <Field fieldName="name" />
+  <Field fieldName="lastDeploymentId.deployStatus" widgetType="StatusIcon" />
+  <Field fieldName="ownerId.email" />
+</ModelCard>
+```
+
+The card walker traverses all three slots (header / body / footer), folds the auto-collected SubQuery into the list query, and resolves leaf metaFields via `POST /metadata/resolveCascadedPaths`. Cascaded paths inside a custom function component (instead of as direct slot children) are invisible to the walker — declare them inline. Full reference: [Cascaded Field Path](../fields/fields#cascaded-field-path-display).
+
 ## Actions
 
 `ModelCard` supports `Action` components for per-card operations. Placement is inferred from **where the `Action` is defined** in the JSX tree — not from the `placement` prop.

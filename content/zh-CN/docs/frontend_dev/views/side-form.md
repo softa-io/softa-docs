@@ -57,6 +57,8 @@ export default function SettingPage() {
 6. 若表单存在**未保存变更**，切换前会弹出确认对话框。
 7. 未选中任何记录时显示占位提示。
 
+级联声明 `<Field fieldName="a.b">` 在 `ModelSideForm` 内可自动工作，因为内嵌的 `ModelForm` 负责遍历器 / 解析 / Provider 管线 —— 参见 [ModelForm 中的级联字段路径](./form#cascaded-field-path)。
+
 ## Props
 
 | Prop                   | 类型        | 必填 | 默认值 | 说明 |
@@ -194,6 +196,7 @@ function WorkItemListItem() {
   <SideCard
     modelName="DesignApp"
     filterField="appId"
+    sortField="appName"
     searchable
   >
     <SideCard.Header>

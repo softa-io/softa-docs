@@ -69,6 +69,20 @@ export default function DesignAppPage() {
 </ModelCard>
 ```
 
+### 级联字段
+
+各插槽支持用点号记法声明 `<Field>`，以读取关联记录上的字段：
+
+```tsx
+<ModelCard modelName="AppEnv">
+  <Field fieldName="name" />
+  <Field fieldName="lastDeploymentId.deployStatus" widgetType="StatusIcon" />
+  <Field fieldName="ownerId.email" />
+</ModelCard>
+```
+
+卡片遍历器会遍历 header / body / footer 三个插槽，将自动收集的 SubQuery 折叠进列表查询，并通过 `POST /metadata/resolveCascadedPaths` 解析叶子 `metaField`。自定义函数组件内部的级联路径（不作为插槽直接子节点时）对遍历器不可见 —— 请以内联方式声明。完整说明见 [级联字段路径](../fields/fields#cascaded-field-path-display)。
+
 ## 动作
 
 `ModelCard` 支持用 `Action` 做每张卡片的操作。**放置方式由 `Action` 在 JSX 中的定义位置推断**，不依赖 `placement` prop。
