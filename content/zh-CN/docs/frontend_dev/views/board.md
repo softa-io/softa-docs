@@ -136,25 +136,42 @@ export default function VersionsPage() {
 | `filters`          | `FilterCondition`                                            | 否   | -    | 推荐基础筛选；高于 `initialParams.filters` 与 `MultiView.Tab.filters`（上下文）。与工作区、运行时筛选以 AND 合并。见 [优先级说明](./multi-view#filter--order-precedence)。 |
 | `initialParams`    | `QueryParamsWithoutFields`                                   | 否   | -    | 高级查询参数。`pageSize` 与 `fields` 由内部管理；`filters` / `orders` 建议用顶层 props。           |
 | `enableCreate`     | `boolean`                                                    | 否   | `true`  | 工具栏显示新建按钮。                                                                           |
+| `enableColumnCreate` | `boolean`                                                  | 否   | `false` | 在每列标题显示「+」按钮。导航至 `${pathname}/new?{groupBy.field}={column.id}`；接收页表单会预填该列对应字段的值。见 [按列新建](#按列新建)。 |
 | `enableDelete`     | `boolean`                                                    | 否   | `false` | 每张卡片显示 `...` 删除动作。                                                                  |
 | `initialFetchSize` | `number`                                                     | 否   | `100`   | 主查询 `pageSize`。记录在客户端分组。                                                          |
 | `loadMorePageSize` | `number`                                                     | 否   | `20`    | 「加载更多」请求的每页大小。                                                                   |
 | `disableLoadMore`  | `boolean`                                                    | 否   | `false` | 即便 `count > 已渲染` 也隐藏每列「加载更多」。适用于后端无法按 `groupBy.field` 分页时；列计数仍反映真实总数。 |
 | `enableDragDrop`   | `boolean`                                                    | 否   | `false` | 启用列间拖拽改派。见 [拖拽跨列改派](#拖拽跨列改派)。                                           |
-| `onCardMove`       | `(ctx: CardMoveContext) => void \| Promise<void>`            | 否   | -       | 将卡片拖到其他列时的自定义移动处理；提供时替代默认的 `updateOne`。                             |
-| `linkTo`           | `string`                                                     | 否   | -       | 点击导航用的单子目录名（单一路径段）。跳转到 `${pathname}/${linkTo}/${id}?mode=read`。省略则为默认 `${pathname}/${id}?mode=read`。 |
+| `onCardMove`       | `(ctx: CardMoveContext) => void \| Promise<void>`            | 否   | -       | 卡片被放到其他列时调用；提供则替代默认的 `updateOne`。                             |
+| `linkTo`           | `string`                                                     | 否   | -       | 点击导航用的单子目录名（单一路径段）。跳转到 `${pathname}/${linkTo}/${id}?mode=read`。省略则为默认 `${pathname}/{id}?mode=read`。 |
 | `sidecars`         | `SidecarConfig[]`                                            | 否   | -       | 按主键 id 关联合并到每张卡片上的附属记录。工具栏会增加刷新按钮，用于使主查询及每个 sidecar 模型的查询失效。见 [ModelSidecar](../components/model-sidecar)。 |
 | `children`         | `ReactNode`                                                  | 否   | -       | `ModelBoard.Header`、`Field` / 任意节点、`ModelBoard.Footer`、`Action` 等。                      |
 
 ## `groupBy` 相关 Props
 
-| Prop                 | Type                                             | 必填 | 默认                         | 说明 |
-| -------------------- | ------------------------------------------------ | ---- | ---------------------------- | ---- |
-| `field`              | `string`                                         | 是   | -                            | 用于分组的记录字段；其元数据决定列来源。 |
-| `sourceFilters`      | `FilterCondition`                                | 否   | 若有则为 `metaField.filters` | 仅查找模式。与工作区筛选 AND 合并。 |
-| `sourceOrders`       | `OrderCondition`                                 | 否   | -                            | 仅查找模式。Option 模式沿用选项集顺序。 |
-| `columns`            | `{ value, label }[]`                             | 否   | 由元数据推导                 | 绕过元数据解析；用于收窄或改列标题。 |
-| `columnHeaderRender` | `(source: Record<string, unknown>) => ReactNode` | 否   | -                            | 收到 Option 模式下的选项项或查找模式下的来源记录。显式传入 `columns` 时不调用。 |
+| Prop                  | Type                                              | 必填 | 默认                                | 说明 |
+| --------------------- | ------------------------------------------------- | ---- | -------------------------------------- | ----- |
+| `field`               | `string`                                          | 是   | -                                      | 用于分组的记录字段；其元数据决定列来源。 |
+| `sourceFilters`       | `FilterCondition`                                 | 否   | 若有则为 `metaField.filters`         | 仅查找模式。与工作区筛选 AND 合并。 |
+| `sourceOrders`        | `OrderCondition`                                  | 否   | -                                      | 仅查找模式。Option 模式沿用选项集顺序。 |
+| `columns`             | `{ value, label }[]`                              | 否   | 由元数据推导                  | 绕过元数据解析；用于收窄或改列标题。 |
+| `columnHeaderRender`  | `(source: Record<string, unknown>) => ReactNode`  | 否   | -                                      | 收到 Option 模式下的选项项或查找模式下的来源记录。显式传入 `columns` 时不调用。 |
+
+## 按列新建
+
+将 `enableColumnCreate` 设为 `true` 可在每列标题显示「+」按钮。点击后导航至 `${pathname}/new?{groupBy.field}={column.id}`。`ModelForm` 在新建路由上会读取 URL 查询参数，并将与表单字段同名的项合并进默认值：
+
+| `metaField.fieldType`              | 从查询字符串的强制转换 |
+| ---------------------------------- | -------------------------- |
+| `String`, `Option`, `Date`, `DateTime`, `Time` | 原样作为字符串传入      |
+| `Boolean`                          | `value === "true"`         |
+| `Integer`, `Long`, `Double`, `BigDecimal` | `Number(value)`（NaN 则跳过） |
+| `ManyToOne`, `OneToOne`            | `{ id: value }`（展示名由控件在需要时解析） |
+| 其他                              | 忽略                    |
+
+URL 参数优先于 `defaultValues` 与工作区默认值，因此明确的「+ Dev」点击能反映用户意图。编辑路由忽略搜索参数默认值 —— 它们仅在新建模式下生效。
+
+目前为可选能力：状态机类看板（Draft → Sealed → Frozen）通常不需要每列「+」，除非列所代表的类别本身可在该模型下新建（环境类型、负责人等），否则请保持 `enableColumnCreate` 默认为 `false`。
 
 ## 何时选用 Board、Card 与 Table
 

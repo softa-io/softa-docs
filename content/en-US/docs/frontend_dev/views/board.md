@@ -136,6 +136,7 @@ Free-form click handlers and cross-route URLs are intentionally not supported. T
 | `filters`          | `FilterCondition`                                            | No       | -       | Recommended base filter. Wins over `initialParams.filters` and `MultiView.Tab.filters` (context). AND-merged with workspace/runtime filters. See [precedence](./multi-view#filter--order-precedence). |
 | `initialParams`    | `QueryParamsWithoutFields`                                   | No       | -       | Advanced query params. `pageSize` and `fields` are managed internally; for `filters` / `orders`, prefer top-level props. |
 | `enableCreate`     | `boolean`                                                    | No       | `true`  | Show Create button in toolbar.                                                                     |
+| `enableColumnCreate` | `boolean`                                                  | No       | `false` | Show a "+" button in each column header. Navigates to `${pathname}/new?{groupBy.field}={column.id}`; the receiving form pre-fills the column's value. See [Per-column Create](#per-column-create). |
 | `enableDelete`     | `boolean`                                                    | No       | `false` | Show `...` delete action on each card.                                                             |
 | `initialFetchSize` | `number`                                                     | No       | `100`   | Main query `pageSize`. Records are grouped client-side.                                            |
 | `loadMorePageSize` | `number`                                                     | No       | `20`    | Page size for `Load more` requests.                                                                |
@@ -155,6 +156,22 @@ Free-form click handlers and cross-route URLs are intentionally not supported. T
 | `sourceOrders`        | `OrderCondition`                                  | No       | -                                      | Lookup mode only. Option mode trusts the option-set's own order. |
 | `columns`             | `{ value, label }[]`                              | No       | derived from metadata                  | Bypass metadata-driven resolution. Useful for narrowing or relabelling. |
 | `columnHeaderRender`  | `(source: Record<string, unknown>) => ReactNode`  | No       | -                                      | Receives the option item (Option mode) or source record (lookup mode). Not invoked when `columns` is passed explicitly. |
+
+## Per-column Create
+
+Set `enableColumnCreate` to surface a "+" button in each column header. Clicking it navigates to `${pathname}/new?{groupBy.field}={column.id}`. `ModelForm` reads URL query params on the new-mode route and merges any matching field names into the form's default values:
+
+| `metaField.fieldType`              | Coercion from query string |
+| ---------------------------------- | -------------------------- |
+| `String`, `Option`, `Date`, `DateTime`, `Time` | passthrough as string      |
+| `Boolean`                          | `value === "true"`         |
+| `Integer`, `Long`, `Double`, `BigDecimal` | `Number(value)` (skipped if NaN) |
+| `ManyToOne`, `OneToOne`            | `{ id: value }` (display name resolved by the widget when needed) |
+| Other                              | ignored                    |
+
+URL params win over `defaultValues` and workspace defaults so an explicit "+ Dev" click reflects the user's intent. Editing routes ignore search-param defaults — they only apply in new mode.
+
+This is opt-in for now: state-machine boards (Draft → Sealed → Frozen) usually don't want a per-column "+", so leave `enableColumnCreate` at its `false` default unless the columns model genuinely creatable categories (env type, owner, etc.).
 
 ## When to use Board vs Card vs Table
 
