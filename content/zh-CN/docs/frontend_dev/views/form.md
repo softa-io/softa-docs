@@ -959,7 +959,7 @@ import { FormBody, FormTab } from "@/components/views/form/components/FormBody";
 
 | 容器          | 支持的 Action 类型                     | 支持的位置          |
 | ------------- | -------------------------------------- | ------------------- |
-| `FormToolbar` | `default`, `dialog`, `link`, `custom`, `form` | `toolbar`, `more`   |
+| `FormToolbar` | `default`, `dialog`, `link`, `custom` | `toolbar`, `more`   |
 | `FormSection` | `link`, `custom`                       | `header`, `inline`  |
 
 规则：
@@ -1019,7 +1019,6 @@ function UnlockDialog() {
         placement="header"
         icon={ExternalLink}
         href="https://docs.example.com/credentials"
-        target="_blank"
       />
       <Action
         type="custom"
@@ -1055,9 +1054,9 @@ function UnlockDialog() {
   - 表单 dirty 且后台 refetch => 不覆盖当前编辑
 - 元数据解析策略：始终从 `/metadata/getMetaModel` 拉取；首个响应会被 React Query 缓存并复用
 - 元数据驱动的字段 props 由内部字段运行时解析；业务代码应保持在 `Field` 层
-- Cancel 行为：
-  - 编辑模式：`Cancel` 在 dirty 时会确认，随后把表单重置到最新加载数据，并切回只读模式
-  - 只读模式：`Back` 会导航回列表页
+- **Cancel / Back**（按模式与位置区分）：
+  - 编辑 / 创建模式：`Cancel` 在工具栏中位于 `Save` 旁（`FormPrimaryActions`）；dirty 时会确认，随后将表单重置到最新加载快照，并回到只读模式
+  - 只读模式：`Back` 位于页面页头右侧（`FormBackButton`，在 `ModelSideForm` 内隐藏）；导航回列表页
 - Save / Create mutation 处理和 toast 提示
 - 审计查询内置使用 `useGetChangeLogQuery(modelName, id)`，参数为：
   - `pageNumber=1`
@@ -1079,7 +1078,24 @@ function UnlockDialog() {
   - `create`：默认折叠
   - `delete`：仅显示操作信息
 
-## 对话框架构
+## 页面导航（页头返回与上一条 / 下一条）
+
+页头右侧有两个**页面 / 记录级**导航原语（不涉及表单数据本身），让 `FormToolbar` 专注表单生命周期动作：
+
+- **`FormBackButton`**（仅只读模式）— 返回列表。在 `ModelSideForm` 中隐藏；在编辑 / 创建模式中也不显示（等价意图由工具栏的 `Cancel` 处理）。
+- **`FormSiblingNav`** — `‹ index/total ›` 按钮，跳到上一条 / 下一条兄弟记录。
+
+兄弟导航要求用户从**同一模型的兄弟列表视图**（`ModelTable` / `ModelBoard` / `ModelCard`）通过行 / 卡片点击进入：
+
+- 数据源是 `src/components/views/form/hooks/siblingNavStore.ts` 中的模块级快照。列表视图在点击时把当前可见（已排序、服务端分页）的 id 写入快照；`FormSiblingNav` 渲染时读取。
+- 各视图范围：
+  - `ModelTable`：当前页的 id（服务端筛选 + 排序已应用）。
+  - `ModelBoard`：被点击卡片所在列内的 id。
+  - `ModelCard`：当前页的 id。
+- 无快照时隐藏按钮（例如直链打开、整页刷新或不同模型）。在首条 / 末条、提交中或表单 **dirty** 时禁用（避免未保存修改因点击而丢失）。
+- 快照刻意设计为**短命**：仅内存，不写入 URL、sessionStorage 或 React 状态；`router.push` 等客户端路由会保留，整页刷新则清空。
+
+## 对话框
 
 更完整的对话框 API、props 和示例维护在：
 [Dialogs](./dialogs)。

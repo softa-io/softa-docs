@@ -1052,9 +1052,9 @@ Inside `ModelForm` children, use `useModelFormContext()` to access:
   - dirty form + background refetch => do not overwrite current edits
 - Metadata resolution policy: always fetch from `/metadata/getMetaModel`; first response is cached by React Query and reused.
 - Metadata-driven field props are resolved by the internal field runtime; business code should stay on `Field`.
-- Cancel behavior:
-  - edit mode: `Cancel` confirms (when dirty), resets form to latest loaded data, then switches to read-only mode
-  - read mode: `Back` navigates to list page
+- Cancel / Back behavior (split by mode and placement):
+  - edit / create mode: `Cancel` button lives in the toolbar next to `Save` (`FormPrimaryActions`); confirms when dirty, resets to the latest loaded snapshot, returns to read-only mode
+  - read mode: `Back` button lives in the page header right side (`FormBackButton`, hidden inside `ModelSideForm`); navigates to the list page
 - Save/create mutation handling with toasts.
 - Audit query is built in via `useGetChangeLogQuery(modelName, id)` with:
   - `pageNumber=1`
@@ -1075,6 +1075,23 @@ Inside `ModelForm` children, use `useModelFormContext()` to access:
   - `update`: `<=5` expanded, `>5` show first 5 + `Show all fields (N)`
   - `create`: collapsed by default
   - `delete`: operation info only
+
+## Page Navigation (Back + Prev/Next in Header)
+
+The page header right side hosts two navigation primitives that operate at the page/record level (not the form-data level), keeping `FormToolbar` focused on form lifecycle actions:
+
+- `FormBackButton` (read-only mode only) — returns to the list. Hidden in `ModelSideForm` and in edit/create mode (where `Cancel` in the toolbar handles the equivalent intent).
+- `FormSiblingNav` — `‹ index/total ›` buttons that jump to the previous/next sibling record.
+
+Sibling navigation requires that the user arrived via a row/card click in a sibling list view (`ModelTable` / `ModelBoard` / `ModelCard`) of the same model:
+
+- Source of truth is a module-level snapshot at `src/components/views/form/hooks/siblingNavStore.ts`. The list view writes the currently visible (sorted, server-paged) ids into the snapshot at click time; `FormSiblingNav` reads it on render.
+- Scope per view:
+  - `ModelTable`: ids of the current page (server-side filter + sort applied).
+  - `ModelBoard`: ids within the column the clicked card belongs to.
+  - `ModelCard`: ids of the current page.
+- Buttons are hidden when there is no snapshot (e.g. direct URL, page reload, or a different model). They are disabled at the first/last record, while submitting, and while the form is dirty (so unsaved edits never get lost on click).
+- The snapshot is intentionally ephemeral: in-memory only, not persisted to URL, sessionStorage, or React state. It survives client-side route changes (`router.push`) but resets on full reload.
 
 ## Dialog Architecture
 
