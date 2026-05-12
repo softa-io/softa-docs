@@ -15,7 +15,7 @@
 
 | FieldType     | 默认行为                       | 支持的 WidgetType                                                              |
 | ------------- | ------------------------------ | ------------------------------------------------------------------------------- |
-| `String`      | 单行文本输入                   | `URL`, `Email`, `Text`, `RichText`, `TemplateEditor`, `Markdown`, `Code`, `Color`, `yyyy-MM`, `MM-dd`, `CronEditor` |
+| `String`      | 单行文本输入                   | `URL`, `Email`, `Phone`, `Text`, `RichText`, `TemplateEditor`, `Markdown`, `Code`, `Color`, `yyyy-MM`, `MM-dd`, `CronEditor` |
 | `MultiString` | 标签式逗号/回车输入            | -                                                                                 |
 | `Integer`     | 数字输入                       | `Monetary`, `Percentage`, `Slider`                                                |
 | `Long`        | 数字输入                       | `Monetary`, `Percentage`, `Slider`                                                |
@@ -53,6 +53,18 @@
 <Field fieldName="contactEmail" widgetType="Email" />
 <Field fieldName="themeColor" widgetType="Color" />
 ```
+
+### `Phone`
+
+国际电话输入控件。值为单一 E.164 字符串（如 `"+6591234567"`）。组件将国家选择器（国旗 + 国际区号）与国内号码输入组合，在用户输入过程中通过 `libphonenumber-js` 的 `AsYouType` 进行格式化。国家列表、名称与拨号区号由后端 `GET /CountryRegion/listDialCodes` 经 `useDialCodes()` 拉取，使支持的国家与 i18n 文案保持服务端驱动；校验、解析与格式化在本地仍由 `libphonenumber-js` 完成。
+
+粘贴友好：若粘贴内容以 `+` 开头，会重新解析以切换国家选择器并重排国内数字。只读模式下以国际可读格式渲染（例如 `"+65 9123 4567"`）。
+
+```tsx
+<Field fieldName="workPhone" widgetType="Phone" />
+```
+
+值契约：E.164 格式的 `string`（`"+<区号><国内数字>"`），未输入则为空字符串。Schema 层校验建议使用 `@/utils/schema-validators` 中的 `phoneE164` / `phoneE164Optional`。
 
 ### `Text`
 

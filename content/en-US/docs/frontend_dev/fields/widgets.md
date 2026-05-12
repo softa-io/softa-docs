@@ -15,7 +15,7 @@ Related docs:
 
 | FieldType     | Default behavior               | Supported WidgetType                                                              |
 | ------------- | ------------------------------ | --------------------------------------------------------------------------------- |
-| `String`      | single-line input              | `URL`, `Email`, `Text`, `RichText`, `TemplateEditor`, `Markdown`, `Code`, `Color`, `yyyy-MM`, `MM-dd`, `CronEditor` |
+| `String`      | single-line input              | `URL`, `Email`, `Phone`, `Text`, `RichText`, `TemplateEditor`, `Markdown`, `Code`, `Color`, `yyyy-MM`, `MM-dd`, `CronEditor` |
 | `MultiString` | tag-style comma/enter input    | -                                                                                 |
 | `Integer`     | numeric input                  | `Monetary`, `Percentage`, `Slider`                                                |
 | `Long`        | numeric input                  | `Monetary`, `Percentage`, `Slider`                                                |
@@ -53,6 +53,18 @@ Related docs:
 <Field fieldName="contactEmail" widgetType="Email" />
 <Field fieldName="themeColor" widgetType="Color" />
 ```
+
+### `Phone`
+
+International phone input. Stores a single E.164 string (e.g. `"+6591234567"`). The widget composes a country picker (flag + dial code) with a national-number input that formats as the user types via `libphonenumber-js` `AsYouType`. Country list, names, and dial codes are fetched from the backend endpoint `GET /CountryRegion/listDialCodes` via `useDialCodes()` so the supported countries and i18n labels stay server-driven; `libphonenumber-js` handles validation/parsing/formatting locally.
+
+Paste-friendly: pasting a value that begins with `+` re-parses to switch the country picker and reformat the national digits. Read-only mode renders the value in international format (e.g. `"+65 9123 4567"`).
+
+```tsx
+<Field fieldName="workPhone" widgetType="Phone" />
+```
+
+Value contract: E.164 `string` (`"+<dialCode><nationalDigits>"`), or empty string when no number is entered. Schema-level validation should use `phoneE164` / `phoneE164Optional` from `@/utils/schema-validators`.
 
 ### `Text`
 
