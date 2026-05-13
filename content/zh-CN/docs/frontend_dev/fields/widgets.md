@@ -98,8 +98,8 @@
 
 功能：
 
-- **字段占位符** — 以行内标签块插入模型字段。HTML 输出：`<span data-tpl-field="fieldPath" data-tpl-label="label">{{fieldPath}}</span>`。「插入字段」选择器（含关联一层路径与循环表列选项）会排除 `@/types/BaseModel` 中的 `reversedFields`（如 `id`、`tenantId`、`version`、审计时间戳与用户引用等），与其他将这些视为系统托管字段的流程一致。
-- **自定义变量** — 以行内标签块插入一次性变量。HTML 输出：`<span data-tpl-variable="employee_name" data-tpl-label="Employee Name" data-tpl-value-type="String" data-tpl-required="true">{{employee_name}}</span>`
+- **字段占位符** — 将模型字段以行内芯片形式插入。HTML 输出：`<span data-tpl-field="fieldPath" data-tpl-label="label">{{fieldPath}}</span>`。「插入字段」选择器（含关联一层路径与循环表列选项）会排除 `@/types/BaseModel` 中的 `reversedFields`（如 `id`、`tenantId`、`version`、审计时间戳与用户引用等），与其他将这些视为系统托管字段的流程一致。
+- **自定义变量** — 将一次性变量以行内芯片形式插入。HTML 输出：`<span data-tpl-variable="employee_name" data-tpl-label="Employee Name" data-tpl-value-type="String" data-tpl-required="true">{{employee_name}}</span>`
 - **签名槽** — 插入固定尺寸、可内联于文字流中的签名占位。同一行可插入多个签名槽，并排显示，槽之间可留打字间距或文字。默认工具栏预设对应签署方槽位（如 `Sender` 与 `Receiver`）。HTML 输出：`<span data-tpl-signature="Sender" data-tpl-label="Sender Signature"></span>`
 - **关联字段展开** — 将 `ManyToOne` / `OneToOne` 关联展开一层，插入嵌套路径（如 `department.name`）
 - **循环表格** — 将 `OneToMany` / `ManyToMany` 关联以可选列的循环表格插入。HTML 输出：`<table data-tpl-loop="relationField" data-tpl-model="RelatedModel">` 及 `<th data-tpl-field="col">` 表头
@@ -288,7 +288,7 @@
 - **搜索** — 打开 CodeMirror 搜索面板（也可用 `Ctrl/Cmd+F`）
 - **复制** — 将编辑器全文复制到剪贴板
 
-字段只读且值为空（或仅空白）时，编辑器主体显示 `CodeEditorEmptyState`（`shared/code-editor-empty-state.tsx`），使用 UI 说明样式而非空 CodeMirror；默认文案为 “No content to display.”。在 Studio 等自定义宿主中若直接组合该组件，可传入 `emptyMessage`。
+字段只读且值为空（或仅空白）时，编辑器主体显示 `CodeEditorEmptyState`（`shared/code-editor-empty-state.tsx`），采用 UI 说明样式而非空白 CodeMirror；默认文案为 “No content to display.”。若在自定义宿主中直接组合该组件（例如 Studio 预览对话框），可向 `CodeEditorEmptyState` 传入 `emptyMessage`。
 
 预览由 `react-markdown` 渲染，并默认启用 `remark-gfm`。
 
@@ -513,8 +513,8 @@ import { StatusIcon } from "@/components/fields/widgets/option/StatusIconWidget"
 | `max`           | `string`   | `"23:59"` / `"23:59:59"` | 上界（含）。                                                                                                                                                    |
 | `clearable`     | `boolean`  | `true`                   | 是否显示 **Clear**。                                                                                                                                           |
 | `showQuickPick` | `boolean`  | `true`                   | 是否显示 **Now** 快捷按钮（当前时刻不在 `[min, max]` 内时禁用）。                                                                                               |
-| `minuteStep`    | `number`   | `1`                      | 分钟候选粒度。合法取值：`1, 2, 3, 4, 5, 6, 10, 12, 15, 20, 30`。非法值回退为 `1` 并在开发模式告警。                                                               |
-| `secondStep`    | `number`   | `1`                      | 秒候选粒度。仅 `HH:mm:ss` 生效；`HH:mm` 忽略。合法集合同 `minuteStep`。                                                                                           |
+| `minuteStep`    | `number`   | `1`                      | 分钟候选粒度。合法取值：`1, 2, 3, 4, 5, 6, 10, 12, 15, 20, 30, 60`。`60` 表示仅允许 `00`。集合外取值回退为 `1` 并在开发模式告警。                                                               |
+| `secondStep`    | `number`   | `1`                      | 秒候选粒度。仅 `HH:mm:ss` 生效；`HH:mm` 忽略。合法集合与 `minuteStep` 相同；`60` 表示仅允许 `00`。                                                                                           |
 | `defaultTime`   | `string`   | -                        | 字段无值时首次打开的预填值。会按步长网格对齐；若无法落入 `[min, max]` 则回退到 `min`。                                                                             |
 | `quickOptions`  | `string[]` | -                        | 列上方的自定义预设片（例如 `["09:00", "12:00", "18:00"]`）。每项须在 `[min, max]` 内且对齐步长网格，否则禁用。                                                       |
 | `use12Hours`    | `boolean`  | `false`                  | 类型占位——本版本未实现。                                                                                                                                        |

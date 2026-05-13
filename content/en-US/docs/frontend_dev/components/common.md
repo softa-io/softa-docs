@@ -326,7 +326,7 @@ const config = resolveTimeConfig(
 | Field | Type | Notes |
 | ----- | ---- | ----- |
 | `min` / `max` | `string` | Inclusive bounds in `timeFormat` |
-| `minuteStep` / `secondStep` | `number` | One of `[1,2,3,4,5,6,10,12,15,20,30]` (divisors of 60); invalid values warn and fall back to 1 |
+| `minuteStep` / `secondStep` | `number` | One of `[1,2,3,4,5,6,10,12,15,20,30,60]` (divisors of 60); `60` means only `00`; invalid values warn and fall back to 1 |
 | `defaultTime` | `string` | Pre-fill on first open; auto-snapped UP to step grid |
 | `quickOptions` | `string[]` | Quick-pick buttons rendered above the columns; out-of-range / off-grid entries auto-disable |
 | `clearable` | `boolean` | Show Clear in footer (default `true`) |

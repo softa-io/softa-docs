@@ -314,7 +314,7 @@ const config = resolveTimeConfig(
 | 字段 | 类型 | 说明 |
 | ----- | ---- | ---- |
 | `min` / `max` | `string` | 含边界的上下界，格式为 `timeFormat` |
-| `minuteStep` / `secondStep` | `number` | 取值之一为 `[1,2,3,4,5,6,10,12,15,20,30]`（60 的因数）；非法值将告警并退回 1 |
+| `minuteStep` / `secondStep` | `number` | 取值之一为 `[1,2,3,4,5,6,10,12,15,20,30,60]`（60 的因数）；`60` 表示仅允许 `00`；非法值将告警并退回 1 |
 | `defaultTime` | `string` | 首次打开时预填；自动向上对齐到步长网格 |
 | `quickOptions` | `string[]` | 列上方的快捷按钮；超出范围或不在网格上的项自动禁用 |
 | `clearable` | `boolean` | 页脚是否显示清除（默认 `true`） |
