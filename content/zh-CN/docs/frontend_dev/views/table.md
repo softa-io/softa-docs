@@ -135,9 +135,9 @@ type ModelTableRowData = { id: string };
 </ModelTable>
 ```
 
-列表查询控制器会自动将匹配的 SubQuery 折叠进 `searchPage` —— 展示的级联路径无需手搓 `initialParams.subQueries`。级联列始终只读（不支持内联编辑），渲染使用叶子字段的元数据（`fieldType` / `widgetType` / `labelName`）。手写的 `initialParams.subQueries` 仍会与自动收集的结果合并，供进阶场景使用。
+列表查询控制器会自动将匹配的 SubQuery 折叠进 `searchPage` —— 已展示的级联路径无需手搓 `initialParams.subQueries`。级联列始终只读（不支持内联编辑），渲染使用叶子字段的元数据（`fieldType` / `widgetType` / `labelName`）。手写的 `initialParams.subQueries` 仍会与自动收集的结果合并，供进阶场景使用。
 
-完整语义见字段 README 中的 [级联字段路径](../fields/fields#cascaded-field-path-display)。
+完整参考与语义见字段 README 中的 [级联字段路径](../fields/fields#cascaded-field-path-display)。
 
 ## 文件与图片列
 
@@ -299,7 +299,17 @@ type UserAccountRow = ModelTableRowWith<{
 
 可用操作符由每列的 `fieldType` 推导。单一事实来源为 `src/components/views/table/utils/filter-operators.ts`。一元操作符（`IS SET` / `IS NOT SET`）无需填写取值。
 
-`Date` / `DateTime` 列还会在相同浮层中额外提供 **快捷日期范围预设**（Today、Last N days、Next N days、本周 / 本月 / 本年等）以及一键 `Is set` / `Is not set` 入口。预设清单、交互规则、时区处理与持久化语义见 [日期与时间类 Widget → 快捷范围筛选（列头）](../fields/widgets#quick-range-filter-column-header)。
+`Date` / `DateTime` 列还会在相同浮层中额外提供 **快捷日期范围预设**（Today、Last N days、Next N days、This week / month / year 等）以及一键 `Is set` / `Is not set` 入口。详见 [日期与时间类 Widgets → 快捷范围筛选](../fields/widgets#quick-range-filter-column-header)（预设清单、交互规则、时区处理与持久化语义）。
+
+## 字段能力规则
+
+字段是否出现在工具栏的筛选 / 排序 / 分组选择器中，以及列头是否渲染筛选 / 排序图标，均由 `src/components/views/table/utils/field-capability.ts` 中的一组辅助函数决定。工具栏选择器与列头使用相同的辅助函数，因此表现始终一致。
+
+- `isFilterableField` — 仅排除 `dynamic=true`。所有 `FieldType`（含 `File`、`MultiFile`、`OneToMany`、`ManyToMany`、`JSON`、`Filters`、`Orders`、`DTO`）均保留筛选能力，因为 `filter-operators.ts` 已为它们定义操作符（至少包含 `IS SET` / `IS NOT SET`）。
+- `isSortableField` — 排除 `dynamic=true`，**并**排除八种不可排序的 `FieldType`：`File`、`MultiFile`、`OneToMany`、`ManyToMany`、`JSON`、`Filters`、`Orders`、`DTO`。
+- `isGroupableField` — 规则与 `isSortableField` 相同。
+
+`dynamic=true` 的字段绝不会出现在筛选 / 排序 / 分组选择器中，且其列头也不渲染筛选图标或排序图标。
 
 ## 统一的工具栏激活状态
 

@@ -305,6 +305,16 @@ Available operators are derived from each column's `fieldType`. The single sourc
 
 `Date` / `DateTime` columns additionally expose **quick range presets** (Today, Last N days, Next N days, This week / month / year, etc.) and one-click `Is set` / `Is not set` entries inside the same popover. See [Date And Time Widgets → Quick range filter](../fields/widgets#quick-range-filter-column-header) for the preset registry, interaction rules, time-zone handling, and persistence semantics.
 
+## Field Capability Rules
+
+Whether a field shows up in the toolbar's filter / sort / groupby selectors and whether its column header renders a filter / sort icon is decided by a single set of helpers in `src/components/views/table/utils/field-capability.ts`. Toolbar selectors and column headers use the same helpers so they always agree.
+
+- `isFilterableField` — excludes `dynamic=true` only. All `FieldType` values (including `File`, `MultiFile`, `OneToMany`, `ManyToMany`, `JSON`, `Filters`, `Orders`, `DTO`) keep filter capability because `filter-operators.ts` defines operators for them (at minimum `IS SET` / `IS NOT SET`).
+- `isSortableField` — excludes `dynamic=true` **and** the eight non-sortable `FieldType` values: `File`, `MultiFile`, `OneToMany`, `ManyToMany`, `JSON`, `Filters`, `Orders`, `DTO`.
+- `isGroupableField` — shares the same rule as `isSortableField`.
+
+A `dynamic=true` field never appears in the filter / sort / groupby selectors and its column header renders neither a filter icon nor a sort icon.
+
 ## Unified Active Toolbar State
 
 Toolbar active state area can show and clear:
