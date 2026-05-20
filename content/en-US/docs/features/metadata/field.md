@@ -1,5 +1,7 @@
 # Field Metadata
 
+> **See also**: To declare these attributes on a Java entity field via annotations, see [`@Field` annotation](../../backend_dev/model_dev/annotation#field--sysfield).
+
 Field metadata is a collection of descriptive information about model fields. It defines the fields used by a model in business scenarios, as well as the type, length, default value, required/readonly constraints, relationships, and more. With this metadata, Softa can handle data responses, processing, and interactions in a consistent way, and can abstract common requirements to ensure data consistency, accuracy, and integrity.
 
 ## 1. Field Type Overview

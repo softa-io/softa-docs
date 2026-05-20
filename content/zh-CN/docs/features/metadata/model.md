@@ -1,5 +1,7 @@
 # Model
 
+> **参见**：在 Java 实体类中通过注解声明这些属性，见 [`@Model` 注解](../../backend_dev/model_dev/annotation#model--sysmodel)。
+
 在 Softa 中，元数据存在三种形态：DesignTime Metadata、Runtime Metadata、InMemory Metadata，以下是它们的应用场景区分：
 
 （1）DesignTime Metadata：设计时的元数据，使用可视化工具进行编辑、版本化管理和发布管理。
@@ -146,7 +148,7 @@
 
 当启用模型级多数据源配置时，可以选择性指定模型的数据源Key，用于指定模型数据存储在哪个数据源中。
 
-当未指定数据源Key时，模型数据存储在默认数据源中。具体参考 [多数据源](../../backend_dev/datasource)。
+当未指定数据源Key时，模型数据存储在默认数据源中。具体参考 [多数据源](../../backend_dev/architecture/datasource)。
 
 ### 2.14、`businessKey` 业务主键
 除了模型主键 ID 字段外，还可以指定模型的业务主键，用于唯一标识模型数据。业务主键可以是单个字段，也可以是多个字段的组合。

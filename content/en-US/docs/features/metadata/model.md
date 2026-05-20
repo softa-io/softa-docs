@@ -1,5 +1,7 @@
 # Model Metadata
 
+> **See also**: To declare these attributes on a Java entity class via annotations, see [`@Model` annotation](../../backend_dev/model_dev/annotation#model--sysmodel).
+
 In Softa, metadata exists in three forms: DesignTime Metadata, Runtime Metadata, and InMemory Metadata. Here is the differentiation of their use cases:
 
 (1) **DesignTime Metadata:** Metadata at design time, edited, versioned, and published using visual tools.
@@ -137,7 +139,7 @@ Before enabling multi-tenant control, the global multi-tenant configuration need
 
 When enabling multi-data-source configuration at the model level, you can optionally specify the data source key for the model, indicating which data source the model data is stored in.
 
-If the data source key is not specified, the model data will be stored in the default data source. For details, refer to [Multi-Data Source](../../backend_dev/datasource).
+If the data source key is not specified, the model data will be stored in the default data source. For details, refer to [Multi-Data Source](../../backend_dev/architecture/datasource).
 
 ### 2.14 `businessKey` Business Key
 

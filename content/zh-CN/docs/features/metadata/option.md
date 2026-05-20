@@ -1,5 +1,7 @@
 ## 选项集
 
+> **参见**：在 Java 枚举上通过注解声明选项集与选项项，见 [`@OptionSet` / `@OptionItem`](../../backend_dev/model_dev/annotation#optionset--sysoptionset)。
+
 选项集提供一组共享且有序的可选值。Web 模块暴露用于读取选项项的 API，ORM 层将其缓存以便快速查找。
 
 ### 数据来源

@@ -1,4 +1,7 @@
 ## Option Sets
+
+> **See also**: To declare option sets and items via Java enum annotations, see [`@OptionSet` / `@OptionItem`](../../backend_dev/model_dev/annotation#optionset--sysoptionset).
+
 Option sets provide a shared, ordered list of selectable values. The web module exposes an API to read option items
 and the ORM layer caches them for fast lookup.
 
