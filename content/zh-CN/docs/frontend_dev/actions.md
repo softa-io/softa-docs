@@ -52,50 +52,50 @@ type ActionValue<T> =
 
 ### 通用 Props
 
-| Prop             | 类型                                           | 必填 | 默认值                | 说明 |
-| ---------------- | ---------------------------------------------- | ---- | --------------------- | ---- |
-| `type`           | `"default" \| "dialog" \| "link" \| "custom" \| "form"` | 否   | `"default"`           | 动作行为。省略时表示直接调用 API。 |
-| `labelName`      | `ReactNode`                                    | 是   | -                     | 动作文案。 |
-| `style`          | `"primary" \| "danger"`                        | 否   | -                     | 视觉样式。省略时为中性默认外观。见 [动作样式](#动作样式)。 |
-| `placement`      | `"toolbar" \| "more" \| "header" \| "inline"` | 否   | 取决于容器            | 支持的位置依赖于父容器。 |
-| `confirmMessage` | `ActionValue<string>`                          | 否   | -                     | 执行动作前的可选确认提示。 |
-| `successMessage` | `ActionValue<string>`                          | 否   | -                     | `default` 和 `dialog` 动作成功后的提示文案。 |
-| `icon`           | `ComponentType<{ className?: string }>`        | 否   | -                     | 动作图标。 |
-| `disabled`       | `boolean \| FilterCondition \| dependsOn(...)` | 否   | `false`               | 禁用状态。 |
-| `hidden`         | `boolean \| FilterCondition \| dependsOn(...)` | 否   | `false`               | 当条件解析为 `true` 时隐藏动作。 |
+| Prop             | 类型                                                    | 必填 | 默认值              | 说明                                                     |
+| ---------------- | ------------------------------------------------------- | ---- | ------------------- | -------------------------------------------------------- |
+| `type`           | `"default" \| "dialog" \| "link" \| "custom" \| "form"` | 否   | `"default"`         | 动作行为。省略时表示直接调用 API。                       |
+| `label`          | `ReactNode`                                             | 是   | -                   | 动作文案。                                               |
+| `style`          | `"primary" \| "danger"`                                 | 否   | -                   | 视觉样式。省略时为中性默认外观。见 [动作样式](#动作样式)。 |
+| `placement`      | `"toolbar" \| "more" \| "header" \| "inline"`           | 否   | 取决于容器          | 支持的位置依赖于父容器。                                 |
+| `confirmMessage` | `ActionValue<string>`                                   | 否   | -                   | 执行动作前的可选确认提示。                               |
+| `successMessage` | `ActionValue<string>`                                   | 否   | -                   | `default` 和 `dialog` 动作成功后的提示文案。             |
+| `icon`           | `ComponentType<{ className?: string }>`                 | 否   | -                   | 动作图标。                                               |
+| `disabled`       | `boolean \| FilterCondition \| dependsOn(...)`          | 否   | `false`             | 禁用状态。                                               |
+| `hidden`         | `boolean \| FilterCondition \| dependsOn(...)`          | 否   | `false`             | 当条件解析为 `true` 时隐藏动作。                         |
 
 ### 行为专属 Props
 
-| 组件行为                           | 必填行为 Props         | 默认值 | 说明 |
-| ---------------------------------- | ---------------------- | ------ | ---- |
-| 省略 `type` 或 `type="default"` | `operation` | - | 调用 `POST /{modelName}/{operation}`，当前记录 `id` 通过 query 参数传递。 |
-| `type="dialog"`                    | `operation`, `component`    | -                                       | `component={MyDialogComponent}`。打开/关闭、operation 与成功提示由 `Action` 注入；失败时使用接口返回的 toast。 |
+| 组件行为                           | 必填行为 Props              | 默认值                                  | 说明                                                                                                                                                                                                                                                                                                                                  |
+| ---------------------------------- | --------------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 省略 `type` 或 `type="default"`    | `operation`                 | -                                       | 调用 `POST /{modelName}/{operation}`，当前记录 `id` 通过 query 参数传递。                                                                                                                                                                                                                                                        |
+| `type="dialog"`                    | `operation`, `component`    | -                                       | `component={MyDialogComponent}`。打开/关闭、operation 与成功提示由 `Action` 注入；失败时使用接口返回的 toast。                                                                                                                                                                                            |
 | `type="view"`                      | `component`                 | -                                       | 面向当前记录的自由内容对话框。组件直接接收 `{ open, onOpenChange, recordId, record }` props——不调用 operation。适用于审计日志查看器、差异报告、预览面板、历史记录对话框等。 |
-| `type="link"`                      | `href`                      | 当前标签页打开（`target="_self"`） | `href` 支持模板字符串（见下文）或 `({ id, modelName }) => string`。使用 `target="_blank"` 在新标签页打开。 |
-| `type="custom"`                    | `onClick`                   | -                                       | 纯 UI / 本地行为。签名：`onClick({ id, modelName, scope, mode, isDirty, values, row }) => void`。若副作用是「针对该行打开对话框」，优先使用 `type="view"`——可减少页面级状态。 |
-| `type="form"` | `component`, `relatedField` | - | 在对话框中打开独立的 `ModelForm`。`component` 渲染子表单视图；`relatedField` 为子模型指向父记录的字段名。父级 `id` 会自动写入 `ModelForm.defaultValues` 的 `{ [relatedField]: parentId }`，并包含在创建/更新 API 的请求体中。 |
+| `type="link"`                      | `href`                      | 当前标签页打开（`target="_self"`）      | `href` 支持模板字符串（见下文）或 `({ id, modelName }) => string`。使用 `target="_blank"` 在新标签页打开。                                                                                                                                                                                                             |
+| `type="custom"`                    | `onClick`                   | -                                       | 纯 UI / 本地行为。签名：`onClick({ id, modelName, scope, mode, isDirty, values, row }) => void`。若副作用是「针对该行打开对话框」，优先使用 `type="view"`——可减少页面级状态。                                                                                                                                                                                                                  |
+| `type="form"`                      | `component`, `relatedField` | -                                       | 在对话框中打开独立的 `ModelForm`。`component` 渲染子表单视图；`relatedField` 为子模型指向父记录的字段名。父级 `id` 会自动写入 `ModelForm.defaultValues` 的 `{ [relatedField]: parentId }`，并包含在创建/更新 API 的请求体中。 |
 
 ### 动作执行上下文
 
 每个 `ActionValue<T>`、`disabled`、`hidden` 回调都会收到同一套上下文：
 
-| 属性 | 类型 | 说明 |
-| ---- | ---- | ---- |
-| `id` | `string \| null` | 当前记录 id（创建模式下为 `null`）。 |
-| `modelName` | `string \| undefined` | 宿主容器的模型名。 |
-| `scope` | `"form" \| "model-table"` | 动作所在容器。 |
-| `mode` | `"create" \| "edit" \| "read"` | 表单/行生命周期阶段（见下表）。 |
-| `isDirty` | `boolean` | 表单/行是否存在未保存修改。 |
-| `values` | `Record<string, unknown>` | 当前表单值（表单作用域）或行数据（表格作用域）。 |
-| `row` | `Record<string, unknown>` | 行数据（仅表格作用域；表单作用域为 `undefined`）。 |
+| 属性        | 类型                           | 说明                                                 |
+| ----------- | ------------------------------ | ---------------------------------------------------- |
+| `id`        | `string \| null`               | 当前记录 id（创建模式下为 `null`）。                 |
+| `modelName` | `string \| undefined`          | 宿主容器的模型名。                                   |
+| `scope`     | `"form" \| "model-table"`      | 动作所在容器。                                       |
+| `mode`      | `"create" \| "edit" \| "read"` | 表单/行生命周期阶段（见下表）。                      |
+| `isDirty`   | `boolean`                      | 表单/行是否存在未保存修改。                          |
+| `values`    | `Record<string, unknown>`      | 当前表单值（表单作用域）或行数据（表格作用域）。     |
+| `row`       | `Record<string, unknown>`      | 行数据（仅表格作用域；表单作用域为 `undefined`）。   |
 
 #### `mode` 取值
 
-| 模式 | 含义 | 何时 |
-| ---- | ---- | ---- |
-| `"create"` | 新建记录，表单可编辑，`id` 为 `null` | 创建模式（无已有记录）。 |
-| `"edit"` | 已有记录，字段可编辑 | 用户在只读详情上点击编辑，或直接以编辑模式打开。 |
-| `"read"` | 已有记录，字段只读 | 详情表单且 `detailStartsInReadOnly`、用户尚未点编辑，或路由 `?mode=read`。 |
+| 模式       | 含义                                      | 何时                                                                                          |
+| ---------- | ----------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `"create"` | 新建记录，表单可编辑，`id` 为 `null`。    | 创建模式（无已有记录）。                                                                      |
+| `"edit"`   | 已有记录，字段可编辑。                    | 用户在只读详情上点击编辑，或直接以编辑模式打开。                                              |
+| `"read"`   | 已有记录，字段只读。                      | 详情表单且 `detailStartsInReadOnly`、用户尚未点编辑，或路由 `?mode=read`。                    |
 
 要点：**工具栏上的业务动作（`Action`）在 `read` 模式下不会自动禁用。** 只读只锁表单字段；状态流转类动作仍可点击。若某动作在只读下也应禁用，请显式设置 `disabled`。
 
@@ -103,24 +103,24 @@ type ActionValue<T> =
 
 使用 `style` 表达按钮的视觉意图。省略 `style` 时，动作为中性外观（ghost 或描边，由容器决定）。
 
-| 取值 | 外观 | 适用场景 |
-| ---- | ---- | -------- |
-| `"primary"` | 突出 / 实心 | 工具栏或区块中的主推荐操作。 |
-| `"danger"` | 红色 / 危险 | 不可逆或高风险操作。 |
-| _（省略）_ | 中性 ghost/描边 | 其他动作。 |
+| 取值        | 外观                | 适用场景                             |
+| ----------- | ------------------- | ------------------------------------ |
+| `"primary"` | 突出 / 实心         | 工具栏或区块中的主推荐操作。         |
+| `"danger"`  | 红色 / 危险         | 不可逆或高风险操作。                 |
+| _（省略）_  | 中性 ghost/描边     | 其他动作。                           |
 
 ```tsx
-// 主按钮：突出关键操作
-<Action labelName="提交审批" operation="submit" style="primary" />
+// Primary: highlight the key action
+<Action label="Submit for Approval" operation="submit" style="primary" />
 
-// 危险：明确提示风险
-<Action labelName="停用账户" operation="deactivate" style="danger" confirmMessage="确定停用该账户？" />
+// Danger: signal risk explicitly
+<Action label="Deactivate Account" operation="deactivate" style="danger" confirmMessage="Deactivate this account?" />
 
-// 无 style：中性外观
-<Action labelName="导出" operation="export" />
+// No style: neutral appearance
+<Action label="Export" operation="export" />
 ```
 
-> **自动识别**：若省略 `style`，当 `operation` 或 `labelName` 含有 `delete`、`remove`、`disable`、`deactivate`、`archive`、`reject` 等关键词时，会自动视为 `"danger"`。仍建议显式设置 `style="danger"` 以保持清晰。
+> **自动识别**：若省略 `style`，当 `operation` 或 `label` 含有 `delete`、`remove`、`disable`、`deactivate`、`archive`、`reject` 等关键词时，会自动视为 `"danger"`。仍建议显式设置 `style="danger"` 以保持清晰。
 
 ### 条件类 props（`disabled` / `hidden`）
 
@@ -137,82 +137,82 @@ type ActionValue<T> =
 #### 常见的 `disabled` / `hidden` 写法
 
 ```tsx
-// 仅在只读模式下禁用（创建模式已由隐式规则覆盖）
+// Disabled in read mode only (create is already covered implicitly)
 disabled={dependsOn(["id"], ({ mode }) => mode === "read")}
 
-// 除非状态为某值，否则隐藏（FilterCondition 简写）
+// Hidden unless status is a specific value (FilterCondition shorthand)
 hidden={["status", "!=", "InProgress"]}
 
-// 依赖多个状态码
+// Hidden based on multiple status values
 hidden={dependsOn(["status"], ({ values }) => {
   const code = getOptionCode(values?.status);
   return code !== "InProgress" && code !== "Done";
 })}
 
-// 始终禁用（静态）
+// Always disabled (static)
 disabled={true}
 
-// 表单有未保存修改时禁用
+// Disabled when form has unsaved changes
 disabled={dependsOn([], ({ isDirty }) => isDirty)}
 ```
 
 ### Action 类型示例
 
 ```tsx
-// 1) default（省略 type）：直接调用 API
+// 1) default (type omitted): direct API invoke
 <Action
-  labelName="Lock Account"
+  label="Lock Account"
   operation="lockAccount"
   placement="more"
   confirmMessage="Lock this user account?"
   successMessage="User account locked."
 />
 
-// 2) dialog：打开自定义对话框，operation 注入对话框运行时
+// 2) dialog: open custom dialog component, operation injected into dialog runtime
 <Action
   type="dialog"
-  labelName="Unlock Account"
+  label="Unlock Account"
   operation="unlockAccount"
   placement="more"
   component={UserAccountUnlockActionDialog}
   successMessage="User account unlocked."
 />
 
-// 3) link：默认在当前标签页打开 —— 字符串模板或函数
+// 3) link: open URL in current tab by default — string template or function
 <Action
   type="link"
-  labelName="Open Audit"
+  label="Open Audit"
   placement="more"
   href="/{modelName}/audit?id={id}"
 />
-// 显式新标签页：
+// Explicit new-tab behavior:
 <Action
   type="link"
-  labelName="Open Docs"
+  label="Open Docs"
   placement="more"
   href="https://docs.example.com"
   target="_blank"
 />
-// 函数形式（需要条件逻辑时）：
+// Function form (required when you need conditional logic):
 <Action
   type="link"
-  labelName="Open Audit"
+  label="Open Audit"
   placement="more"
   href={({ id, modelName }) => `/${modelName}/audit?id=${id}`}
 />
 
-// 4) custom：本地 UI 逻辑
+// 4) custom: local UI logic
 <Action
   type="custom"
-  labelName="Run Health Check"
+  label="Run Health Check"
   placement="more"
   onClick={({ modelName }) => console.log(`${modelName} health check started.`)}
 />
 
-// 5) form：在对话框中打开独立的 ModelForm
+// 5) form: open independent ModelForm in dialog
 <Action
   type="form"
-  labelName="Add Config Group"
+  label="Add Config Group"
   placement="toolbar"
   component={ConfigGroupForm}
   relatedField="tenantConfigId"
@@ -224,8 +224,8 @@ disabled={dependsOn([], ({ isDirty }) => isDirty)}
 `component` 是标准 React 组件，内部渲染带自有 `modelName` 的 `ModelForm`。通过 `Action type="form"` 打开时，`ModelForm` 会自动适配对话框模式：
 
 - 忽略路由 `params.id`（仅使用传入的 `id` prop）
-- 创建 / 更新成功：关闭对话框，而不是 `router.push`
-- 取消：关闭对话框，而不是返回导航
+- 创建 / 更新成功：关闭对话框，而不是导航
+- 取消：关闭对话框，而不是导航
 - `relatedField` 的值会注入 `defaultValues` 并写入 API payload，即使该字段未在表单中展示
 
 ```tsx
@@ -240,7 +240,7 @@ function ConfigGroupForm() {
     <ModelForm modelName="TenantConfigGroup">
       <FormToolbar />
       <FormBody enableAuditLog={false}>
-        <FormSection labelName="General" hideHeader>
+        <FormSection label="General" hideHeader>
           <Field fieldName="groupName" />
           <Field fieldName="description" />
         </FormSection>
@@ -268,23 +268,23 @@ function ConfigGroupForm() {
 
 - 类型：`default | dialog`
 - 放置位置：`toolbar | more`
-- 通用视觉 props 与 `Action` 保持一致：`labelName`、`style`、`confirmMessage`、`successMessage`、`icon`、`disabled`
+- 通用视觉 props 与 `Action` 保持一致：`label`、`style`、`confirmMessage`、`successMessage`、`icon`、`disabled`
 
 行为专属 Props：
 
-| 组件行为                           | 必填行为 Props         | 说明 |
-| ---------------------------------- | ---------------------- | ---- |
-| 省略 `type` 或 `type="default"`    | `operation`            | 使用选中的 ids 执行批量操作。 |
-| `type="dialog"`                    | `operation`, `component` | 打开一个对话框，其提交会绑定到批量操作运行时。 |
+| 组件行为                           | 必填行为 Props           | 说明                                                               |
+| ---------------------------------- | ------------------------ | ------------------------------------------------------------------ |
+| 省略 `type` 或 `type="default"`    | `operation`              | 使用选中的 ids 执行批量操作。                                      |
+| `type="dialog"`                    | `operation`, `component` | 打开一个对话框，其提交会绑定到批量操作运行时。                     |
 
 ## `ModelForm` 中的动作
 
 容器支持：
 
-| 容器          | 支持的 Action 类型                     | 支持的位置          |
-| ------------- | -------------------------------------- | ------------------- |
-| `FormToolbar` | `default`, `dialog`, `link`, `custom`, `form`  | `toolbar`, `more`   |
-| `FormSection` | `link`, `custom`                       | `header`, `inline`  |
+| 容器          | 支持的 Action 类型                              | 支持的位置         |
+| ------------- | ----------------------------------------------- | ------------------ |
+| `FormToolbar` | `default`, `dialog`, `link`, `custom`, `form`   | `toolbar`, `more`  |
+| `FormSection` | `link`, `custom`                                | `header`, `inline` |
 
 规则：
 
@@ -310,7 +310,7 @@ import { ExternalLink, Lock, RefreshCw, ShieldCheck } from "lucide-react";
 function UnlockDialog() {
   return (
     <ActionDialog title="Unlock Account">
-      <Field fieldName="reason" labelName="Reason" widgetType="Text" />
+      <Field fieldName="reason" label="Reason" widgetType="Text" />
     </ActionDialog>
   );
 }
@@ -318,7 +318,7 @@ function UnlockDialog() {
 <ModelForm modelName="UserAccount">
   <FormToolbar>
     <Action
-      labelName="Lock"
+      label="Lock"
       operation="lockAccount"
       placement="toolbar"
       icon={Lock}
@@ -326,7 +326,7 @@ function UnlockDialog() {
     />
     <Action
       type="dialog"
-      labelName="Unlock"
+      label="Unlock"
       operation="unlockAccount"
       placement="more"
       icon={ShieldCheck}
@@ -335,10 +335,10 @@ function UnlockDialog() {
   </FormToolbar>
 
   <FormBody>
-    <FormSection labelName="Credentials">
+    <FormSection label="Credentials">
       <Action
         type="link"
-        labelName="Open Docs"
+        label="Open Docs"
         placement="header"
         icon={ExternalLink}
         href="https://docs.example.com/credentials"
@@ -346,7 +346,7 @@ function UnlockDialog() {
       />
       <Action
         type="custom"
-        labelName="Regenerate Preview"
+        label="Regenerate Preview"
         placement="inline"
         icon={RefreshCw}
         onClick={() => console.log("regenerate")}
@@ -369,26 +369,26 @@ function UnlockDialog() {
 - `hidden` / `disabled` 按卡片用 `RecordContext` 的值求值（与 ModelTable 行级动作相同）
 - 支持全部动作类型：`default`、`dialog`、`link`、`custom`
 
-字符串 `href` 支持 `{placeholder}` 插值：
+字符串 `href` 支持 `{placeholder}` 插值。支持的占位符：
 
-| 占位符 | 解析为 |
-| ------ | ------ |
-| `{id}` | 当前记录 ID |
-| `{modelName}` | 卡片所属模型名 |
-| `{任意字段名}` | 记录中该字段的值 |
+| 占位符           | 解析为               |
+| ---------------- | -------------------- |
+| `{id}`           | 当前记录 ID          |
+| `{modelName}`    | 卡片所属模型名       |
+| `{anyFieldName}` | 记录中该字段的值     |
 
 ```tsx
-// 记录 ID
-<Action type="link" labelName="Edit" href="/studio/app/{id}/workbench" />
+// Record ID
+<Action type="link" label="Edit" href="/studio/app/{id}/design-model" />
 
-// 任意记录字段
-<Action type="link" labelName="Open" href="/studio/{appCode}/workbench" />
+// Any record field
+<Action type="link" label="Open" href="/studio/app/{appCode}/design-model" />
 
-// 多个占位符
-<Action type="link" labelName="Open" href="/studio/app/{id}/version/{currentVersion}" />
+// Multiple placeholders
+<Action type="link" label="Open" href="/studio/app/{id}/version/{currentVersion}" />
 
-// 函数形式（条件逻辑）
-<Action type="link" labelName="Edit" href={({ id }) => `/studio/app/${id}/workbench`} />
+// Function form (for conditional logic)
+<Action type="link" label="Edit" href={({ id }) => `/studio/app/${id}/design-model`} />
 ```
 
 完整示例：
@@ -397,15 +397,15 @@ function UnlockDialog() {
 <ModelCard modelName="DesignApp" enableDelete>
   <ModelCard.Header>
     <Field fieldName="appName" />
-    <Action type="link" labelName="Edit" href="/studio/app/{id}/workbench" />
+    <Action type="link" label="Edit" href="/studio/app/{id}/design-model" />
     <Action
-      labelName="Archive"
+      label="Archive"
       operation="archive"
       placement="more"
     />
   </ModelCard.Header>
   <Field fieldName="status" />
-  <Action labelName="Publish" operation="publish" />
+  <Action label="Publish" operation="publish" />
   <ModelCard.Footer>
     <Field fieldName="updatedTime" />
   </ModelCard.Footer>
@@ -438,7 +438,7 @@ import { ExternalLink, Lock, Pencil, ShieldCheck } from "lucide-react";
 function UnlockDialog() {
   return (
     <ActionDialog title="Unlock Account">
-      <Field fieldName="reason" labelName="Reason" widgetType="Text" />
+      <Field fieldName="reason" label="Reason" widgetType="Text" />
     </ActionDialog>
   );
 }
@@ -450,21 +450,21 @@ function UnlockDialog() {
 
   <Action
     type="custom"
-    labelName="Refresh"
+    label="Refresh"
     placement="toolbar"
     onClick={() => console.log("refresh")}
   />
 
   <Action
     type="custom"
-    labelName="Quick Edit"
+    label="Quick Edit"
     placement="inline"
     icon={Pencil}
     onClick={({ id }) => console.log("quick edit:", id)}
   />
 
   <Action
-    labelName="Lock Account"
+    label="Lock Account"
     placement="more"
     icon={Lock}
     operation="lockAccount"
@@ -473,7 +473,7 @@ function UnlockDialog() {
 
   <Action
     type="dialog"
-    labelName="Unlock Account"
+    label="Unlock Account"
     placement="more"
     icon={ShieldCheck}
     operation="unlockAccount"
@@ -482,21 +482,21 @@ function UnlockDialog() {
 
   <Action
     type="link"
-    labelName="Open Audit"
+    label="Open Audit"
     placement="more"
     icon={ExternalLink}
     href={({ id }) => `/user/user-account/${id}/audit`}
   />
 
   <BulkAction
-    labelName="Lock Selected"
+    label="Lock Selected"
     operation="lockByIds"
     placement="toolbar"
   />
 
   <BulkAction
     type="dialog"
-    labelName="Unlock Selected"
+    label="Unlock Selected"
     operation="unlockByIds"
     placement="more"
     component={UnlockDialog}
@@ -534,15 +534,15 @@ function AgreementLineTableView() {
 
       <Action
         type="link"
-        labelName="打开"
+        label="Open"
         placement="inline"
         href="/sales/agreement-line/{id}"
       />
       <Action
-        labelName="重算"
+        label="Recalculate"
         operation="recalculate"
         placement="more"
-        successMessage="行已重算。"
+        successMessage="Line recalculated."
       />
     </RelationTable>
   );
@@ -551,4 +551,4 @@ function AgreementLineTableView() {
 <Field fieldName="lines" tableView={AgreementLineTableView} />;
 ```
 
-另见 [关联字段 — 行内操作](./fields/relations.md#row-actions)。
+另见 [关联字段 — 行内操作](./fields/relations#row-actions)。

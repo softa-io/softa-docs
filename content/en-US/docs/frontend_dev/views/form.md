@@ -38,7 +38,7 @@ export default function EditUserAccountPage() {
       <FormHeader />
       <FormToolbar>
         <Action
-          labelName="Lock Account"
+          label="Lock Account"
           operation="lockAccount"
           placement="more"
           confirmMessage="Lock this user account?"
@@ -46,7 +46,7 @@ export default function EditUserAccountPage() {
         />
         <Action
           type="dialog"
-          labelName="Unlock Account"
+          label="Unlock Account"
           operation="unlockAccount"
           placement="more"
           successMessage="User account unlocked."
@@ -55,7 +55,7 @@ export default function EditUserAccountPage() {
       </FormToolbar>
 
       <FormBody>
-        <FormSection labelName="General" hideHeader>
+        <FormSection label="General" hideHeader>
           <Field fieldName="username" />
           <Field fieldName="nickname" />
           <Field fieldName="email" />
@@ -97,7 +97,7 @@ Example:
 <FormToolbar>
   <Action
     type="form"
-    labelName="Add Config Group"
+    label="Add Config Group"
     placement="toolbar"
     component={ConfigGroupForm}
     relatedField="tenantConfigId"
@@ -110,7 +110,7 @@ function ConfigGroupForm() {
     <ModelForm modelName="TenantConfigGroup">
       <FormToolbar />
       <FormBody enableAuditLog={false}>
-        <FormSection labelName="General" hideHeader>
+        <FormSection label="General" hideHeader>
           <Field fieldName="groupName" />
           <Field fieldName="description" />
           {/* tenantConfigId is not displayed but is auto-injected into the API payload */}
@@ -142,7 +142,7 @@ Example metadata overrides on `Field`:
 ```tsx
 <Field
   fieldName="name"
-  labelName="Custom Label"
+  label="Custom Label"
   readonly
   required={false}
   hideLabel={true}
@@ -184,7 +184,7 @@ import { dependsOn, Field } from "@/components/fields";
 />
 
 <Field
-  fieldName="itemName"
+  fieldName="label"
   required={dependsOn(["active", "itemCode"], ({ values, isEditing }) =>
     !isEditing && values.active === true && values.itemCode !== "Temp"
   )}
@@ -194,11 +194,11 @@ import { dependsOn, Field } from "@/components/fields";
 Example remote field linkage:
 
 ```tsx
-<Field fieldName="itemCode" onChange={["itemName", "itemTone"]} />
+<Field fieldName="itemCode" onChange={["label", "itemTone"]} />
 
 <Field
   fieldName="itemCode"
-  onChange={{ update: ["itemName"], with: ["active"] }}
+  onChange={{ update: ["label"], with: ["active"] }}
 />
 ```
 
@@ -473,7 +473,7 @@ function OptionItemsTableView() {
     <RelationTable orders={["sequence", "ASC"]} pageSize={10}>
       <Field fieldName="sequence" />
       <Field fieldName="itemCode" />
-      <Field fieldName="itemName" />
+      <Field fieldName="label" />
       <Field fieldName="active" />
     </RelationTable>
   );
@@ -490,7 +490,7 @@ function MultiSortTableView() {
     >
       <Field fieldName="sequence" />
       <Field fieldName="itemCode" />
-      <Field fieldName="itemName" />
+      <Field fieldName="label" />
     </RelationTable>
   );
 }
@@ -537,7 +537,7 @@ function OptionItemsTableView() {
     <RelationTable orders={["sequence", "ASC"]} pageSize={10}>
       <Field fieldName="sequence" />
       <Field fieldName="itemCode" />
-      <Field fieldName="itemName" readonly={[["active", "=", false]]} />
+      <Field fieldName="label" readonly={[["active", "=", false]]} />
       <Field fieldName="active" />
     </RelationTable>
   );
@@ -547,9 +547,9 @@ function OptionItemsFormView() {
   return (
     <ModelDialog title="Option Item">
       <FormBody enableAuditLog={false}>
-        <FormSection labelName="General" hideHeader>
+        <FormSection label="General" hideHeader>
           <Field fieldName="itemCode" />
-          <Field fieldName="itemName" />
+          <Field fieldName="label" />
           <Field fieldName="sequence" />
           <Field fieldName="active" />
           <Field fieldName="description" />
@@ -631,7 +631,7 @@ function UserRoleUserIdsTableView() {
 function UserRoleUserIdsFormView() {
   return (
     <ModelDialog title="User Detail">
-      <FormSection labelName="General" hideHeader>
+      <FormSection label="General" hideHeader>
         <Field fieldName="username" />
         <Field fieldName="nickname" />
         <Field fieldName="email" />
@@ -649,7 +649,7 @@ export default function UserRoleFormPage() {
       <FormToolbar />
 
       <FormBody>
-        <FormSection labelName="General" hideHeader>
+        <FormSection label="General" hideHeader>
           <Field fieldName="name" />
           <Field fieldName="code" />
           <Field fieldName="description" />
@@ -698,7 +698,7 @@ Usage:
 ```tsx
 function UserAccountOneToOneView() {
   return (
-    <FormSection labelName="Account">
+    <FormSection label="Account">
       <Field fieldName="username" />
       <Field fieldName="nickname" />
       <Field fieldName="email" />
@@ -716,7 +716,7 @@ export default function UserProfileFormPage() {
       <FormToolbar />
 
       <FormBody>
-        <FormSection labelName="General" hideHeader>
+        <FormSection label="General" hideHeader>
           <Field fieldName="fullName" />
           <Field fieldName="birthDate" />
           <Field fieldName="gender" />
@@ -786,6 +786,7 @@ Recommended default layout:
 | `schemaBuilder` | `(context) => ZodTypeAny` | No       | -                                     | Runtime schema extender. Receives `{ metaModel, baseSchema }` built from resolved metadata. |
 | `readOnly`      | `boolean`                 | No       | `false`                               | Force read-only mode.                                                                       |
 | `defaultValues` | `Record<string, unknown>` | No       | -                                     | Extra default values merged into metadata defaults. Useful for injecting parent context such as `relatedField` values. |
+| `copyFromId`    | `string \| null`          | No       | -                                     | New mode only: prefill the form with the copyable field values (`getCopyableFields`) of this source record (duplicate flow). Full-page forms normally use the `?copyFrom=<id>` search param instead; embedded forms pass this prop. Explicit context (`defaultValues`, search params, related field) wins over copied values. |
 | `enableWorkflow`       | `boolean`                 | No       | `false`                               | Show workflow action group in toolbar left area (edit mode only). |
 | `enableCreate`         | `boolean`                 | No       | auto                                  | Built-in `Create New` action switch. `false` disables. Omitted follows default behavior (read-only forms hide unless explicitly `true`). |
 | `enableDuplicate`      | `boolean`                 | No       | auto                                  | Built-in duplicate action switch. `false` disables. Omitted follows default behavior (read-only forms hide unless explicitly `true`). |
@@ -819,7 +820,7 @@ Remote `Field.onChange` in `ModelForm`:
 
 | Prop          | Type        | Required | Default                                      | Notes                                     |
 | ------------- | ----------- | -------- | -------------------------------------------- | ----------------------------------------- |
-| `title`       | `string`    | No       | `metaModel.labelName` (fallback `pageTitle`) | Optional override.                        |
+| `title`       | `string`    | No       | `metaModel.label` (fallback `pageTitle`) | Optional override.                        |
 | `description` | `string`    | No       | `metaModel.description`                      | Optional override.                        |
 | `extras`      | `ReactNode` | No       | -                                            | Extra header content rendered near title. |
 | `children`    | `ReactNode` | No       | -                                            | Display-mode content below description. `Field` children render as read-only values via `FieldDisplayScope`. Use `Group` for inline layout. |
@@ -852,7 +853,7 @@ Remote `Field.onChange` in `ModelForm`:
 
 | Prop        | Type        | Required | Default | Notes                                                |
 | ----------- | ----------- | -------- | ------- | ---------------------------------------------------- |
-| `labelName`  | `string`    | Yes      | -       | Visible tab label.                                                                    |
+| `label`  | `string`    | Yes      | -       | Visible tab label.                                                                    |
 | `value`      | `string`    | No       | auto    | Optional stable tab id; auto-derived from label.                                      |
 | `sectionNav` | `boolean`   | No       | -       | Overrides `FormBody`'s `sectionNav` for this tab only. Takes priority when defined.   |
 | `children`   | `ReactNode` | No       | -       | Tab panel content. `FormSection` remains recommended.                                  |
@@ -863,7 +864,7 @@ Remote `Field.onChange` in `ModelForm`:
 
 | Prop          | Type                  | Required | Default  | Notes                                                                                 |
 | ------------- | --------------------- | -------- | -------- | ------------------------------------------------------------------------------------- |
-| `labelName`   | `string`              | No       | -        | Visible section label; also used as the section-nav anchor text.                      |
+| `label`   | `string`              | No       | -        | Visible section label; also used as the section-nav anchor text.                      |
 | `description` | `string`              | No       | -        | Optional helper text rendered under the section header.                               |
 | `className`   | `string`              | No       | -        | Extra wrapper class for the section container.                                        |
 | `columns`     | `1 \| 2 \| 3 \| 4`    | No       | `2`      | Responsive grid column count for section content on `md+` layouts.                    |
@@ -874,10 +875,10 @@ Remote `Field.onChange` in `ModelForm`:
 Notes:
 
 - `FormSection` registers itself to the nearest `FormBody` section registry automatically.
-- Nav label falls back to `"Section"` when `labelName` is omitted.
+- Nav label falls back to `"Section"` when `label` is omitted.
 - Generic labels (`"Section"`) are auto-renamed in nav as `Section 1`, `Section 2`, and so on.
 - `hideHeader` only affects the rendered header; it does not disable section-nav registration.
-- `divided` is most useful when sections have no `labelName` (i.e. the header itself is hidden) and visual separation is still needed. When `labelName` is present the heading already provides visual separation, so `divided` is typically unnecessary.
+- `divided` is most useful when sections have no `label` (i.e. the header itself is hidden) and visual separation is still needed. When `label` is present the heading already provides visual separation, so `divided` is typically unnecessary.
 - `FormSection` supports only local UI actions: `type="link"` and `type="custom"` with `placement="header"` or `placement="inline"`.
 
 ### Section Nav
@@ -897,22 +898,22 @@ Stacked example:
 
 ```tsx
 <FormBody sectionNav>
-  <FormSection labelName="General" hideHeader>
+  <FormSection label="General" hideHeader>
     <Field fieldName="name" />
     <Field fieldName="code" />
   </FormSection>
 
-  <FormSection labelName="Security">
+  <FormSection label="Security">
     <Field fieldName="passwordMinLength" />
     <Field fieldName="passwordComplexityEnabled" />
   </FormSection>
 
-  <FormSection labelName="Audit">
+  <FormSection label="Audit">
     <Field fieldName="createdBy" readOnly />
     <Field fieldName="createdDate" readOnly />
   </FormSection>
 
-  <FormSection labelName="Advanced">
+  <FormSection label="Advanced">
     <Field fieldName="description" />
   </FormSection>
 </FormBody>
@@ -924,18 +925,18 @@ Tabbed example:
 import { FormBody, FormTab } from "@/components/views/form/components/FormBody";
 
 <FormBody>
-  <FormTab labelName="Profile" sectionNav>
-    <FormSection labelName="General">
+  <FormTab label="Profile" sectionNav>
+    <FormSection label="General">
       <Field fieldName="name" />
       <Field fieldName="code" />
     </FormSection>
 
-    <FormSection labelName="Advanced">
+    <FormSection label="Advanced">
       <Field fieldName="description" />
     </FormSection>
   </FormTab>
 
-  <FormTab labelName="Members">
+  <FormTab label="Members">
     <Field fieldName="userIds" />
   </FormTab>
 </FormBody>
@@ -968,7 +969,8 @@ Rules:
 - built-in workflow/create/duplicate/delete toolbar behavior is configured on `ModelForm`/`ModelSideForm` props
 - edit mode with unsaved changes: clicking business actions asks whether to discard changes before continuing
 - create mode: built-in `Duplicate` / `Delete` remain visible but disabled
-- built-in `Duplicate` still uses backend `copyById`; exclusion of `BaseModel.reversedFields` is handled by backend duplicate semantics
+- built-in `Duplicate` only appears when the model metadata is `copyable` (`MetaModel.copyable === true`); non-copyable models never expose the action regardless of `enableDuplicate`
+- built-in `Duplicate` never inserts directly: it loads the source record's copyable values via `getCopyableFields` and opens a prefilled new-mode form (full-page forms navigate to `new?copyFrom=<id>`; ModelSideForm enters inline create mode with the prefill), so the user can adjust unique/business fields before saving through the normal create flow; which fields are copyable (decided by each field's `MetaField.copyable`) is resolved by the backend
 
 Complete example:
 
@@ -985,7 +987,7 @@ import { ExternalLink, Lock, RefreshCw, ShieldCheck } from "lucide-react";
 function UnlockDialog() {
   return (
     <ActionDialog title="Unlock Account">
-      <Field fieldName="reason" labelName="Reason" widgetType="Text" />
+      <Field fieldName="reason" label="Reason" widgetType="Text" />
     </ActionDialog>
   );
 }
@@ -993,7 +995,7 @@ function UnlockDialog() {
 <ModelForm modelName="UserAccount">
   <FormToolbar>
     <Action
-      labelName="Lock"
+      label="Lock"
       operation="lockAccount"
       placement="toolbar"
       icon={Lock}
@@ -1001,7 +1003,7 @@ function UnlockDialog() {
     />
     <Action
       type="dialog"
-      labelName="Unlock"
+      label="Unlock"
       operation="unlockAccount"
       placement="more"
       icon={ShieldCheck}
@@ -1010,17 +1012,17 @@ function UnlockDialog() {
   </FormToolbar>
 
   <FormBody>
-    <FormSection labelName="Credentials">
+    <FormSection label="Credentials">
       <Action
         type="link"
-        labelName="Open Docs"
+        label="Open Docs"
         placement="header"
         icon={ExternalLink}
         href="https://docs.example.com/credentials"
       />
       <Action
         type="custom"
-        labelName="Regenerate Preview"
+        label="Regenerate Preview"
         placement="inline"
         icon={RefreshCw}
         onClick={() => console.log("regenerate")}
@@ -1045,14 +1047,14 @@ Inside `ModelForm` children, use `useModelFormContext()` to access:
 
 ## Cascaded Field Path
 
-`<Field fieldName="lastDeploymentId.deployStatus" />` (dot-notation) reads a related record's field and renders it read-only. The form plan walker collects every cascaded path declared in the body, calls `POST /metadata/resolveCascadedPaths` once to resolve all leaf metaFields, folds the matching SubQueries into `getById`, and exposes the resolutions to `<Field>` via `CascadedResolutionsProvider`.
+`<Field fieldName="lastActivityId.status" />` (dot-notation) reads a related record's field and renders it read-only. The form plan walker collects every cascaded path declared in the body, calls `POST /metadata/resolveCascadedPaths` once to resolve all leaf metaFields, folds the matching SubQueries into `getById`, and exposes the resolutions to `<Field>` via `CascadedResolutionsProvider`.
 
 ```tsx
 <ModelForm modelName="AppEnv" recordId={envId}>
   <Field fieldName="name" />
-  <Field fieldName="lastDeploymentId" />                {/* normal ManyToOne */}
-  <Field fieldName="lastDeploymentId.deployStatus" />   {/* cascaded — readonly */}
-  <Field fieldName="lastDeploymentId.finishedTime" />   {/* shares base, auto-merged */}
+  <Field fieldName="lastActivityId" />                {/* normal ManyToOne */}
+  <Field fieldName="lastActivityId.status" />   {/* cascaded — readonly */}
+  <Field fieldName="lastActivityId.finishedTime" />   {/* shares base, auto-merged */}
   <Field fieldName="ownerId.departmentId.name" />       {/* depth-3 */}
 </ModelForm>
 ```
@@ -1060,11 +1062,56 @@ Inside `ModelForm` children, use `useModelFormContext()` to access:
 Notes:
 
 - always read-only — never registers with RHF, never appears in `formState.dirtyFields`
-- effective metadata (fieldType / widgetType / labelName / optionSetCode) comes from the **leaf** field; `props.label` / `props.widgetType` still override
+- effective metadata (fieldType / widgetType / label / optionSetCode) comes from the **leaf** field; `props.label` / `props.widgetType` still override
 - works inside `ModelSideForm` automatically (it composes `ModelForm`)
 - nested cascaded paths inside `formView` callbacks (depth > 0) are not yet resolved — dev `console.warn` and "-" placeholder
 
 Full reference & semantics: [Cascaded Field Path](../fields/fields#cascaded-field-path-display) in the fields README.
+
+## Permission Integration
+
+`ModelForm` auto-gates by `modelName` against the generated `MODEL_PERMISSIONS` lookup — business pages do not call `usePermission` for the standard toolbar controls or for any custom `<Action permission="…">` child.
+
+What gets gated for free, just from passing `modelName`:
+
+| Built-in control       | Action segment checked  | Effect when denied                                                |
+| ---------------------- | ----------------------- | ----------------------------------------------------------------- |
+| Toolbar "Save" / write | `update`                | Form is forced into read-only mode (no Save button, fields frozen) |
+| Toolbar "Edit" button  | `update`                | Hidden — `enableUpdate` resolves to false                          |
+| Toolbar "Create New"   | `create`                | Hidden — `enableCreate` resolves to false                          |
+| Toolbar "Duplicate"    | `create`                | Hidden — `enableDuplicate` resolves to false                       |
+| Toolbar "Delete"       | `delete`                | Hidden — `enableDelete` resolves to false                          |
+
+Custom `<Action permission="…" />` children inside `<FormToolbar>` and `<FormSection>` are filtered before render — same semantics as `ModelTable`. Pass the manifest action segment (e.g. `permission="transfer"`).
+
+Status semantics match `ModelTable`:
+
+- **Granted** → control / action stays visible.
+- **Denied** → control / action hidden; form is forced read-only when `update` is denied (even if the URL is `?mode=edit`, the user lands in read mode — server enforces this independently, this is UX).
+- **Unmanaged** → `(modelName, action)` not in `MODEL_PERMISSIONS` (ambiguous across pages). Auto-gate has no opinion; page can pass explicit `readOnly` / `enable*` props instead.
+
+Business props still win when set to `false` (page explicitly hides Edit even for SUPER_ADMIN). SUPER_ADMIN short-circuits permission lookups internally.
+
+Example:
+
+```tsx
+<ModelForm modelName="Employee">
+  <FormToolbar>
+    <Action
+      type="custom"
+      label="Transfer"
+      permission="transfer"          {/* gated by Employee.transfer */}
+      onClick={openTransferDialog}
+    />
+  </FormToolbar>
+  <FormSection label="Profile">
+    <Field fieldName="fullName" />
+    ...
+  </FormSection>
+</ModelForm>
+```
+
+`Save` / `Cancel` / `Edit` / `Delete` are auto-shown / auto-hidden purely from `modelName="Employee"`; "Transfer" is auto-hidden when the user lacks `Employee.transfer`.
 
 ## Built-in Behavior
 
@@ -1077,7 +1124,7 @@ Full reference & semantics: [Cascaded Field Path](../fields/fields#cascaded-fiel
 - Metadata-driven field props are resolved by the internal field runtime; business code should stay on `Field`.
 - Cancel / Back behavior (split by mode and placement):
   - edit / create mode: `Cancel` button lives in the toolbar next to `Save` (`FormPrimaryActions`); confirms when dirty, resets to the latest loaded snapshot, returns to read-only mode
-  - read mode: `Back` button lives in the page header right side (`FormBackButton`, hidden inside `ModelSideForm`); navigates to the list page
+  - read mode: `Back` button lives in the page header right side (`FormBackButton`, hidden inside `ModelSideForm`); navigates to the route derived from the breadcrumb (`resolveBackRoute` = navigation manifest + pathname). MultiView `linkTo` detail routes (`/list/<tab>/<id>`) resolve to the tab crumb `/list?tab=<tab>` instead of the route-less `/list/<tab>`, so Back never 404s and lands on the originating tab — no carried query state, refresh / deep-link resolve identically
 - Save/create mutation handling with toasts.
 - Audit query is built in via `useGetChangeLogQuery(modelName, id)` with:
   - `pageNumber=1`
@@ -1103,7 +1150,7 @@ Full reference & semantics: [Cascaded Field Path](../fields/fields#cascaded-fiel
 
 The page header right side hosts two navigation primitives that operate at the page/record level (not the form-data level), keeping `FormToolbar` focused on form lifecycle actions:
 
-- `FormBackButton` (read-only mode only) — returns to the list. Hidden in `ModelSideForm` and in edit/create mode (where `Cancel` in the toolbar handles the equivalent intent).
+- `FormBackButton` (read-only mode only) — returns to the breadcrumb-derived route (`resolveBackRoute`): the registered list page for normal detail, or the tab crumb `/list?tab=<tab>` for MultiView `linkTo` detail. Purely path/manifest derived (no carried query state). Hidden in `ModelSideForm` and in edit/create mode (where `Cancel` in the toolbar handles the equivalent intent).
 - `FormSiblingNav` — `‹ index/total ›` buttons that jump to the previous/next sibling record.
 
 Sibling navigation requires that the user arrived via a row/card click in a sibling list view (`ModelTable` / `ModelBoard` / `ModelCard`) of the same model:

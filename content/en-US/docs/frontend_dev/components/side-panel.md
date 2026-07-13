@@ -32,7 +32,7 @@ import { SideTree } from "@/components/views/shared/side-panel/SideTree";
     title="System Model"
     modelName="SysModel"
     filterField="modelId"
-    labelField="labelName"
+    labelField="label"
     parentField="parentId"
     treeLimit={1000}
     selectionMode="single"
@@ -40,7 +40,7 @@ import { SideTree } from "@/components/views/shared/side-panel/SideTree";
   />
   <Field fieldName="modelName" />
   <Field fieldName="fieldName" />
-  <Field fieldName="labelName" />
+  <Field fieldName="label" />
   <Field fieldName="fieldType" />
 </ModelTable>
 ```
@@ -54,7 +54,7 @@ import { SideCard } from "@/components/views/shared/side-panel/SideCard";
 import { Group } from "@/components/fields/composition";
 import { Action } from "@/components/actions/Action";
 
-<ModelTable modelName="DesignWorkItem">
+<ModelTable modelName="DesignActivity">
   <SideCard
     modelName="DesignApp"
     filterField="appId"
@@ -75,8 +75,8 @@ import { Action } from "@/components/actions/Action";
       <Field fieldName="updatedTime" />
     </SideCard.Footer>
 
-    <Action type="link" labelName="Edit" placement="header" href="/design/app/{id}" />
-    <Action type="custom" labelName="Archive" placement="more" onClick={(ctx) => { /* ... */ }} />
+    <Action type="link" label="Edit" placement="header" href="/design/app/{id}" />
+    <Action type="custom" label="Archive" placement="more" onClick={(ctx) => { /* ... */ }} />
   </SideCard>
 
   <Field fieldName="name" />
@@ -96,7 +96,7 @@ import { SideList } from "@/components/views/shared/side-panel/SideList";
     searchable
   >
     <Field fieldName="modelName" />
-    <Field fieldName="labelName" />
+    <Field fieldName="label" />
   </SideList>
 
   <Field fieldName="fieldName" />

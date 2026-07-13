@@ -1,376 +1,399 @@
 # Flow Starter
 
-## 1. Flow 概念
+## Flow 概念
+Flow 是业务流程的更广义概念。
 
-Flow 是对业务流程的一种更通用抽象。
+关系：
+Flow > BP = Workflow > BPMN
 
-关系大致可以理解为：
+表达式引擎主要用于解决数据计算问题，实现类似 QLExpress 的计算引擎。BPMN 场景更适合工作流或规则引擎（如 Flowable）。例如 Flowable 集成 JUEL 以支持简单表达式解析。DMN 规则引擎更适合真/假决策场景，例如 BP 中的 sequenceFlow 路由条件。Drools 更侧重于规则配置与管理。
 
-> Flow > 业务流程（BP） ≈ Workflow > BPMN
+示例场景：
+- 导入：更适合 BPMN。每个动作是数据更新节点；动作有顺序但可异步处理。
+- 审批：BPMN + DMN。BPMN 处理审批流程与路径。DMN 处理复杂审批路由。DQL 解决复杂审批人查询。
 
-表达式引擎主要用于解决数据计算问题，可以实现类似 QLExpress 的计算引擎。带有流程编排的场景更适合使用工作流或规则引擎，如 Flowable；Flowable 集成了 JUEL 用于简单表达式解析。DMN 规则引擎更适合布尔决策场景，例如 BP 中 `sequenceFlow` 的路由条件；Drools 更偏向规则配置与管理。
+`flow-starter` 是 Softa 的元数据驱动流程引擎 starter。涵盖：
 
-典型场景示例：
+- 供可视化编辑器使用的设计时图文档
+- 编译时校验并转换为运行时 bundle
+- 按 `designId` 发布的 bundle 修订版
+- 流程、校验和计算流程的运行时执行
+- 实例、审批任务、审批记录、委托、抄送规则和触发事件的持久化投影
+- 可选的基于 Pulsar 的触发与异步任务集成
 
-- 导入：更适合用 BPMN 表达，每个动作是一次数据更新节点，节点之间有执行顺序，但可以异步处理。
-- 审批：结合 BPMN + DMN 使用。BPMN 负责审批流程与路径，DMN 负责复杂的审批路由，复杂人员查询可交给 DQL。
+本 README 记录本模块当前实现的后端契约。
 
-## 2. Flow 设计
+## 当前模型
 
-Flow Starter 提供事件驱动的流程定义与执行能力。
+### 设计、发布、运行时
 
-### 支持的流程类型
+| 层级 | 主要类型 | 说明 |
+|---|---|---|
+| 设计时 | `DesignFlowDefinition`、`FlowGraphDocument`、`FlowGraphNode`、`FlowGraphEdge` | 面向编辑器的图 DTO |
+| 发布时 | `FlowCompiler`、`CompiledFlowDefinition`、`FlowPublishService` | 编译、校验、发布修订版、回滚 |
+| 运行时 | `FlowRuntimeEngine`、`FlowExecutionState` | 执行已发布 bundle、挂起/恢复、持久化投影 |
 
-- 自动化流程（automated flow）
-- Cron 流程（cron flow）
-- 表单流程（form flow）
-- 校验流程（validation flow）
-- onchange 事件流程（onchange event flow）
-- AI Agent 流程（AI Agent flow）
+### Flow 身份与修订版
 
-### 支持的节点类型
+- `FlowDesign` 是草稿工作副本。
+- `FlowBundle` 是编译后的已发布快照。
+- 已发布修订版以 `designId` 为键，而非 `flowCode`。
+- `FlowStartRequest` 按以下顺序解析 bundle：
+  1. `bundleId` — 固定到确切的已发布修订版
+  2. `designId` — 启动当前活动修订版
+- 要启动特定历史修订版，通过修订版列表端点查找其 `bundleId` 并作为 `bundleId` 传入。
+- `FlowBundle.designJson` 保留发布时使用的设计快照，以便编辑器恢复历史画布。
+
+### Flow 场景
+
+模块现使用单一的 `FlowScenario` 枚举，取代旧的 `FlowKind + FlowPurpose` 拆分。
+
+| 场景 | 含义 |
+|---|---|
+| `PROCESS` | 有状态运行时流程，持久化实例；涵盖审批式与自动化式流程 |
+| `VALIDATION` | 无状态同步校验流程——瞬态求值：无实例行、无 trace、无事件日志 |
+| `COMPUTE` | 无状态同步计算/onchange 流程——瞬态求值，同样零足迹规则 |
+
+场景决定执行策略：`PROCESS` 流程经 `FlowRuntimeEngine.start`（持久化、可恢复）；`VALIDATION` / `COMPUTE` 流程经 `evaluate`——相同遍历但零 flow 足迹。任务节点产生的业务写入仍加入调用方事务，因此求值失败会回滚。
+
+### 节点类型
+
+当前 `FlowNodeType` 值：
+
+- 控制：`Start`、`End`、`Timer`
+- 路由：`InclusiveGateway`、`ParallelFork`、`ParallelJoin`
+- 人工：`Approval`、`HumanTask`*
+- 任务：`Script`、`CreateRecord`、`GetRecord`、`UpdateRecord`、`DeleteRecord`、`QueryRecords`、`ValidateData`、`Transform`、`CallService`、`CallWebhook`、`SendEmail`、`SendSms`、`SendInboxNotification`、`QueryAI`、`AsyncTask`、`GenerateFile`
+- 子流程：`Subflow`
+- 数据：`ForEach`*、`ReturnValue`
+
+\* `HumanTask` 和 `ForEach` 已定义但**尚未运行时支持**：它们从节点面板中省略，并在编译时被拒绝（`UNSUPPORTED_NODE_TYPE`），因此包含它们的流程无法发布。
+
+### 运行时状态
+
+已定义的 `FlowExecutionStatus` 值：
+
+- `Pending`
+- `Running`
+- `Waiting` — 停在一个或多个等待上（待审批和/或定时器 / 异步回调）。具体原因位于实例的待审批列表和等待令牌列表中，因此单一状态可同时覆盖因不同原因挂起的并行分支。
+- `Rejected`
+- `Returned`
+- `Withdrawn`
+- `Cancelled`
+- `Completed`
+- `Failed`
+
+## API 概览
 
-- 创建数据、更新数据、删除数据、查询数据、计算数据
-- 决策网关、生成报表、调用 AI、发送消息
-- 校验数据、WebHook、异步任务、子流程（subflow）
+### 设计 API（flow 编辑器）
 
-### 支持的事件类型
+基础路径：`/flow/designs` — 图形编辑器的专用表面（完整编辑器 API 契约位于 flow-starter 源仓库的 `starters/flow-starter/docs/frontend-editor-api.md`）。通用模型 API `/FlowDesign/**` 仍作为平台数据平面可用，且有意不被拦截。
 
-- create、update、delete、changed（create/update/delete）、onchange、API、cron、subflow、message
-- 按钮事件可以通过 API 事件来实现
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| `POST` | `/flow/designs` | 创建草稿 |
+| `GET` | `/flow/designs?keyword=&scenario=&pageNumber=&pageSize=` | 分页草稿列表（不含画布） |
+| `GET` | `/flow/designs/{id}` | 加载一个草稿（画布 + 乐观锁 version） |
+| `POST` | `/flow/designs/{id}/save` | 自动保存画布；过期 version 会被拒绝 |
+| `POST` | `/flow/designs/{id}/delete` | 删除从未发布过的草稿 |
+| `POST` | `/flow/designs/{id}/duplicate` | 在新 flow code 下复制草稿 |
+| `POST` | `/flow/designs/validate` | 校验提交的文档；诊断作为成功 payload 返回 |
+| `POST` | `/flow/designs/{id}/publish` | 将已保存草稿发布为新活动修订版 |
+| `POST` | `/flow/designs/{id}/restore?bundleId=` | 从历史 bundle 快照恢复草稿画布 |
+| `GET` | `/flow/designs/{id}/status` | 发布状态：修订版徽章 + dirty 标志 |
+| `GET` | `/flow/designs/{id}/availableVariables?nodeId=` | 节点可见变量（表达式自动完成） |
+| `POST` | `/flow/designs/{id}/debugRun` | 将当前草稿编译并作为调试 bundle 运行（非沙箱） |
+| `GET` | `/flow/designs/{id}/debugRuns` | 调试运行历史，最新在前 |
+
+### Bundle API（已发布修订版）
+
+基础路径：`/flow/bundles`
 
-Flow 同时支持**同步/异步**执行，以及**流程版本管理**。
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| `GET` | `/flow/bundles?designId=` | 一个设计的修订版列表（无 `designId` 时为每个设计的活动 bundle） |
+| `GET` | `/flow/bundles/{bundleId}?include=design` | 一个修订版摘要，可选含画布完整设计快照 |
+| `POST` | `/flow/bundles/{bundleId}/activate` | 使此修订版成为设计的生效修订版（回滚 = 向前滚动） |
 
-## 3. 适用场景
+### 节点描述符 API
 
-1. 批量导入场景下的校验流程，以及导入完成后的业务处理流程
-2. 数据校验同步执行，其它业务处理异步执行
-3. 消息与邮件由流程中的消息节点生产（例如入职欢迎邮件）
-4. 各类业务流程配置与定时任务（基于 Cron）的组合
+基础路径：`/flow/nodeDescriptors`
 
-## 4. 总体概览
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| `GET` | `/flow/nodeDescriptors` | 列出编辑器面板的所有节点描述符 |
+| `GET` | `/flow/nodeDescriptors?scenario=PROCESS` | 按 `FlowScenario` 过滤描述符 |
 
-Flow Starter 为 Softa 提供可配置的流程引擎。流程由 `FlowConfig`、`FlowTrigger`、`FlowNode`、`FlowEdge` 等元数据定义。
+### 运行时 API
 
-一个流程可以通过以下来源触发：
+基础路径：`/flow/runtime`
 
-- ChangeLog 事件（数据的 create/update/delete）
-- API 事件
-- Cron 事件
-- 子流程调用（subflow）
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| `POST` | `/flow/runtime/instances/start` | 启动流程实例 |
+| `POST` | `/flow/runtime/instances/debug` | 启动并返回解析的 bundle 快照及运行时状态 |
+| `GET` | `/flow/runtime/instances/{instanceId}?includeTrace=` | 获取一个运行时实例（默认排除 trace） |
+| `GET` | `/flow/runtime/instances/{instanceId}/overlay` | 画布绘制的每节点运行状态 |
+| `GET` | `/flow/runtime/instances/{instanceId}/trace?sinceSequence=` | 用于轮询的增量 trace 行 |
+| `POST` | `/flow/runtime/instances/search` | 分页实例摘要（filters：flowCode/designId/status/initiator/model/row） |
+| `POST` | `/flow/runtime/instances/approve` | 批准待审批 |
+| `POST` | `/flow/runtime/instances/reject` | 拒绝待审批 |
+| `POST` | `/flow/runtime/instances/transfer` | 转交待审批任务 |
+| `POST` | `/flow/runtime/instances/delegate` | 委托待审批任务 |
+| `POST` | `/flow/runtime/instances/add-sign-before` | 插入前置签批人 |
+| `POST` | `/flow/runtime/instances/add-sign-after` | 插入后续签批人 |
+| `POST` | `/flow/runtime/instances/cc` | 发送抄送通知 |
+| `POST` | `/flow/runtime/instances/cc/read` | 标记抄送为已读 |
+| `POST` | `/flow/runtime/instances/return` | 退回待审批 |
+| `POST` | `/flow/runtime/instances/resubmit` | 重新提交已退回实例 |
+| `POST` | `/flow/runtime/instances/withdraw` | 撤回流程实例 |
+| `POST` | `/flow/runtime/instances/urge` | 催办待审批人 |
+| `POST` | `/flow/runtime/instances/comment` | 添加评论审计条目 |
+| `GET` | `/flow/runtime/instances/{instanceId}/nodes/{nodeId}/formPermissions` | 获取字段级表单权限 |
+| `POST` | `/flow/runtime/trigger` | 触发事件并启动匹配流程 |
+| `POST` | `/flow/runtime/onchange` | 瞬态运行 `COMPUTE` 流程并返回变量 diff |
+| `POST` | `/flow/runtime/validate` | 针对候选行数据瞬态运行 `VALIDATION` 流程；按 flow code 返回各流程声明的输出 |
 
-执行模型支持：
+引擎内部恢复回调位于 `/internal/flow/runtime/instances/{resumeAsync|resumeTimer}`（INTERNAL 身份范围）——不属于面向用户的表面。
 
-- 事务提交前的同步校验（validation）
-- 通过 MQ 的异步处理
+`actorId` / `initiatorId` / `tenantId` **从不**由客户端发送：每个操作请求从登录上下文服务端盖章（`@JsonProperty(READ_ONLY)`），所有查询端点从上下文解析当前 actor。
 
-## 5. 依赖
+## 审批投影 API
 
-```xml
-<dependency>
-  <groupId>io.softa</groupId>
-  <artifactId>flow-starter</artifactId>
-  <version>${softa.version}</version>
-</dependency>
-```
+### 审批任务
 
-## 6. 前置条件
+基础路径：`/flow/approvalTasks`
 
-- 数据库中需要存在流程相关的元数据表：
-  - `FlowConfig`、`FlowTrigger`、`FlowNode`、`FlowEdge`
-  - `FlowStage`、`FlowEvent`、`FlowInstance`、`FlowDebugHistory`
-- 需要 Pulsar 用于异步流程事件与异步任务执行。
-- ChangeLog 与 Cron 集成非必需，如需从这些来源触发流程则需开启对应集成。
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| `GET` | `/flow/approvalTasks/pending` | 当前 actor 的待办任务（分页：返回 `Page`） |
+| `GET` | `/flow/approvalTasks/completed` | 当前 actor 的已完成任务（分页） |
+| `GET` | `/flow/approvalTasks/cc` | 当前 actor 的抄送任务（分页；`read=` 过滤未读/已读） |
+| `GET` | `/flow/approvalTasks/inbox` | 统一收件箱视图 |
+| `GET` | `/flow/approvalTasks/instance/{instanceId}` | 一个运行时实例的所有任务 |
 
-## 7. 配置
+### 审批记录
 
-### 开启 Flow
+基础路径：`/flow/approvalRecords`
 
-```yml
-enable:
-  flow: true
-```
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| `GET` | `/flow/approvalRecords/instance/{instanceId}` | 按运行时实例的审批历史 |
+| `GET` | `/flow/approvalRecords/history` | actor 范围的审批历史 |
+| `GET` | `/flow/approvalRecords/cc/sent` | 发送方抄送历史 |
 
-### MQ 主题
+### 抄送配置
 
-```yml
-mq:
-  topics:
-    change-log:
-      topic: dev_demo_change_log
-      flow-sub: dev_demo_change_log_flow_sub
-    cron-task:
-      topic: dev_demo_cron_task
-      flow-sub: dev_demo_cron_task_flow_sub
-    flow-async-task:
-      topic: dev_demo_flow_async_task
-      sub: dev_demo_flow_async_task_sub
-    flow-event:
-      topic: dev_demo_flow_event
-      sub: dev_demo_flow_event_sub
-```
+基础路径：`/flow/ccConfigs`
 
-## 8. 核心概念
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| `POST` | `/flow/ccConfigs` | 创建抄送规则 |
+| `GET` | `/flow/ccConfigs?flowCode=` | 按 `flowCode` 列出抄送规则 |
+| `POST` | `/flow/ccConfigs/{id}/deactivate` | 停用抄送规则 |
 
-- **FlowConfig**：流程定义。关键字段包括 `name`、`flowType`、`sync`、`rollbackOnFail`、`debugMode`、`active` 等。
-- **FlowTrigger**：触发定义，包括 `eventType`、`sourceModel`、`sourceFields`、`triggerCondition`、`cronId` 等。
-- **FlowNode**：执行单元，包含 `nodeType`、`nodeParams`、`nodeCondition` 以及可选的 `exceptionPolicy`。
-- **FlowEdge**：节点之间的连线，主要用于可视化布局。
-- **FlowStage**：可选的阶段分组。
+### 委托
 
-## 9. 执行模型
+基础路径：`/flow/delegations`
 
-### 触发来源
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| `POST` | `/flow/delegations` | 创建委托规则 |
+| `GET` | `/flow/delegations/my?delegatorId=` | 某委托人创建的委托 |
+| `GET` | `/flow/delegations/to-me?delegateId=` | 分配给某受托人的活动委托 |
+| `POST` | `/flow/delegations/{id}/cancel` | 取消委托规则 |
 
-- **ChangeLog 事件**：由 ORM 的变更日志产生。
-  - 同步流程在事务提交前（BEFORE_COMMIT）执行，用于校验。
-  - 异步流程通过 MQ 消费执行。
-- **API 事件**：通过 `POST /automation/apiEvent`，传入 `TriggerEventDTO` 触发。
-- **Cron 事件**：从 cron-task 主题消费消息，根据 `cronId` 路由到对应流程。
-- **子流程事件**：`TriggerSubflow` 节点通过 `triggerId` 触发子流程。
+### 事件日志
 
-### 触发条件
+基础路径：`/flow/events`
 
-- `FlowTrigger.triggerCondition` 在 `triggerParams` 上进行求值：
-  - ChangeLog 事件：`CREATE/UPDATE` 使用变更后的数据，`DELETE` 使用变更前的数据。
-  - API 事件：`TriggerEventDTO.eventParams`。
-- `UPDATE` 事件中，`sourceFields` 用于限制“哪些字段变化时触发”；若为空则任意字段更新都会触发。
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| `GET` | `/flow/events?flowCode=&sourceModel=&sourceRowId=&instanceId=&success=&pageNumber=&pageSize=` | 分页事件日志，最新在前（filters 以 AND 组合；列表行排除 parameters payload） |
 
-### 同步 vs 异步
+## 审批模型
 
-- `FlowConfig.sync = true`：在当前进程内执行；当 `rollbackOnFail = true` 时会包裹在事务中。
-- `FlowConfig.sync = false`：会发送 `FlowEventMessage` 到 MQ，由 `FlowEventConsumer` 异步执行。
+### 审批与拒绝阈值
 
-### 重要行为说明
+- 审批模式：`ANY_ONE`、`UNANIMOUS`、`MIN_COUNT`、`PERCENTAGE`
+- 拒绝模式：`ANY_ONE`、`UNANIMOUS`、`MIN_COUNT`、`PERCENTAGE`
+- 每个 actor 每轮只能投一票有效票。
+- 编译时校验器拒绝不可能的阈值组合。
 
-- FlowManager 在启动时一次性加载所有 `FlowTrigger` 与 `FlowConfig` 到内存；更新元数据后需要重启或提供手动刷新机制。
-- 校验类流程在 BEFORE_COMMIT 阶段执行，不建议在其中修改数据。
-- `FlowConstant.EXCLUDE_TRIGGER_MODELS` 会排除 `FlowInstance`、`FlowEvent` 等模型，避免流程互相触发造成循环。
+### 审批人解析
 
-## 10. 上下文与表达式
+审批节点支持：
 
-Flow 引擎在节点之间传递一个 `NodeContext`，其中包括：
+- 通过 `config.approvers` 的静态审批人
+- 通过 `config.approverSource` 的动态审批人
+- 通过 `config.emptyApproverStrategy` 的空审批人策略
 
-- FlowEnv 变量：`NOW`、`TODAY`、`YESTERDAY` 等
-- `TriggerParams`：触发该流程的记录数据
-- `SourceRowId`：触发记录的主键 ID
+当前默认解析路径支持的动态源类型：
 
-模板表达式语法（所有模板统一使用 `{{ expr }}`）：
+- `VariableList`
+- `Expression`
+- `InitiatorManager`
+- `Role`
 
-- 变量与表达式：`{{ TriggerParams.id }}`、`{{ price * qty }}`、`{{ NOW }}`。
-- Filters 中的保留字段引用：`{{ @fieldName }}`、`{{ @parent.fieldName }}`。
+重要集成说明：
 
-节点结果：
+- `OrganizationService` 定义为 SPI（接入时 `MetadataOrganizationService` 为默认）。默认解析路径还通过 `ApproverResolutionService` 支持基于变量的源。
+- 若需真实组织树查找，提供自定义 `OrganizationService` bean，或在流程到达审批节点前填充 `initiatorManagerId`、`roleApprovers` 等解析变量。
 
-- 多数节点会将输出结果放入 `NodeContext`，键为节点 ID。
-- 在后续节点或模板中可通过 `{{ <nodeId> }}` 或 `{{ <nodeId>.field }}` 引用。
+### 其他审批操作
 
-节点异常策略：
+- transfer
+- delegate
+- add-sign-before
+- add-sign-after
+- cc
+- read-cc
+- return
+- resubmit
+- withdraw
+- urge
+- comment
 
-- `FlowNode.exceptionPolicy` 支持 `NodeExceptionPolicy`，可以检测结果为空/为 false 等情况，并发出 `EndFlow` 或 `ThrowException` 等信号。
+### 超时处理
 
-## 11. 已实现的节点类型
+审批超时策略：
 
-- **ValidateData**：表达式校验，失败时抛出 `BusinessException`。
-- **GetData**：查询数据，支持返回单行/多行/字段值/是否存在/计数等。
-- **ComputeData**：计算表达式结果。
-- **CreateData / UpdateData / DeleteData**：基于模板与 Filters 的 CRUD。
-- **ExtractTransform**：从集合中抽取指定字段并组成 Set。
-- **Condition**：判断条件并发出异常信号。
-- **TriggerSubflow**：通过 triggerId 触发子流程。
-- **AsyncTask**：向 MQ 发送异步任务消息。
-- **QueryAi**：调用 AI，并将回复写入上下文。
-- **ReturnData**：设置流程返回结果。
+- `REMIND`
+- `AUTO_APPROVE`
+- `AUTO_REJECT`
+- `ESCALATE`
 
-## 12. 预留/待实现的节点类型
+`ApprovalTimeoutScheduler` 针对持久化的待审批处理提醒、自动操作和升级。
 
-这些节点当前为占位实现，需要自定义 Processor 才能生效：
+## 任务执行模型
 
-- BranchGateway
-- LoopByDataset
-- LoopByPage
-- TransferStage
-- GenerateReport
-- SendMessage
-- WebHook
-- ApprovalNode
+基于执行器的任务节点使用 `TaskNodeConfig`。节点 **`FlowNodeType`** 选择执行器——config 中没有单独的 `executor` 字段。
 
-其中，`FlowNodeService` 已经包含了 LoopByDataset 与 LoopByPage 的循环控制逻辑，但 Starter 未提供对应的 `NodeProcessor` 实现，需要由业务自定义。
-
-## 13. 关键参数与枚举
-
-以下参数与当前代码保持一致，字段值支持：
-
-- 常量
-- 表达式 `{{ expr }}`（变量、Map 访问、计算等），如 `{{ TriggerParams.status }}`、`{{ price * qty }}`、`{{ NOW }}`
-- Filters 中的保留字段引用：`{{ @fieldName }}`、`{{ @parent.fieldName }}`
-
-常用枚举：
-
-- **NodeGetDataType**：MultiRows、SingleRow、OneFieldValue、OneFieldValues、Exist、Count
-- **ValueType**：String、Integer、Long、Double、BigDecimal、Boolean、Date、DateTime、Time
-
-同时，文档还列出了各节点类型的参数对象与字段（可参考英文版表格或 `examples/node-params.json` 示例）。
-
-## 14. REST API
-
-- `POST /automation/apiEvent`
-- `POST /automation/onchange`（当前返回空 Map）
-- `POST /automation/simulateEvent`（仅在非生产环境可用）
-- `GET /FlowConfig/getByModel`
-- `GET /FlowConfig/getFlowById`
-
-此外，`EntityController` 也提供 `FlowConfig`、`FlowTrigger`、`FlowNode`、`FlowEdge`、`FlowStage`、`FlowInstance`、`FlowEvent`、`FlowDebugHistory` 等实体的 CRUD 接口。
-
-## 15. 示例
-
-API event request body:
 ```json
 {
-  "sourceModel": "Order",
-  "sourceRowId": 1001,
-  "triggerId": 2001,
-  "eventParams": {
-    "id": 1001,
-    "status": "PAID",
-    "totalAmount": 199.99,
-    "updatedBy": "system"
-  }
+  "input": {
+    "to": ["{{ applicantEmail }}"],
+    "subject": "Order {{ orderId }} confirmed",
+    "htmlBody": "<h1>Thank you for your order!</h1>"
+  },
+  "outputVariable": "taskResult"
 }
 ```
 
-API event:
-```bash
-curl -X POST http://localhost:8080/automation/apiEvent \
-  -H 'Content-Type: application/json' \
-  -d @- <<'JSON'
-{
-  "sourceModel": "Order",
-  "sourceRowId": 1001,
-  "triggerId": 2001,
-  "eventParams": {
-    "id": 1001,
-    "status": "PAID",
-    "totalAmount": 199.99,
-    "updatedBy": "system"
-  }
-}
-JSON
-```
+- `input` 支持 `{{ expr }}` 插值；解析由执行器拥有（数据执行器为类型感知，自由形状 payload 为递归插值）
+- `options` 为执行器特定
+- 存在时，`outputVariable` 将原始执行器结果存于一个变量名之下
 
-Simulate flow event request body (non-prod only):
-```json
-{
-  "flowId": 3001,
-  "flowNodeId": null,
-  "rollbackOnFail": true,
-  "triggerId": 2001,
-  "sourceModel": "Order",
-  "sourceRowId": 1001,
-  "triggerParams": {
-    "id": 1001,
-    "status": "PAID",
-    "totalAmount": 199.99
-  }
-}
-```
+每种任务节点类型在 `TaskConfigTypes` 中注册**类型化 input config DTO**：编译器在发布时将 `config.input` 解析为 DTO，并拒绝缺失的必填键（`MISSING_REQUIRED_INPUT`），因此配置错误的节点在发布时失败而非执行中途失败。`DefaultTaskExecutorRegistry` 在启动时断言每个已注册执行器的节点类型都有此类条目。
 
-Simulate flow event (non-prod only):
-```bash
-curl -X POST http://localhost:8080/automation/simulateEvent \
-  -H 'Content-Type: application/json' \
-  -d @- <<'JSON'
-{
-  "flowId": 3001,
-  "flowNodeId": null,
-  "rollbackOnFail": true,
-  "triggerId": 2001,
-  "sourceModel": "Order",
-  "sourceRowId": 1001,
-  "triggerParams": {
-    "id": 1001,
-    "status": "PAID",
-    "totalAmount": 199.99
-  }
-}
-JSON
-```
+### 内置任务执行器
 
-Node parameters reference (common `nodeParams` templates):
-```json
-{
-  "validateData": {
-    "expression": "TriggerParams.totalAmount > 0",
-    "exceptionMsg": "totalAmount must be greater than 0 for order {{ TriggerParams.id }}"
-  },
-  "getData": {
-    "modelName": "Order",
-    "getDataType": "MultiRows",
-    "fields": ["id", "status", "totalAmount"],
-    "filters": ["status", "=", "PENDING"],
-    "orders": ["createdTime", "DESC"],
-    "limitSize": 100
-  },
-  "extractTransform": {
-    "collectionVariable": "{{ 101 }}",
-    "itemKey": "id"
-  },
-  "computeData": {
-    "expression": "1 + 2",
-    "valueType": "Integer"
-  },
-  "updateData": {
-    "modelName": "Order",
-    "pkVariable": "{{ 102 }}",
-    "rowTemplate": {
-      "status": "PROCESSING",
-      "updatedAt": "{{ NOW }}"
-    }
-  },
-  "deleteData": {
-    "modelName": "Order",
-    "filters": ["status", "=", "CANCELLED"]
-  },
-  "condition": {
-    "passCondition": "TriggerParams.status == 'PAID'",
-    "exceptionSignal": "EndFlow",
-    "exceptionMessage": "status is not PAID, flow ended"
-  },
-  "returnData": {
-    "dataTemplate": {
-      "orderId": "{{ TriggerParams.id }}",
-      "status": "{{ TriggerParams.status }}"
-    }
-  },
-  "asyncTask": {
-    "asyncTaskHandlerCode": "OrderNotify",
-    "dataTemplate": {
-      "orderId": "{{ TriggerParams.id }}",
-      "status": "{{ TriggerParams.status }}"
-    }
-  },
-  "triggerSubflow": {
-    "subflowTriggerId": 4001,
-    "dataTemplate": {
-      "orderId": "{{ TriggerParams.id }}",
-      "totalAmount": "{{ TriggerParams.totalAmount }}"
-    }
-  },
-  "loopByDataset": {
-    "dataSetParam": "{{ 101 }}",
-    "loopItemNaming": "orderItem"
-  },
-  "loopByPage": {
-    "model": "Order",
-    "fields": ["id", "status"],
-    "filters": ["status", "=", "PENDING"],
-    "pageSize": 50,
-    "pageParamNaming": "pageRows"
-  },
-  "queryAi": {
-    "robotId": 1,
-    "conversationId": 1,
-    "queryContent": "Summarize order {{ TriggerParams.id }}"
-  }
-}
-```
+| 节点类型 | 执行器 bean | 说明 |
+|---|---|---|
+| `CREATE_RECORD` | `CreateDataTaskExecutor` | 内置 |
+| `GET_RECORD` | `GetDataTaskExecutor` | 内置 |
+| `UPDATE_RECORD` | `UpdateDataTaskExecutor` | 内置 |
+| `DELETE_RECORD` | `DeleteDataTaskExecutor` | 内置 |
+| `QUERY_RECORDS` | `QueryRecordsTaskExecutor` | 内置；可通过 `flow.task.builtin.query-records.enabled=false` 退出以注册自定义执行器 |
+| `VALIDATE_DATA` | `ValidateDataTaskExecutor` | 内置 |
+| `TRANSFORM` | `ExtractTransformTaskExecutor` | 内置 |
+| `CALL_WEBHOOK` | `WebHookTaskExecutor` | 内置 |
+| `CALL_SERVICE` | `CallServiceTaskExecutor` | **默认禁用**（ADR-0005）。通过 `flow.task.builtin.call-service.enabled=true` 启用；随后 `flow.task.call-service.allow-list` 中允许的 bean 名前缀非空为必填 |
+| `SEND_EMAIL` | `SendEmailTaskExecutor` | 仅当 `MessageService` 可用时注册 |
+| `SEND_SMS` | `SendSmsTaskExecutor` | 仅当 `MessageService` 可用时注册 |
+| `SEND_INBOX_NOTIFICATION` | `SendInboxNotificationTaskExecutor` | 仅当 `MessageService` 可用时注册 |
+| `QUERY_AI` | `QueryAiTaskExecutor` | 仅当 `AiRobotService` 可用时注册 |
+| `ASYNC_TASK` | `AsyncTaskExecutor` | 仅当 `FlowAsyncTaskProducer` 可用时注册 |
+| `GENERATE_FILE` | `GenerateFileTaskExecutor` | 仅当 `DocumentTemplateService`（file-starter）可用时注册 |
+
+当前模块说明：
+
+- `CALL_SERVICE` 附带内置执行器但**默认禁用**（ADR-0005）：按名称调用任意 Spring bean 方法，因此必须显式启用并给定非空 bean 名 allow-list。
+
+## 触发与消息集成
+
+支持的触发源（`TriggerSource` 密封子类型）：
+
+- `EntityChange`
+- `Api`
+- `Cron`
+- `Subflow`
+- `FieldChange`（仅 COMPUTE 场景）
+
+Pulsar 连接组件按条件注册：
+
+| 属性 | 组件 | 用途 |
+|---|---|---|
+| `mq.topics.flow-event.topic` | `FlowEventProducer`、`FlowEventConsumer` | 异步触发触发与消费 |
+| `mq.topics.flow-async-task.topic` | `FlowAsyncTaskProducer`、`FlowAsyncTaskConsumer` | 异步任务分派与回调恢复 |
+| `mq.topics.change-log.topic` | `ChangeLogFlowConsumer` | 实体变更驱动的流程触发 |
+| `mq.topics.cron-task.topic` | `CronTaskFlowConsumer` | Cron 驱动的流程触发 |
+| `mq.topics.flow-timer.topic` | `FlowTimerConsumer` | 定时器唤醒消费端 |
+
+重要定时器说明：
+
+- 模块包含定时器恢复消费者。
+- 发布 `FlowTimerMessage` 的调度器或生产者仍须由宿主应用或其他集成模块提供。
+
+## 持久化模型
+
+| 实体 | 说明 |
+|---|---|
+| `FlowDesign` | 草稿工作副本 |
+| `FlowBundle` | 已发布编译 bundle |
+| `FlowInstance` | 持久化运行时实例状态（trace 和审批历史**未**嵌入——见两个专用表） |
+| `FlowExecutionTrace` | 仅追加的执行 trace 行（内存状态仅保留当前尝试的 delta） |
+| `FlowApprovalTask` | 待办/已完成/抄送任务投影 |
+| `FlowApprovalRecord` | 审批操作审计账本——权威审批历史，由实例存储与实例行在同一事务中 flush |
+| `FlowCcConfig` | 自动抄送规则 |
+| `FlowDelegation` | 委托规则 |
+| `FlowEvent` | 触发事件日志 |
+| `FlowDebugHistory` | 调试快照 |
+| `FlowFormDefinition` | 绑定到流程节点的表单定义 |
+| `FlowParallelBranch` | 并行分支跟踪 |
+
+本模块主要存储适配器：
+
+- `OrmFlowBundleRegistry`
+- `OrmFlowInstanceStore`
+
+## 节点描述符契约
+
+编辑器面板由通过 `/flow/nodeDescriptors` 暴露的 `FlowNodeDescriptor` 记录构建。
+
+- 结构描述符来自 `BuiltinNodeDescriptorProvider`
+- 基于执行器的任务描述符来自 `TaskExecutorDescriptorProvider`
+- 描述符包含 label、icon、排序、config schema、默认 config 和允许的场景
+
+`TaskExecutorDescriptorProvider` 仅暴露实际注册为 Spring bean 的执行器的任务节点，因此 `QUERY_AI`、`ASYNC_TASK` 等条件执行器仅在其依赖存在时出现。
+
+## 前端图兼容性
+
+设计图 DTO 仍与 xyflow/react 风格结构对齐：
+
+| xyflow/react | flow-starter |
+|---|---|
+| `Node.id` | `FlowGraphNode.id` |
+| `Node.type` | `FlowGraphNode.type` |
+| `Node.position` | `FlowGraphNode.position` |
+| `Node.width` / `height` | `FlowGraphNode.width` / `height` |
+| `Node.data` | `FlowGraphNode.data` |
+| `Edge.id` | `FlowGraphEdge.id` |
+| `Edge.source` / `target` | `FlowGraphEdge.source` / `target` |
+| `Edge.sourceHandle` / `targetHandle` | `FlowGraphEdge.sourceHandle` / `targetHandle` |
+| `Edge.type` | `FlowGraphEdge.type` |
+| `Edge.label` | `FlowGraphEdge.label` |
+| `Edge.data` | `FlowGraphEdge.data` |
+| `Viewport {x, y, zoom}` | `FlowGraphViewport {x, y, zoom}` |
+
+## 宿主应用集成检查清单
+
+在真实应用中启用 `flow-starter` 前，请确认：
+
+- 将 `flow-starter` 加入应用 classpath
+- 通过通用模型 API 创建并暴露 `FlowDesign` 草稿
+- 若需邮件、短信、IM 或应用内通知，提供真实的 `ApprovalNotificationService`
+- 若需基于经理/角色/部门的审批人，提供自定义 `OrganizationService` 或填充审批人解析变量
+- 若使用触发或异步任务，启用 Pulsar topics
+- 若使用 `TIMER` 节点，提供定时调度/发布
+- 若流程需调用 Spring bean，显式启用 `CALL_SERVICE`（及其 bean 名 allow-list）；其他任务节点类型均附带可用执行器，按能力 bean 条件注册

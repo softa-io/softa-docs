@@ -38,7 +38,7 @@ export default function EditUserAccountPage() {
       <FormHeader />
       <FormToolbar>
         <Action
-          labelName="Lock Account"
+          label="Lock Account"
           operation="lockAccount"
           placement="more"
           confirmMessage="Lock this user account?"
@@ -46,7 +46,7 @@ export default function EditUserAccountPage() {
         />
         <Action
           type="dialog"
-          labelName="Unlock Account"
+          label="Unlock Account"
           operation="unlockAccount"
           placement="more"
           successMessage="User account unlocked."
@@ -55,7 +55,7 @@ export default function EditUserAccountPage() {
       </FormToolbar>
 
       <FormBody>
-        <FormSection labelName="General" hideHeader>
+        <FormSection label="General" hideHeader>
           <Field fieldName="username" />
           <Field fieldName="nickname" />
           <Field fieldName="email" />
@@ -68,27 +68,27 @@ export default function EditUserAccountPage() {
 }
 ```
 
-`ModelForm` 现在会提供运行时 / provider 与页面壳层间距，并自动解析路由 `id`：
+`ModelForm` 现在提供 runtime/provider 与页面壳层间距，并自动解析路由 `id`：
 
 - `params.id === "new"` => 创建模式（`id = null`）
 - `params.id` 存在且不为 `"new"` => 编辑模式
-- 如果路由没有 `id` 参数 => 默认创建模式
+- 若路由没有 `id` 参数 => 默认创建模式
 
 校验行为：
 
-- 默认是 `onBlur`
-- `reValidateMode` 是 `onChange`
+- 默认为 `onBlur`
+- `reValidateMode` 为 `onChange`
 
 ### 对话框模式（Action type="form"）
 
 通过 `<Action type="form" />` 打开时，`ModelForm` 可在对话框内运行。此模式下会自动适配：
 
-- **ID 解析**：忽略路由 `params.id`（仅使用 `id` prop；默认可视为创建模式）
-- **创建 / 更新成功**：关闭对话框，而不是 `router.push`
-- **取消**：关闭对话框，而不是返回导航
-- **relatedField 注入**：父记录 `id` 会合并进 `defaultValues`，形如 `{ [relatedField]: parentId }`，并写入 API payload —— 即使表单中未展示该字段
+- **ID 解析**：忽略路由 `params.id`（仅使用 `id` prop；默认创建模式）
+- **创建 / 更新成功**：关闭对话框，而非 `router.push`
+- **取消**：关闭对话框，而非返回上一页
+- **relatedField 注入**：父记录 `id` 会合并进 `defaultValues` 为 `{ [relatedField]: parentId }`，并包含在 API 载荷中 —— 即使该字段未在表单中展示
 
-`ModelForm` 本身无需额外 props —— 对话框模式通过 `ActionFormRuntimeContext` 自动识别。
+`ModelForm` 本身无需特殊 props —— 对话框模式通过 `ActionFormRuntimeContext` 自动检测。
 
 示例：
 
@@ -97,7 +97,7 @@ export default function EditUserAccountPage() {
 <FormToolbar>
   <Action
     type="form"
-    labelName="Add Config Group"
+    label="Add Config Group"
     placement="toolbar"
     component={ConfigGroupForm}
     relatedField="tenantConfigId"
@@ -110,10 +110,10 @@ function ConfigGroupForm() {
     <ModelForm modelName="TenantConfigGroup">
       <FormToolbar />
       <FormBody enableAuditLog={false}>
-        <FormSection labelName="General" hideHeader>
+        <FormSection label="General" hideHeader>
           <Field fieldName="groupName" />
           <Field fieldName="description" />
-          {/* tenantConfigId 未展示，但会自动注入 API payload */}
+          {/* tenantConfigId 未展示，但会自动注入 API 载荷 */}
         </FormSection>
       </FormBody>
     </ModelForm>
@@ -121,28 +121,28 @@ function ConfigGroupForm() {
 }
 ```
 
-需要自定义布局？在子组件中使用 `useModelFormContext()`，并直接调整 `FormHeader` / `FormToolbar` / `FormBody` 的组合即可。
+需要自定义变体？在子组件中使用 `useModelFormContext()`，并直接重排 `FormHeader/FormToolbar/FormBody`。
 
-字段的规范化用法现在统一维护在 [Fields](../fields/fields)。
-widget 兼容性和 widget 专属示例维护在 [Widget 矩阵](../fields/widgets)。
-关联字段行为维护在 [关联字段](../fields/relations)。
-这些文档用于说明：
+字段的标准用法现位于 [Fields](../fields/fields)。
+Widget 兼容性与 widget 专属示例见 [Widget 矩阵](../fields/widgets)。
+关联字段行为见 [关联字段](../fields/relations)。
+这些文档涵盖：
 
 - `Field` props 与元数据覆盖
-- `FieldType -> WidgetType` 兼容关系
+- `FieldType -> WidgetType` 兼容性
 - widget 专属 `widgetProps`
 - 关联字段行为（`Reference`、`OneToMany`、`ManyToMany`）
 
-下面的快速示例保留为本页捷径，但字段 README 才是事实来源。
+下方快速示例仅作本地捷径；fields README 为准。
 
-默认建议是使用 `Field`（通过 `fieldType` 自动分发元数据），并配合元数据覆盖与条件控制。
+默认推荐使用 `Field`（按 `fieldType` 元数据自动分发），配合元数据覆盖与基于条件的控制。
 
 `Field` 上的元数据覆盖示例：
 
 ```tsx
 <Field
   fieldName="name"
-  labelName="Custom Label"
+  label="Custom Label"
   readonly
   required={false}
   hideLabel={true}
@@ -153,17 +153,17 @@ widget 兼容性和 widget 专属示例维护在 [Widget 矩阵](../fields/widge
 />
 ```
 
-`Field.defaultValue` 是创建态的字段级覆盖。静态页面默认值优先使用它；路由参数、父上下文值等动态预填则放在对话框 / 页面级 `defaultValues`。
+`Field.defaultValue` 是创建时的字段覆盖。静态、页面级默认值优先用它；动态预填（如路由参数或父上下文值）仍放在对话框 / 页面级 `defaultValues`。
 
-当你传入容器级 `defaultValues` 时，请直接使用字段 UI 值：
+若传递容器级 `defaultValues`，请直接使用字段 UI 值：
 
 - `File`：`FileInfo | null`
 - `MultiFile`：`FileInfo[]`
-- `JSON` / `DTO`：结构化对象 / 数组
+- `JSON` / `DTO`：结构化 object/array 值
 - `Filters`：`FilterCondition`
-- `Orders`：结构化排序元组 / 数组
+- `Orders`：结构化 order 元组 / 数组
 
-更详细的字段值契约见 [Field](../fields/fields)。
+详细字段值契约见 [Field](../fields/fields)。
 
 条件字段控制示例：
 
@@ -184,7 +184,7 @@ import { dependsOn, Field } from "@/components/fields";
 />
 
 <Field
-  fieldName="itemName"
+  fieldName="label"
   required={dependsOn(["active", "itemCode"], ({ values, isEditing }) =>
     !isEditing && values.active === true && values.itemCode !== "Temp"
   )}
@@ -194,15 +194,15 @@ import { dependsOn, Field } from "@/components/fields";
 远程字段联动示例：
 
 ```tsx
-<Field fieldName="itemCode" onChange={["itemName", "itemTone"]} />
+<Field fieldName="itemCode" onChange={["label", "itemTone"]} />
 
 <Field
   fieldName="itemCode"
-  onChange={{ update: ["itemName"], with: ["active"] }}
+  onChange={{ update: ["label"], with: ["active"] }}
 />
 ```
 
-关联过滤联动示例：
+关联筛选联动示例：
 
 ```tsx
 <Field fieldName="companyId" />
@@ -219,14 +219,14 @@ import { dependsOn, Field } from "@/components/fields";
 />
 ```
 
-`ModelForm` 中的关联过滤说明：
+`ModelForm` 中的关联筛选说明：
 
-- `{{ companyId }}` 会在发送关联查询前，从当前表单值中解析（统一模板语法 `{{ expr }}`）
-- 后端环境 token，例如 `TODAY`、`NOW`、`USER_ID`、`USER_COMP_ID`，会原样透传；字面量可使用 `{{ 'value' }}` 或后端 token 如 `{{ NOW }}`
-- `Field.filters` 会覆盖 `metaField.filters`；若省略，仍会使用元数据中的过滤条件
-- 未解析的 `{{ expr }}` 依赖会暂停关联查询，而不是加载未过滤数据
+- `{{ companyId }}` 在关联查询发出前，从当前表单值解析（统一模板语法 `{{ expr }}`）
+- `TODAY`、`NOW`、`USER_ID`、`USER_COMP_ID` 等后端环境 token 原样透传；字面量按需使用 `{{ 'value' }}` 或 `{{ NOW }}` 等后端 token
+- `Field.filters` 覆盖 `metaField.filters`；若省略，元数据筛选仍生效
+- 未解析的 `{{ expr }}` 依赖会暂停关联查询，而非加载未筛选数据
 
-通过 `widgetType` 驱动渲染行为的示例：
+使用 `widgetType` 驱动渲染行为的示例：
 
 ```tsx
 <Field
@@ -274,17 +274,17 @@ import { dependsOn, Field } from "@/components/fields";
 />
 ```
 
-`File` / `MultiFile` 在编辑模式下会自动使用当前 `ModelForm` 的记录 id。
+`File` / `MultiFile` 在编辑模式下会自动使用当前 `ModelForm` 记录 id。
 
 ### Widget Props
 
-字段级输入占位文案请使用 `placeholder`。
-`widgetProps` 只用于 widget 专属配置。
+字段级输入占位符使用 `placeholder`。
+仅 widget 专属配置使用 `widgetProps`。
 
 作用域说明：
 
-- `widgetProps` 会应用到 `ModelForm` widget 和表格内联编辑器，因为这些路径直接渲染 `Field`
-- `ModelTable` / `RelationTable` 的只读单元格有意不消费 `widgetProps`；表格图片 / 文件单元格使用 [ModelTable](./table) 中描述的统一紧凑渲染器
+- `widgetProps` 适用于 `ModelForm` widget 与表格行内编辑器，因为这些路径直接渲染 `Field`
+- `ModelTable` / `RelationTable` 只读单元格刻意不消费 `widgetProps`；表格 image/file 单元格使用 [ModelTable](./table) 中描述的共享紧凑渲染器
 
 当前支持的示例：
 
@@ -352,48 +352,48 @@ import { dependsOn, Field } from "@/components/fields";
 
 `JsonField` 现在默认使用 `react-codemirror`。常见 JSON 编辑器 `widgetProps`：
 
-- `height`：编辑器固定高度
-- `minHeight`：编辑器最小高度
-- `maxHeight`：编辑器最大高度
-- `lineNumbers`：显示或隐藏行号
-- `lineWrapping`：长行折行
+- `height`：固定编辑器高度
+- `minHeight`：最小编辑器高度
+- `maxHeight`：最大编辑器高度
+- `lineNumbers`：显示或隐藏行号槽
+- `lineWrapping`：长行换行
 - `tabSize`：缩进大小
 - `formatOnBlur`：失焦后格式化合法 JSON
-- `autoFocus`：挂载后自动聚焦编辑器
+- `autoFocus`：挂载时聚焦编辑器
 
-`CodeWidget` 支持这些常见 `widgetProps`：
+`CodeWidget` 支持以下常见 `widgetProps`：
 
 - `language`：`plain`、`java`、`html`、`json`、`markdown`、`python`、`sql`、`yaml`、`yml`
-- `height`：编辑器固定高度
-- `minHeight`：编辑器最小高度
-- `maxHeight`：编辑器最大高度
-- `lineNumbers`：显示或隐藏行号
-- `lineWrapping`：长行折行
+- `height`：固定编辑器高度
+- `minHeight`：最小编辑器高度
+- `maxHeight`：最大编辑器高度
+- `lineNumbers`：显示或隐藏行号槽
+- `lineWrapping`：长行换行
 - `tabSize`：缩进大小
-- `autoFocus`：挂载后自动聚焦编辑器
+- `autoFocus`：挂载时聚焦编辑器
 
-`MarkdownWidget` 支持这些常见 `widgetProps`：
+`MarkdownWidget` 支持以下常见 `widgetProps`：
 
 - `mode`：`split`、`edit`、`preview`（默认：`split`）
-- `height`：编辑 / 预览区域固定高度
-- `minHeight`：编辑 / 预览区域最小高度
-- `maxHeight`：编辑 / 预览区域最大高度
-- `lineNumbers`：是否显示编辑器行号
-- `lineWrapping`：编辑模式下是否折行
+- `height`：固定编辑器 / 预览高度
+- `minHeight`：最小编辑器 / 预览高度
+- `maxHeight`：最大编辑器 / 预览高度
+- `lineNumbers`：显示或隐藏编辑器行号
+- `lineWrapping`：编辑器模式下长行换行
 - `tabSize`：缩进大小
-- `autoFocus`：挂载后自动聚焦编辑器
+- `autoFocus`：挂载时聚焦编辑器
 
-`MarkdownWidget` 使用 `react-markdown` 做预览，并默认启用 `remark-gfm`。
+`MarkdownWidget` 使用 `react-markdown` 预览，并默认启用 `remark-gfm`。
 
 `mode` 行为：
 
-- `split`：桌面端并排显示编辑器和预览，小屏幕下纵向堆叠
+- `split`：桌面端并排显示编辑器与预览；较小屏幕垂直堆叠
 - `edit`：仅显示编辑器
 - `preview`：仅显示预览
 
-### Field 全宽
+### 字段全宽
 
-`Field` 在这些字段渲染器上支持 `fullWidth`：
+以下字段渲染器支持 `Field` 的 `fullWidth`：
 
 - `StringField + TextWidget`（`fieldType="String"` + `widgetType="Text"`）
 - `StringField + RichTextWidget`（`fieldType="String"` + `widgetType="RichText"`）
@@ -402,8 +402,8 @@ import { dependsOn, Field } from "@/components/fields";
 - `OneToManyField`
 - `ManyToManyField`
 
-以上字段默认都是 `fullWidth={true}`。
-传入 `fullWidth={false}` 可回退为普通网格宽度。
+以上字段默认 `fullWidth={true}`。
+设置 `fullWidth={false}` 以普通网格宽度渲染。
 
 ```tsx
 <Field fieldName="description" widgetType="Text" />
@@ -412,36 +412,36 @@ import { dependsOn, Field } from "@/components/fields";
 <Field fieldName="userIds" fullWidth={false} />
 ```
 
-### Field 标签可见性
+### 字段标签可见性
 
-`Field` 支持通过 `hideLabel` 控制是否渲染整个字段标签区块（`FormLabelWithTooltip`）。
+`Field` 支持 `hideLabel`，控制是否渲染整个字段标签块（`FormLabelWithTooltip`）。
 
 - 默认：`hideLabel={false}`（显示标签）
-- 设置 `hideLabel={true}` 后，会隐藏整个标签区块（标签文本 + tooltip 图标）
+- 设置 `hideLabel={true}` 隐藏整个标签块（标签文字 + tooltip 图标）
 
 ```tsx
 <Field fieldName="description" hideLabel={true} />
 ```
 
-### ReadOnly vs Disabled
+### ReadOnly 与 Disabled
 
-`readOnly` 和 `disabled` 的语义不同：
+`readOnly` 与 `disabled` 语义不同：
 
-- `readOnly`：用户依然可以清晰阅读值，字段仍是正常详情阅读体验的一部分。更适合详情页、审计型查看页面，以及需要便于浏览 / 复制的字段。
-- `disabled`：控件暂时或结构性不可用。更适合权限限制、前置条件未满足、异步提交 / 加载中、工作流 / 状态锁定或功能门控。
+- `readOnly`：用户可清晰查看值，字段仍是正常详情阅读体验的一部分。详情页、审计式查看、需便于扫描 / 复制的字段优先用它。
+- `disabled`：控件暂时或结构上不可用。权限限制、前置条件未满足、异步提交 / 加载、工作流 / 状态锁定或功能门控时优先用它。
 
-在人力资源 SaaS 表单中，详情页通常应优先使用 `readOnly`，而不是 `disabled`。
+HR SaaS 表单中，详情页通常应优先 `readOnly` 而非 `disabled`。
 
-对于 `widgetType="Code"` 与 `widgetType="Markdown"`，只读且值为空时会显示共用的 `CodeEditorEmptyState` 提示，而不是空白 CodeMirror（参见 `src/components/fields/widgets/README.md`）。
+对 `widgetType="Code"` 与 `widgetType="Markdown"`，只读且值为空的字段会显示共享 `CodeEditorEmptyState` 提示，而非空 CodeMirror（见 `src/components/fields/widgets/README.md`）。
 
 ## XToMany 字段（默认增量提交）
 
-`ReferenceField` 现在只负责：
+`ReferenceField` 现在仅处理：
 
 - `ManyToOne`
 - `OneToOne`
 
-`OneToMany` 和 `ManyToMany` 由内部专用字段组件处理，但业务侧依然通过：
+`OneToMany` 与 `ManyToMany` 由专用字段组件内部处理，仍通过以下方式使用：
 
 ```tsx
 <Field fieldName="..." />
@@ -449,21 +449,21 @@ import { dependsOn, Field } from "@/components/fields";
 
 ### OneToMany
 
-- UI：表单体内的本地关联表格
+- UI：表单体内的本地关联表
 - 支持：新增、编辑、删除
-- 没有 `formView`：行编辑使用表格单元格内联编辑（点击行进入编辑）
-- 有 `formView`：行创建 / 编辑使用运行时 `ModelDialog`
-- 默认提交：patch map（增量）
+- 无 `formView`：行编辑使用表格单元格行内编辑（点击行进入编辑）
+- 有 `formView`：行编辑 / 创建使用运行时 `ModelDialog`
+- 提交默认：patch map（增量）
 
-内联编辑行为（`OneToMany`，且没有 `formView`）：
+行内编辑行为（`OneToMany`，无 `formView`）：
 
-- 行只有在点击后才进入编辑模式（页面进入时不会自动选中）
-- 修改的值会直接写入主表单的关联数组，并在父级 `Save/Create` 时一起保存
-- 可编辑单元格仅限声明在 `<RelationTable><Field /></RelationTable>` 中的列，并与关联模型可编辑字段取交集
-- 内联编辑只在本地表格模式（`!isPaged` 或远程条件未满足）下可用
-- 行级 `required` / `readonly` 条件基于当前关联行求值，`scope="relation-table"`
-- 行级 `Field.onChange` 远程联动也运行在 `scope="relation-table"`，且只 patch 当前关联行
-- `RelationTable.pageSize` 仅对分页关联表格（`isPaged`）生效
+- 仅点击行后进入编辑模式（进入页面时不自动选中）
+- 编辑值直接写入主表单关联数组，随父级 `Save/Create` 保存
+- 可编辑单元格限于 `<RelationTable><Field /></RelationTable>` 声明的列与可编辑关联模型字段的交集
+- 行内编辑仅在本地表模式可用（`!isPaged` 或远程条件未满足）
+- 行级 `required` / `readonly` 条件针对当前关联行评估，`scope="relation-table"`
+- 行级 `Field.onChange` 远程联动也在 `scope="relation-table"` 运行，且仅 patch 当前关联行
+- `RelationTable.pageSize` 仅影响分页关联表（`isPaged`）
 
 启用模式：
 
@@ -473,7 +473,7 @@ function OptionItemsTableView() {
     <RelationTable orders={["sequence", "ASC"]} pageSize={10}>
       <Field fieldName="sequence" />
       <Field fieldName="itemCode" />
-      <Field fieldName="itemName" />
+      <Field fieldName="label" />
       <Field fieldName="active" />
     </RelationTable>
   );
@@ -490,26 +490,26 @@ function MultiSortTableView() {
     >
       <Field fieldName="sequence" />
       <Field fieldName="itemCode" />
-      <Field fieldName="itemName" />
+      <Field fieldName="label" />
     </RelationTable>
   );
 }
 
-// 启用表格单元格内联编辑（推荐用于本地关联编辑）
+// 启用表格单元格行内编辑（本地关联编辑推荐）
 <Field fieldName="optionItems" tableView={OptionItemsTableView} />
 
-// 关闭内联编辑，改为对话框编辑
+// 禁用行内编辑，使用对话框编辑
 <Field
   fieldName="optionItems"
   tableView={OptionItemsTableView}
   formView={OptionItemsFormView}
 />
 
-// 分页关联表格（启用分页；可能切换到远程 searchPage 模式）
+// 分页关联表（启用分页；可能切换到远程 searchPage 模式）
 <Field fieldName="optionItems" tableView={OptionItemsTableView} isPaged />
 ```
 
-提交 payload 形态：
+提交载荷形状：
 
 ```json
 {
@@ -521,7 +521,7 @@ function MultiSortTableView() {
 
 创建模式约束：
 
-- 只允许 `Create`
+- 仅允许 `Create`
 
 更新模式：
 
@@ -537,7 +537,7 @@ function OptionItemsTableView() {
     <RelationTable orders={["sequence", "ASC"]} pageSize={10}>
       <Field fieldName="sequence" />
       <Field fieldName="itemCode" />
-      <Field fieldName="itemName" readonly={[["active", "=", false]]} />
+      <Field fieldName="label" readonly={[["active", "=", false]]} />
       <Field fieldName="active" />
     </RelationTable>
   );
@@ -547,9 +547,9 @@ function OptionItemsFormView() {
   return (
     <ModelDialog title="Option Item">
       <FormBody enableAuditLog={false}>
-        <FormSection labelName="General" hideHeader>
+        <FormSection label="General" hideHeader>
           <Field fieldName="itemCode" />
-          <Field fieldName="itemName" />
+          <Field fieldName="label" />
           <Field fieldName="sequence" />
           <Field fieldName="active" />
           <Field fieldName="description" />
@@ -588,13 +588,13 @@ export default function SysOptionSetFormPage() {
 
 ### ManyToMany
 
-- UI：表单体中的本地关联表格
+- UI：表单体内的本地关联表
 - 支持：新增、删除
-- 新增会打开关联模型选择器表格对话框（搜索 / 排序 / 列 / 分页）
-- 可选的 `formView` 可以挂载自定义只读 `ModelDialog` 作为行详情
-- 默认提交：patch map（增量）
+- 新增打开关联模型选择表对话框（搜索 / 排序 / 列 / 分页）
+- 可选 `formView` 可挂载自定义只读 `ModelDialog` 查看行详情
+- 提交默认：patch map（增量）
 
-提交 payload 形态：
+提交载荷形状：
 
 ```json
 {
@@ -605,7 +605,7 @@ export default function SysOptionSetFormPage() {
 
 创建模式约束：
 
-- 只允许 `Add`
+- 仅允许 `Add`
 
 更新模式：
 
@@ -631,7 +631,7 @@ function UserRoleUserIdsTableView() {
 function UserRoleUserIdsFormView() {
   return (
     <ModelDialog title="User Detail">
-      <FormSection labelName="General" hideHeader>
+      <FormSection label="General" hideHeader>
         <Field fieldName="username" />
         <Field fieldName="nickname" />
         <Field fieldName="email" />
@@ -649,7 +649,7 @@ export default function UserRoleFormPage() {
       <FormToolbar />
 
       <FormBody>
-        <FormSection labelName="General" hideHeader>
+        <FormSection label="General" hideHeader>
           <Field fieldName="name" />
           <Field fieldName="code" />
           <Field fieldName="description" />
@@ -670,35 +670,35 @@ export default function UserRoleFormPage() {
 
 说明：
 
-- `tableView` 通过**零 props** 视图组件返回 `<RelationTable />`，并由子级 `<Field />` 声明以及可选的 `RelationTable.orders` / `RelationTable.pageSize` 控制关联表格列
-- `RelationTable.orders` 同时支持单个元组（`["username", "ASC"]`）或多个元组（`[["username", "ASC"], ["email", "DESC"]]`）
-- 远程关联表格和选择器查询会组合有效字段过滤条件（`Field.filters ?? metaField.filters`）、关联作用域过滤条件，以及运行时搜索 / 列过滤条件
-- `isPaged`（仅 `OneToMany` / `ManyToMany`）：
-  - `false`（默认）：在 `getById` 中包含关联 `subQuery`；关联表格 UI 不分页，渲染全部本地行
-  - `true`：关联表格启用分页 UI；当 `recordId + relatedModel + scoped relation filter` 就绪时，通过 `relatedModel.searchPage` 加载数据（远程模式），否则退回为本地分页
-- 关联表格 `pageSize` 默认是 `50`；只有在启用分页（`isPaged=true`）时才会显示页大小选择器
-- ManyToMany 的选择器对话框（`Add`）由服务端驱动；搜索 / 排序 / 翻页变化都会触发 `searchPage` 请求
-- `formView` 是可选的。在 `ManyToMany` 中，点击行会以只读模式打开 `ModelDialog`；新增 / 移除仍然走选择器行为
-- 未解析的 `{{ expr }}` 依赖会暂停远程关联查询和选择器查询，直到父表单中的依赖值存在
+- `tableView` 通过零 prop 视图组件控制关联表列，该组件返回带子 `<Field />` 声明的 `<RelationTable />`，以及可选的 `RelationTable.orders` / `RelationTable.pageSize`。
+- `RelationTable.orders` 支持单个元组（`["username", "ASC"]`）或多个元组（`[["username", "ASC"], ["email", "DESC"]]`）。
+- 远程关联表与选择器查询使用生效字段筛选（`Field.filters ?? metaField.filters`）、关联作用域筛选，以及运行时搜索 / 列筛选。
+- `isPaged`（仅 OneToMany/ManyToMany 字段）：
+  - `false`（默认）：在 `getById` 中包含关联 `subQuery`；关联表 UI 不分页，渲染全部本地行。
+  - `true`：关联表启用分页 UI；当 `recordId + relatedModel + 作用域关联筛选` 就绪时，由 `relatedModel.searchPage` 加载（远程模式），否则本地分页。
+- 关联表 pageSize 默认 `50`；仅启用分页时（`isPaged=true`）显示 page-size 选择器。
+- ManyToMany 选择器对话框（`Add`）由服务端驱动；搜索 / 排序 / 翻页变更会触发 `searchPage` 请求。
+- `formView` 可选。在 `ManyToMany` 中，点击行以只读模式打开 `ModelDialog`；新增 / 移除仍走选择器行为。
+- 未解析的 `{{ expr }}` 依赖会暂停远程关联查询与选择器查询，直到依赖的父表单值存在
 
-### OneToOne（所属内联）
+### OneToOne（拥有的内联）
 
-对于**所属**的 OneToOne 关系（例如 `UserProfile → UserAccount`），向 `OneToOne` 字段传入 `formView` 后，相关模型的字段会内联渲染到父表单中，而不是显示引用选择器。
+对于**拥有的** OneToOne 关系（如 `UserProfile → UserAccount`），向 `OneToOne` 字段传递 `formView` 会在父表单内联渲染其关联模型字段，而非显示引用选择器。
 
-- UI：内联在父表单体内的 `FormSection`
+- UI：父表单体内的内联 `FormSection`（可多个）
 - 支持：编辑所有声明的子字段
-- 子字段以 `{fieldName}.{subField}` 的形式注册到**父 RHF 实例**（例如 `userId.username`）
-- `getById` 会根据 `formView` JSX 静态推导出 `subQueries: { userId: { fields: [...] } }` 并自动注入，无需额外配置
-- 提交默认：增量（update 仅发送 `{ id, ...onlyChangedSubFields }`；create 发送完整子对象，不含 `id`）
-- `formView` 内的字段条件（`dependsOn`、`showWhen`）在子对象作用域内求值，监听父表单值时会正确添加前缀
-- `ManyToOne` 字段**不支持** `formView`；误用时开发模式下会打印 `console.error`
+- 子字段在**父 RHF 实例**中注册为 `{fieldName}.{subField}`（如 `userId.username`）
+- `getById` 自动从 `formView` JSX 静态推导并添加 `subQueries: { userId: { fields: [...] } }` —— 无需额外配置
+- 提交默认：增量（更新发送 `{ id, ...onlyChangedSubFields }`；创建发送无 `id` 的完整子对象）
+- `formView` 内的字段条件（`dependsOn`、`showWhen`）针对子对象作用域解析，监听父表单值时会正确加前缀
+- `ManyToOne` 字段**不支持** `formView`；误用会在 dev 模式显示 `console.error`
 
 用法：
 
 ```tsx
 function UserAccountOneToOneView() {
   return (
-    <FormSection labelName="Account">
+    <FormSection label="Account">
       <Field fieldName="username" />
       <Field fieldName="nickname" />
       <Field fieldName="email" />
@@ -716,13 +716,13 @@ export default function UserProfileFormPage() {
       <FormToolbar />
 
       <FormBody>
-        <FormSection labelName="General" hideHeader>
+        <FormSection label="General" hideHeader>
           <Field fieldName="fullName" />
           <Field fieldName="birthDate" />
           <Field fieldName="gender" />
         </FormSection>
 
-        {/* OneToOne 内联：在当前表单内渲染 UserAccount 的字段 */}
+        {/* OneToOne 内联：在此表单内渲染 UserAccount 字段 */}
         <Field fieldName="userId" formView={UserAccountOneToOneView} />
       </FormBody>
     </ModelForm>
@@ -730,7 +730,7 @@ export default function UserProfileFormPage() {
 }
 ```
 
-提交 payload 示例（update，仅 `nickname` 变更）：
+提交载荷形状（更新，仅 `nickname` 变更）：
 
 ```json
 {
@@ -742,7 +742,7 @@ export default function UserProfileFormPage() {
 }
 ```
 
-提交 payload 示例（create）：
+提交载荷形状（创建）：
 
 ```json
 {
@@ -757,72 +757,73 @@ export default function UserProfileFormPage() {
 }
 ```
 
-未传入 `formView` 时，`OneToOne` 与 `ManyToOne` 行为一致，渲染引用选择器组件。
+未提供 `formView` 时，`OneToOne` 与 `ManyToOne` 行为相同，渲染引用选择器 widget。
 
 ### 兼容性
 
-后端仍然支持 XToMany 字段的整量提交。
-前端 `ModelForm` 默认采用增量提交（`PatchType` map），以避免分页关联编辑时整表覆盖的风险。
+后端仍支持 XToMany 字段的全量提交。
+前端 `ModelForm` 默认增量提交（`PatchType` map），以避免分页关联编辑中的全列表覆盖风险。
 
 ## 页面结构
 
-推荐的默认布局：
+推荐默认布局：
 
 - Header：标题 + 描述
-- 吸顶工具栏：
-  - 左侧：内置 `FormEditStatus + FormPrimaryActions`（`ModelForm` / `ModelSideForm` 启用 `enableWorkflow=true` 时再加 `FormWorkflowActions`）
-  - 右侧：业务动作区域（自定义动作 + 内置 Duplicate/Delete + More Actions）
-- Body：`FormBody` 渲染堆叠的 section 或真正的 tab 布局，以及内置的审计面板布局
-- Audit：`FormBody(enableAuditLog)` 控制审计面板；大屏在右侧，小屏在底部
+- 粘性工具栏：
+  - 左侧：内置 `FormEditStatus + FormPrimaryActions`（`ModelForm/ModelSideForm enableWorkflow=true` 时还有 `FormWorkflowActions`）
+  - 右侧：业务动作区（自定义动作 + 内置 Duplicate/Delete + More Actions）
+- Body：`FormBody` 渲染堆叠 section 或真正的 tabs，以及内置审计面板布局
+- Audit：`FormBody(enableAuditLog)` 控制审计面板；大屏右侧、小屏底部
 
 ## Props
 
 ### ModelForm Props
 
-| Prop            | 类型                      | 必填 | 默认值                                | 说明 |
-| --------------- | ------------------------- | ---- | ------------------------------------- | ---- |
-| `modelName`     | `string`                  | 是   | -                                     | 用于向 API 请求元数据的模型名（`/metadata/getMetaModel`）。 |
-| `id`            | `string \| null`          | 否   | 路由 `params.id`（`"new"` => `null`） | 可选覆盖。 |
-| `schemaBuilder` | `(context) => ZodTypeAny` | 否   | -                                     | 运行时 schema 扩展器。接收 `{ metaModel, baseSchema }`，其中 `baseSchema` 基于已解析元数据构建。 |
-| `readOnly`      | `boolean`                 | 否   | `false`                               | 强制只读模式。 |
-| `defaultValues` | `Record<string, unknown>` | 否   | -                                     | 与元数据默认值合并的额外默认值。适合注入父上下文，例如 `relatedField` 对应值。 |
-| `enableWorkflow`       | `boolean`                 | 否   | `false`                               | 仅在编辑模式下，在工具栏左侧显示工作流动作组。 |
-| `enableCreate`         | `boolean`                 | 否   | auto                                  | 内置「新建」开关。`false` 关闭。省略时遵循默认行为（只读表单除非显式 `true` 否则隐藏）。 |
-| `enableDuplicate`      | `boolean`                 | 否   | auto                                  | 内置复制开关。`false` 关闭。省略时遵循默认行为（只读表单除非显式 `true` 否则隐藏）。 |
-| `enableDelete`         | `boolean`                 | 否   | auto                                  | 内置删除开关。`false` 关闭。省略时遵循默认行为（只读表单除非显式 `true` 否则隐藏）。 |
-| `confirmDeleteMessage` | `string`                  | 否   | `Delete this {modelLabel}? This action cannot be undone.` | 内置删除操作的确认文案。 |
-| `children`      | `ReactNode`               | 是   | -                                     | 表单页面布局内容（`FormHeader/FormToolbar/FormBody`）。 |
+| Prop            | Type                      | Required | Default                               | Notes                                                                                       |
+| --------------- | ------------------------- | -------- | ------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `modelName`     | `string`                  | Yes      | -                                     | 用于从 API 请求元数据的模型名（`/metadata/getMetaModel`）。                    |
+| `id`            | `string \| null`          | No       | Route `params.id` (`"new"` => `null`) | 可选覆盖。                                                                          |
+| `schemaBuilder` | `(context) => ZodTypeAny` | No       | -                                     | 运行时 schema 扩展器。接收从已解析元数据构建的 `{ metaModel, baseSchema }`。 |
+| `readOnly`      | `boolean`                 | No       | `false`                               | 强制只读模式。                                                                       |
+| `defaultValues` | `Record<string, unknown>` | No       | -                                     | 合并进元数据默认值的额外默认值。适用于注入父上下文，如 `relatedField` 值。 |
+| `copyFromId`    | `string \| null`          | No       | -                                     | 仅新建模式：用此源记录的可复制字段值（`getCopyableFields`）预填表单（复制流程）。全页表单通常用 `?copyFrom=<id>` 查询参数；嵌入式表单传此 prop。显式上下文（`defaultValues`、查询参数、关联字段）优先于复制值。 |
+| `enableWorkflow`       | `boolean`                 | No       | `false`                               | 在工具栏左侧显示工作流动作组（仅编辑模式）。 |
+| `enableCreate`         | `boolean`                 | No       | auto                                  | 内置 `Create New` 动作开关。`false` 禁用。省略则遵循默认（只读表单隐藏，除非显式 `true`）。 |
+| `enableDuplicate`      | `boolean`                 | No       | auto                                  | 内置复制动作开关。`false` 禁用。省略则遵循默认（只读表单隐藏，除非显式 `true`）。 |
+| `enableDelete`         | `boolean`                 | No       | auto                                  | 内置删除动作开关。`false` 禁用。省略则遵循默认（只读表单隐藏，除非显式 `true`）。 |
+| `confirmDeleteMessage` | `string`                  | No       | `Delete this {modelLabel}? This action cannot be undone.` | 内置删除动作的确认文案。 |
+| `children`      | `ReactNode`               | Yes      | -                                     | 表单页面布局内容（`FormHeader/FormToolbar/FormBody`）。                               |
 
 运行时字段条件：
 
-- `Field.required`、`Field.readonly`、`Field.hidden` 支持 `boolean | FilterCondition | dependsOn(...)`
-- 条件基于当前表单值求值
-- `FilterCondition` 会自动追踪操作数字段和本地 `{{ fieldName }}` 引用
-- 函数条件必须通过 `dependsOn([...], evaluator)` 包裹；不支持裸函数
-- `hidden` 字段不会渲染，其校验错误也会被抑制
-- `required={false}` 可以在运行时放宽元数据 `required`；`readonly={false}` 可以覆盖元数据只读
-- `ModelForm` 和构建在 `DialogForm` 之上的对话框表单使用相同的运行时行为
+- `Field.required`、`Field.readonly`、`Field.hidden` 支持 `boolean | FilterCondition | dependsOn(...)`。
+- 条件针对当前表单值评估。
+- `FilterCondition` 自动跟踪操作数字段与本地 `{{ fieldName }}` 引用。
+- 函数条件须用 `dependsOn([...], evaluator)` 包装；不支持裸函数条件。
+- `hidden` 字段不渲染，其校验错误被抑制。
+- `required={false}` 可在运行时放宽元数据 `required`；`readonly={false}` 可覆盖元数据 readonly。
+- `ModelForm` 与基于 `DialogForm` 的对话框表单使用相同运行时行为。
 
 `ModelForm` 中的远程 `Field.onChange`：
 
-- 请求路径是 `POST /<modelName>/onChange/<fieldName>`
-- 请求总会发送当前字段 `value`；编辑模式还会附带 `id`
-- 省略 `with`：只发送 `id + value`
-- `with: ["a", "b"]`：只发送声明的依赖字段，且使用提交 / API 形态
-- `with: "all"`：发送当前表单的提交形态
-- 顶层已注册的 XToMany 字段会序列化为关联 patch payload，而不是原始 UI 行
-- 响应 `values` 只 patch 返回的 key；`null` 表示清空字段
-- 响应中的 `readonly` / `required` 会覆盖本地有效状态，直到 reset、cancel、reload 或更晚的响应到来
-- 这套远程联动运行时已在 `ModelForm` 中实现；它不会自动出现在独立 `DialogForm` 中
+- 请求路径为 `POST /<modelName>/onChange/<fieldName>`
+- 请求始终发送当前字段 `value`；编辑模式还发送 `id`
+- 省略 `with`：仅 `id + value`
+- `with: ["a", "b"]`：仅发送 submit/API 形状中声明的依赖字段
+- `with: "all"`：发送当前表单 submit 形状
+- 顶层注册的 XToMany 字段序列化为关联 patch 载荷，而非原始 UI 行
+- 响应 `values` 仅 patch 返回的键；`null` 清空字段
+- 响应 `readonly` / `required` 覆盖本地生效状态，直至 reset、cancel、reload 或后续响应
+- 此远程联动运行时针对 `ModelForm` 实现；独立 `DialogForm` 不自动可用
 
 ### FormHeader Props
 
-| Prop          | 类型        | 必填 | 默认值                                       | 说明 |
-| ------------- | ----------- | ---- | -------------------------------------------- | ---- |
-| `title`       | `string`    | 否   | `metaModel.labelName`（回退到 `pageTitle`） | 可选覆盖。 |
-| `description` | `string`    | 否   | `metaModel.description`                      | 可选覆盖。 |
-| `extras`      | `ReactNode` | 否   | -                                            | 在标题附近渲染的额外头部内容。 |
-| `children`    | `ReactNode` | 否   | -                                            | 描述下方的展示模式内容。子级 `Field` 通过 `FieldDisplayScope` 以只读值渲染。行内排版请使用 `Group`。 |
+| Prop          | Type        | Required | Default                                      | Notes                                     |
+| ------------- | ----------- | -------- | -------------------------------------------- | ----------------------------------------- |
+| `title`       | `string`    | No       | `metaModel.label` (fallback `pageTitle`) | 可选覆盖。                        |
+| `description` | `string`    | No       | `metaModel.description`                      | 可选覆盖。                        |
+| `extras`      | `ReactNode` | No       | -                                            | 标题附近渲染的额外 header 内容。 |
+| `children`    | `ReactNode` | No       | -                                            | 描述下方的展示模式内容。`Field` 子节点通过 `FieldDisplayScope` 以只读值渲染。行内布局使用 `Group`。 |
 
 **带展示模式子节点的 FormHeader：**
 
@@ -837,105 +838,105 @@ export default function UserProfileFormPage() {
 
 ### FormBody Props
 
-| Prop             | 类型                                        | 必填 | 默认值      | 说明 |
-| ---------------- | ------------------------------------------- | ---- | ----------- | ---- |
-| `sectionNav`     | `boolean`                                   | 否   | `false`     | 启用侧边栏 section 导航。为 `true` 时，当前视图至少有 2 个注册 section 才会渲染导航。 |
-| `enableAuditLog` | `boolean`                                   | 否   | `true`      | 是否启用审计面板（仅编辑模式渲染）。 |
-| `children`       | `ReactNode`                                 | 是   | -           | 内容节点。根级 `FormSection` / `Field` 节点渲染为 tab 上方的共享内容；根级 `FormTab` 节点激活 tab 模式。`FormTab` 不能嵌套在另一个 `FormTab` 中。 |
+| Prop             | Type                                        | Required | Default      | Notes                                                                    |
+| ---------------- | ------------------------------------------- | -------- | ------------ | ------------------------------------------------------------------------ |
+| `sectionNav`     | `boolean`                                   | No       | `false`      | 启用侧边 section 导航。为 `true` 时，section/tab 至少有 2 个 section 才渲染导航。 |
+| `enableAuditLog` | `boolean`                                   | No       | `true`       | 切换审计面板（仅编辑模式渲染）。                          |
+| `children`       | `ReactNode`                                 | Yes      | -            | 内容节点。根级 `FormSection`/`Field` 作为 tabs 上方共享内容渲染；根级 `FormTab` 激活 tabs 模式。`FormTab` 不能嵌套在另一个 `FormTab` 内。 |
 
-`FormBody` 根据其根级子节点推断布局模式。任意根级 `FormTab` 会激活 tab 模式；放在 `FormTab` 外部的 `FormSection` 和 `Field` 节点将渲染在 tab 条上方，作为所有 tab 共享可见的内容。
-`FormBody` 默认内置了内容区域样式：`rounded-(--ui-card-radius) border border-border bg-card p-(--ui-card-padding)`。可通过 `className` 追加额外样式或覆盖默认值。
+`FormBody` 从根子节点推断布局模式。任意根级 `FormTab` 激活 tabs 模式；放在 `FormTab` 外的 `FormSection` 与 `Field` 渲染在 tab 条上方，作为所有 tab 可见的共享内容。
+`FormBody` 默认还包含内置内容 surface 样式：`rounded-(--ui-card-radius) border border-border bg-card p-(--ui-card-padding)`。需要时可用 `className` 追加或覆盖默认样式。
 
 ### FormTab Props
 
-`FormTab` 是 tab 化 `FormBody` 布局的根内容块，可包含多个 `FormSection` 或直接的内容节点。
+`FormTab` 是 tab 式 `FormBody` 布局的根内容块。可包含多个 `FormSection` 块或直接内容节点。
 
-| Prop         | 类型        | 必填 | 默认值 | 说明 |
-| ------------ | ----------- | ---- | ------ | ---- |
-| `labelName`  | `string`    | 是   | -      | 可见 tab 标签文字。 |
-| `value`      | `string`    | 否   | 自动   | 可选的稳定 tab id；由标签自动推导。 |
-| `sectionNav` | `boolean`   | 否   | -      | 仅对当前 tab 覆盖 `FormBody` 的 `sectionNav`。有值时优先生效。 |
-| `children`   | `ReactNode` | 否   | -      | Tab 面板内容。推荐使用 `FormSection`。 |
+| Prop        | Type        | Required | Default | Notes                                                |
+| ----------- | ----------- | -------- | ------- | ---------------------------------------------------- |
+| `label`  | `string`    | Yes      | -       | 可见 tab 标签。                                                                    |
+| `value`      | `string`    | No       | auto    | 可选稳定 tab id；从 label 自动推导。                                      |
+| `sectionNav` | `boolean`   | No       | -       | 仅覆盖此 tab 的 `FormBody` `sectionNav`。定义时优先。   |
+| `children`   | `ReactNode` | No       | -       | Tab 面板内容。仍推荐使用 `FormSection`。                                  |
 
 ### FormSection Props
 
-`FormSection` 是 `FormBody` 内部的默认内容块，提供 section 标题 / 描述渲染、响应式字段网格、局部 section 动作以及 section-nav 注册功能。
+`FormSection` 是 `FormBody` 内的默认内容块。提供 section 标题 / 描述渲染、响应式字段网格、局部 section 动作与 section-nav 注册。
 
-| Prop          | 类型                   | 必填 | 默认值    | 说明 |
-| ------------- | ---------------------- | ---- | --------- | ---- |
-| `labelName`   | `string`               | 否   | -         | 可见 section 标签，也是 section-nav 的导航文本。 |
-| `description` | `string`               | 否   | -         | 可选的辅助说明文字，渲染在 section 标题下方。 |
-| `className`   | `string`               | 否   | -         | section 容器的额外 class。 |
-| `columns`     | `1 \| 2 \| 3 \| 4`    | 否   | `2`       | `md+` 布局时 section 内容的响应式网格列数。 |
-| `hideHeader`  | `boolean`              | 否   | `false`   | 隐藏可视 section 标题，但 section 仍可参与导航注册。 |
-| `divided`     | `boolean`              | 否   | `false`   | 在 section 上方添加顶部边框。对第一个 section（`:first-child`）不生效。 |
-| `children`    | `ReactNode`            | 否   | -         | 通常是 `Field` 节点，以及可选的 section 级 `Action` 节点。 |
+| Prop          | Type                  | Required | Default  | Notes                                                                                 |
+| ------------- | --------------------- | -------- | -------- | ------------------------------------------------------------------------------------- |
+| `label`   | `string`              | No       | -        | 可见 section 标签；也用作 section-nav 锚点文本。                      |
+| `description` | `string`              | No       | -        | 可选，渲染在 section header 下方的说明文字。                               |
+| `className`   | `string`              | No       | -        | section 容器的额外 wrapper class。                                        |
+| `columns`     | `1 \| 2 \| 3 \| 4`    | No       | `2`      | `md+` 布局下 section 内容的响应式网格列数。                    |
+| `hideHeader`  | `boolean`             | No       | `false`  | 隐藏视觉 section header，section 仍可参与导航。        |
+| `divided`     | `boolean`             | No       | `false`  | section 之间添加上边框。第一个 section 上 suppressed（`:first-child`）。 |
+| `children`    | `ReactNode`           | No       | -        | 通常为 `Field` 节点，以及可选的 section 作用域 `Action` 节点。                    |
 
 说明：
 
-- `FormSection` 会自动向最近的 `FormBody` section 注册表注册自身。
-- 未提供 `labelName` 时，导航标签回退为 `"Section"`。
-- 通用标签（`"Section"`）在导航中会自动重命名为 `Section 1`、`Section 2` 等。
-- `hideHeader` 只影响已渲染的标题，不会禁用 section-nav 注册。
-- `divided` 在 section 没有 `labelName`（即标题本身被隐藏）但仍需视觉分隔时最为有用。当 `labelName` 存在时，标题本身已提供了视觉分隔，通常无需使用 `divided`。
-- `FormSection` 仅支持局部 UI 动作：`type="link"` 和 `type="custom"`，且 `placement` 为 `"header"` 或 `"inline"`。
+- `FormSection` 自动向最近的 `FormBody` section 注册表注册自身。
+- 省略 `label` 时，导航标签回退为 `"Section"`。
+- 通用标签（`"Section"`）在导航中自动重命名为 `Section 1`、`Section 2` 等。
+- `hideHeader` 仅影响渲染的 header；不禁用 section-nav 注册。
+- `divided` 在 section 无 `label`（即 header 本身被隐藏）但仍需视觉分隔时最有用。有 `label` 时标题已提供分隔，通常无需 `divided`。
+- `FormSection` 仅支持局部 UI 动作：`type="link"` 与 `type="custom"`，`placement="header"` 或 `placement="inline"`。
 
 ### Section Nav
 
-`FormSectionNav` 已内置于 `FormBody`，页面通常不需要直接渲染它。
+`FormSectionNav` 内置于 `FormBody`；页面通常不直接渲染。
 
-行为说明：
+行为：
 
-- `FormBody` 收集后代 `FormSection` 的锚点，按注册顺序渲染导航。
-- `sectionNav` 默认为 `false`；设为 `true` 可启用侧边栏导航。
-- 导航仅在当前视图至少有 2 个已注册 section 时才渲染。
-- 在 tab 模式中，`FormTab` 自身的 `sectionNav` 对该 tab 的优先级高于 `FormBody` 的设置；`FormTab` 省略此项则继承 `FormBody` 的值。
-- 点击导航项会平滑滚动表单自身的滚动容器，而不是浏览器窗口。
-- 在堆叠模式下，侧边栏导航面向桌面端：无右侧审计列时从 `xl` 断点起显示，有审计日志渲染在右侧时从 `2xl` 断点起显示。
+- `FormBody` 收集后代 `FormSection` 锚点，按注册顺序渲染导航。
+- `sectionNav` 默认 `false`；设为 `true` 启用侧边导航。
+- 仅当前视图至少有 2 个已注册 section 时渲染导航。
+- tabs 模式下，`FormTab` 自身的 `sectionNav` 优先于该 tab 的 `FormBody` 设置。`FormTab` 上省略则继承 `FormBody` 的值。
+- 点击导航项平滑滚动表单自身滚动容器，而非浏览器窗口。
+- 堆叠模式下，侧边导航面向桌面：无右侧审计列时从 `xl` 布局显示；审计日志在右侧时从 `2xl` 显示。
 
-堆叠布局示例：
+堆叠示例：
 
 ```tsx
 <FormBody sectionNav>
-  <FormSection labelName="General" hideHeader>
+  <FormSection label="General" hideHeader>
     <Field fieldName="name" />
     <Field fieldName="code" />
   </FormSection>
 
-  <FormSection labelName="Security">
+  <FormSection label="Security">
     <Field fieldName="passwordMinLength" />
     <Field fieldName="passwordComplexityEnabled" />
   </FormSection>
 
-  <FormSection labelName="Audit">
+  <FormSection label="Audit">
     <Field fieldName="createdBy" readOnly />
     <Field fieldName="createdDate" readOnly />
   </FormSection>
 
-  <FormSection labelName="Advanced">
+  <FormSection label="Advanced">
     <Field fieldName="description" />
   </FormSection>
 </FormBody>
 ```
 
-Tab 布局示例：
+Tab 示例：
 
 ```tsx
 import { FormBody, FormTab } from "@/components/views/form/components/FormBody";
 
 <FormBody>
-  <FormTab labelName="Profile" sectionNav>
-    <FormSection labelName="General">
+  <FormTab label="Profile" sectionNav>
+    <FormSection label="General">
       <Field fieldName="name" />
       <Field fieldName="code" />
     </FormSection>
 
-    <FormSection labelName="Advanced">
+    <FormSection label="Advanced">
       <Field fieldName="description" />
     </FormSection>
   </FormTab>
 
-  <FormTab labelName="Members">
+  <FormTab label="Members">
     <Field fieldName="userIds" />
   </FormTab>
 </FormBody>
@@ -943,32 +944,33 @@ import { FormBody, FormTab } from "@/components/views/form/components/FormBody";
 
 ### FormToolbar Props
 
-| Prop        | 类型        | 必填 | 默认值 | 说明 |
-| ----------- | ----------- | ---- | ------ | ---- |
-| `children`  | `ReactNode` | 否   | -      | 自定义动作。推荐：`<Action type="..." />`。 |
-| `className` | `string`    | 否   | -      | 工具栏容器额外 class。 |
+| Prop        | Type        | Required | Default | Notes                                                |
+| ----------- | ----------- | -------- | ------- | ---------------------------------------------------- |
+| `children`  | `ReactNode` | No       | -       | 自定义动作。推荐：`<Action type="..." />`。 |
+| `className` | `string`    | No       | -       | 工具栏容器的额外 wrapper class。           |
 
-### `ModelForm` 中的动作
+### ModelForm 中的 Actions
 
-通用 `Action` / `BulkAction` API 现在统一维护在 [Actions](../actions)。
-本节只保留 `ModelForm` 容器规则和完整页面示例。
+通用 `Action` / `BulkAction` API 现位于 [Actions](../actions)。
+本节仅保留 `ModelForm` 容器规则与完整页面级示例。
 
 容器支持：
 
-| 容器          | 支持的 Action 类型                     | 支持的位置          |
-| ------------- | -------------------------------------- | ------------------- |
-| `FormToolbar` | `default`, `dialog`, `link`, `custom` | `toolbar`, `more`   |
-| `FormSection` | `link`, `custom`                       | `header`, `inline`  |
+| Container     | Supported Action Types                | Supported Placements |
+| ------------- | ------------------------------------- | -------------------- |
+| `FormToolbar` | `default`, `dialog`, `link`, `custom` | `toolbar`, `more`    |
+| `FormSection` | `link`, `custom`                      | `header`, `inline`   |
 
 规则：
 
-- `FormToolbar` 是页面级业务动作区域
-- `FormSection` 是局部 UI 动作区域，不直接执行模型 API 动作
-- 对于 API 动作（`default` / `dialog`），请放在 `FormToolbar`
-- 内置工作流 / 新建 / 复制 / 删除等工具栏行为由 `ModelForm` / `ModelSideForm` 的 props 配置
-- 编辑模式且有未保存修改时，点击业务动作会先询问是否丢弃修改再继续
-- 创建模式下，内置 `Duplicate` / `Delete` 会保持可见，但处于禁用状态
-- 内置 `Duplicate` 仍调用后端 `copyById`；`BaseModel.reversedFields` 的排除由后端 duplicate 语义负责处理
+- `FormToolbar` 是页面级业务动作区
+- `FormSection` 是局部 UI 动作区，不直接执行模型 API 动作
+- API 动作（`default` / `dialog`）放在 `FormToolbar`
+- 内置工作流 / 创建 / 复制 / 删除工具栏行为在 `ModelForm`/`ModelSideForm` props 上配置
+- 编辑模式有未保存变更：点击业务动作前会询问是否丢弃变更
+- 创建模式：内置 `Duplicate` / `Delete` 仍可见但禁用
+- 内置 `Duplicate` 仅在模型元数据 `copyable`（`MetaModel.copyable === true`）时出现；不可复制模型无论 `enableDuplicate` 如何都不暴露该动作
+- 内置 `Duplicate` 从不直接插入：通过 `getCopyableFields` 加载源记录可复制值并打开预填的新建模式表单（全页表单导航到 `new?copyFrom=<id>`；ModelSideForm 进入带预填的内联创建模式），用户可在正常创建流程保存前调整唯一 / 业务字段；哪些字段可复制（由各字段 `MetaField.copyable` 决定）由后端解析
 
 完整示例：
 
@@ -985,7 +987,7 @@ import { ExternalLink, Lock, RefreshCw, ShieldCheck } from "lucide-react";
 function UnlockDialog() {
   return (
     <ActionDialog title="Unlock Account">
-      <Field fieldName="reason" labelName="Reason" widgetType="Text" />
+      <Field fieldName="reason" label="Reason" widgetType="Text" />
     </ActionDialog>
   );
 }
@@ -993,7 +995,7 @@ function UnlockDialog() {
 <ModelForm modelName="UserAccount">
   <FormToolbar>
     <Action
-      labelName="Lock"
+      label="Lock"
       operation="lockAccount"
       placement="toolbar"
       icon={Lock}
@@ -1001,7 +1003,7 @@ function UnlockDialog() {
     />
     <Action
       type="dialog"
-      labelName="Unlock"
+      label="Unlock"
       operation="unlockAccount"
       placement="more"
       icon={ShieldCheck}
@@ -1010,17 +1012,17 @@ function UnlockDialog() {
   </FormToolbar>
 
   <FormBody>
-    <FormSection labelName="Credentials">
+    <FormSection label="Credentials">
       <Action
         type="link"
-        labelName="Open Docs"
+        label="Open Docs"
         placement="header"
         icon={ExternalLink}
         href="https://docs.example.com/credentials"
       />
       <Action
         type="custom"
-        labelName="Regenerate Preview"
+        label="Regenerate Preview"
         placement="inline"
         icon={RefreshCw}
         onClick={() => console.log("regenerate")}
@@ -1035,7 +1037,7 @@ function UnlockDialog() {
 
 ## Context API
 
-在 `ModelForm` 子组件内部，可以使用 `useModelFormContext()` 获取：
+在 `ModelForm` 子组件内，使用 `useModelFormContext()` 访问：
 
 - `pageTitle`、`pageDescription`
 - `isEditing`、`isSubmitting`、`effectiveReadOnly`
@@ -1043,43 +1045,88 @@ function UnlockDialog() {
 - `onCancel()`
 - `metaModel`、`id`
 
-## 级联字段路径 {#cascaded-field-path}
+## 级联字段路径
 
-`<Field fieldName="lastDeploymentId.deployStatus" />`（点号记法）读取关联记录上的字段并以只读展示。表单规划遍历器会收集正文中声明的每条级联路径，调用一次 `POST /metadata/resolveCascadedPaths` 解析全部叶子 `metaField`，将匹配的 SubQuery 折叠进 `getById`，并通过 `CascadedResolutionsProvider` 向 `<Field>` 暴露解析结果。
+`<Field fieldName="lastActivityId.status" />`（点记法）读取关联记录的字段并以只读渲染。表单计划 walker 收集 body 中声明的每个级联路径，一次性调用 `POST /metadata/resolveCascadedPaths` 解析所有叶子 metaField，将匹配的 SubQueries 折叠进 `getById`，并通过 `CascadedResolutionsProvider` 向 `<Field>` 暴露解析结果。
 
 ```tsx
 <ModelForm modelName="AppEnv" recordId={envId}>
   <Field fieldName="name" />
-  <Field fieldName="lastDeploymentId" />                {/* 普通 ManyToOne */}
-  <Field fieldName="lastDeploymentId.deployStatus" />   {/* 级联 — 只读 */}
-  <Field fieldName="lastDeploymentId.finishedTime" />   {/* 共享基点，自动合并 */}
-  <Field fieldName="ownerId.departmentId.name" />       {/* 三级深度 */}
+  <Field fieldName="lastActivityId" />                {/* 普通 ManyToOne */}
+  <Field fieldName="lastActivityId.status" />   {/* 级联 — 只读 */}
+  <Field fieldName="lastActivityId.finishedTime" />   {/* 共享 base，自动合并 */}
+  <Field fieldName="ownerId.departmentId.name" />       {/* 深度 3 */}
 </ModelForm>
 ```
 
 说明：
 
-- 始终只读 —— 不向 RHF 注册，不会出现在 `formState.dirtyFields`
-- 生效元数据（fieldType / widgetType / labelName / optionSetCode）来自**叶子**字段；`props.label` / `props.widgetType` 仍可覆盖
-- 在 `ModelSideForm` 中同样生效（其内部组合了 `ModelForm`）
-- `formView` 回调内嵌套的级联路径（深度 > 0）尚未解析 —— 开发环境 `console.warn`，展示占位 `"-"`
+- 始终只读 —— 不向 RHF 注册，不出现在 `formState.dirtyFields`
+- 生效元数据（fieldType / widgetType / label / optionSetCode）来自**叶子**字段；`props.label` / `props.widgetType` 仍可覆盖
+- 在 `ModelSideForm` 内自动可用（其组合了 `ModelForm`）
+- `formView` 回调内嵌套级联路径（深度 > 0）尚未解析 —— dev `console.warn` 与 "-" 占位
 
-完整语义见字段 README 中的 [级联字段路径](../fields/fields#cascaded-field-path-display)。
+完整参考与语义：[Fields README 中的级联字段路径](../fields/fields#cascaded-field-path-display)。
+
+## 权限集成
+
+`ModelForm` 根据生成的 `MODEL_PERMISSIONS` 查找表，按 `modelName` 自动门控 —— 业务页面无需为标准工具栏控件或任何自定义 `<Action permission="…">` 子节点调用 `usePermission`。
+
+仅传递 `modelName` 即可免费门控：
+
+| Built-in control       | Action segment checked  | Effect when denied                                                |
+| ---------------------- | ----------------------- | ----------------------------------------------------------------- |
+| Toolbar "Save" / write | `update`                | 表单强制只读（无 Save 按钮，字段冻结） |
+| Toolbar "Edit" button  | `update`                | 隐藏 —— `enableUpdate` 解析为 false                          |
+| Toolbar "Create New"   | `create`                | 隐藏 —— `enableCreate` 解析为 false                          |
+| Toolbar "Duplicate"    | `create`                | 隐藏 —— `enableDuplicate` 解析为 false                       |
+| Toolbar "Delete"       | `delete`                | 隐藏 —— `enableDelete` 解析为 false                          |
+
+`<FormToolbar>` 与 `<FormSection>` 内的自定义 `<Action permission="…" />` 子节点在渲染前过滤 —— 与 `ModelTable` 相同语义。传递 manifest 动作段（如 `permission="transfer"`）。
+
+状态语义与 `ModelTable` 一致：
+
+- **Granted** → 控件 / 动作保持可见。
+- **Denied** → 控件 / 动作隐藏；拒绝 `update` 时表单强制只读（即使 URL 为 `?mode=edit`，用户也会进入只读 —— 服务端独立强制，此为 UX）。
+- **Unmanaged** → `(modelName, action)` 不在 `MODEL_PERMISSIONS`（跨页面歧义）。自动门控无意见；页面可传显式 `readOnly` / `enable*` props。
+
+业务 props 设为 `false` 时仍优先（页面显式隐藏 Edit，即使 SUPER_ADMIN）。SUPER_ADMIN 在内部短路权限查找。
+
+示例：
+
+```tsx
+<ModelForm modelName="Employee">
+  <FormToolbar>
+    <Action
+      type="custom"
+      label="Transfer"
+      permission="transfer"          {/* 由 Employee.transfer 门控 */}
+      onClick={openTransferDialog}
+    />
+  </FormToolbar>
+  <FormSection label="Profile">
+    <Field fieldName="fullName" />
+    ...
+  </FormSection>
+</ModelForm>
+```
+
+`Save` / `Cancel` / `Edit` / `Delete` 完全根据 `modelName="Employee"` 自动显示 / 隐藏；"Transfer" 在用户缺少 `Employee.transfer` 时自动隐藏。
 
 ## 内置行为
 
-- 创建 / 编辑模式默认值与 reset 处理
-- Reset 采用快照保护：
-  - 记录 / 模型身份变化 => reset
-  - 表单 pristine 且远程快照变化 => reset
-  - 表单 dirty 且后台 refetch => 不覆盖当前编辑
-- 元数据解析策略：始终从 `/metadata/getMetaModel` 拉取；首个响应会被 React Query 缓存并复用
-- 元数据驱动的字段 props 由内部字段运行时解析；业务代码应保持在 `Field` 层
-- **Cancel / Back**（按模式与位置区分）：
-  - 编辑 / 创建模式：`Cancel` 在工具栏中位于 `Save` 旁（`FormPrimaryActions`）；dirty 时会确认，随后将表单重置到最新加载快照，并回到只读模式
-  - 只读模式：`Back` 位于页面页头右侧（`FormBackButton`，在 `ModelSideForm` 内隐藏）；导航回列表页
-- Save / Create mutation 处理和 toast 提示
-- 审计查询内置使用 `useGetChangeLogQuery(modelName, id)`，参数为：
+- 创建 / 编辑模式默认与 reset 处理。
+- Reset 行为有快照保护：
+  - 记录 / 模型身份变更 => reset
+  - pristine 表单 + 远程快照变更 => reset
+  - dirty 表单 + 后台 refetch => 不覆盖当前编辑
+- 元数据解析策略：始终从 `/metadata/getMetaModel` 获取；首次响应由 React Query 缓存并复用。
+- 元数据驱动字段 props 由内部字段 runtime 解析；业务代码应停留在 `Field`。
+- Cancel / Back 行为（按模式与位置拆分）：
+  - 编辑 / 创建模式：`Cancel` 按钮在工具栏 `Save` 旁（`FormPrimaryActions`）；dirty 时确认，reset 到最新加载快照，返回只读模式
+  - 只读模式：`Back` 按钮在页面 header 右侧（`FormBackButton`，`ModelSideForm` 内隐藏）；导航到 breadcrumb 推导的路由（`resolveBackRoute` = navigation manifest + pathname）。MultiView `linkTo` 详情路由（`/list/<tab>/<id>`）解析为 tab crumb `/list?tab=<tab>` 而非无路由的 `/list/<tab>`，Back 不会 404 且回到来源 tab —— 无携带查询状态，刷新 / 深链解析一致
+- Save/create mutation 处理与 toast。
+- 审计查询内建 `useGetChangeLogQuery(modelName, id)`：
   - `pageNumber=1`
   - `pageSize=50`
   - `order=DESC`
@@ -1087,43 +1134,43 @@ function UnlockDialog() {
   - `dataMask=true`
 - 全局审计 API 开关：
   - `configs.env.enableChangeLog`（`NEXT_PUBLIC_ENABLE_CHANGE_LOG`，默认 `true`）
-  - 当关闭时，`FormAuditPanel` 不会发起 change-log API 请求，而是显示禁用提示文案
-- `FormWorkflowActions` + `WorkflowActionGroup` 支持这些工作流状态：
+  - 禁用时 `FormAuditPanel` 不发起 change-log API 请求，显示禁用提示
+- `FormWorkflowActions` + `WorkflowActionGroup` 支持工作流状态：
   - `draft`：submit
-  - `pending`：withdraw / approve / reject
+  - `pending`：withdraw/approve/reject
   - `approved`：withdraw approval
   - `rejected`：resubmit
-- 工作流动作在表单 dirty 或提交中时会禁用
+- 表单 dirty 或 submitting 时工作流动作禁用。
 - 审计事件渲染规则：
-  - `update`：`<=5` 项默认展开，`>5` 项显示前 5 个并提供 `Show all fields (N)`
+  - `update`：`<=5` 展开，`>5` 显示前 5 个 + `Show all fields (N)`
   - `create`：默认折叠
-  - `delete`：仅显示操作信息
+  - `delete`：仅操作信息
 
-## 页面导航（页头返回与上一条 / 下一条）
+## 页面导航（Header 中的 Back + Prev/Next）
 
-页头右侧有两个**页面 / 记录级**导航原语（不涉及表单数据本身），让 `FormToolbar` 专注表单生命周期动作：
+页面 header 右侧托管两个页面 / 记录级导航原语（非表单数据级），使 `FormToolbar` 聚焦表单生命周期动作：
 
-- **`FormBackButton`**（仅只读模式）— 返回列表。在 `ModelSideForm` 中隐藏；在编辑 / 创建模式中也不显示（等价意图由工具栏的 `Cancel` 处理）。
-- **`FormSiblingNav`** — `‹ index/total ›` 按钮，跳到上一条 / 下一条兄弟记录。
+- `FormBackButton`（仅只读模式）—— 返回 breadcrumb 推导路由（`resolveBackRoute`）：普通详情的注册列表页，或 MultiView `linkTo` 详情的 tab crumb `/list?tab=<tab>`。纯 path/manifest 推导（无携带查询状态）。在 `ModelSideForm` 与编辑 / 创建模式隐藏（工具栏 `Cancel` 处理等价意图）。
+- `FormSiblingNav` —— `‹ index/total ›` 按钮，跳转到上一条 / 下一条兄弟记录。
 
-兄弟导航要求用户从**同一模型的兄弟列表视图**（`ModelTable` / `ModelBoard` / `ModelCard`）通过行 / 卡片点击进入：
+兄弟导航要求用户通过同模型兄弟列表视图（`ModelTable` / `ModelBoard` / `ModelCard`）的行 / 卡片点击进入：
 
-- 数据源是 `src/components/views/form/hooks/siblingNavStore.ts` 中的模块级快照。列表视图在点击时把当前可见（已排序、服务端分页）的 id 写入快照；`FormSiblingNav` 渲染时读取。
-- 各视图范围：
-  - `ModelTable`：当前页的 id（服务端筛选 + 排序已应用）。
-  - `ModelBoard`：被点击卡片所在列内的 id。
-  - `ModelCard`：当前页的 id。
-- 无快照时隐藏按钮（例如直链打开、整页刷新或不同模型）。在首条 / 末条、提交中或表单 **dirty** 时禁用（避免未保存修改因点击而丢失）。
-- 快照刻意设计为**短命**：仅内存，不写入 URL、sessionStorage 或 React 状态；`router.push` 等客户端路由会保留，整页刷新则清空。
+- 真相源为 `src/components/views/form/hooks/siblingNavStore.ts` 的模块级快照。列表视图在点击时将当前可见（已排序、服务端分页）id 写入快照；`FormSiblingNav` 渲染时读取。
+- 各视图作用域：
+  - `ModelTable`：当前页 id（已应用服务端筛选 + 排序）。
+  - `ModelBoard`：点击卡片所属列内的 id。
+  - `ModelCard`：当前页 id。
+- 无快照时隐藏按钮（如直接 URL、页面 reload 或不同模型）。在首 / 末条记录、submitting 中、表单 dirty 时禁用（避免未保存编辑在点击时丢失）。
+- 快照为临时性：仅内存，不持久化到 URL、sessionStorage 或 React state。客户端路由变更（`router.push`）仍可保留，全量 reload 重置。
 
-## 对话框
+## 对话框架构
 
-更完整的对话框 API、props 和示例维护在：
+详细对话框 API、props 与完整示例维护于：
 [Dialogs](./dialogs)。
 
 快速选择：
 
-- `ActionDialog`：调用模型操作 `/{modelName}/{operation}`（单条 / 批量）
-- `ModelDialog`：关联字段运行时对话框，不需要显式 `modelName`
+- `ActionDialog`：调用模型操作 `/{modelName}/{operation}`（单条 / 批量）。
+- `ModelDialog`：关联字段运行时对话框，无需显式 `modelName`。
 
-为了避免文档漂移，本文件只保留表单页面指导；对话框细节统一收敛在 dialogs README 中。
+为避免文档漂移，本文件仅保留表单页指导；对话框细节集中在 dialogs README。

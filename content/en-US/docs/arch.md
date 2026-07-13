@@ -45,7 +45,7 @@ Central control layer responsible for:
 
 - **Data Schema** – unified models
 - **Lineage** – data flow tracking
-- **Ownership** – responsibility definition
+- **App identity** – catalog rows scoped by `app_code` (which app owns each model/field/option)
 - **Audit Metadata** – compliance records
 
 This layer defines **how data is understood and managed**, not where it is stored.

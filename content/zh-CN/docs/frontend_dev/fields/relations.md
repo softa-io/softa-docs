@@ -27,7 +27,7 @@ import { Field, RelationTable } from "@/components/fields";
 ## `RelationTable`
 
 `RelationTable` 是 `OneToMany` 与 `ManyToMany` 的关联表格视图定义。
-请声明一个**零 props** 的 `tableView` 组件，并在其中返回 `<RelationTable />`。
+请声明一个零 props 的 `tableView` 组件，并在其中返回 `<RelationTable />`。
 
 示例：
 
@@ -37,7 +37,7 @@ function OptionItemsTableView() {
     <RelationTable orders={["sequence", "ASC"]} pageSize={10}>
       <Field fieldName="sequence" />
       <Field fieldName="itemCode" />
-      <Field fieldName="itemName" />
+      <Field fieldName="label" />
       <Field fieldName="active" />
     </RelationTable>
   );
@@ -46,11 +46,11 @@ function OptionItemsTableView() {
 
 ### Props
 
-| Prop       | 类型             | 必填 | 说明                                                                                      |
-| ---------- | ---------------- | ---- | ----------------------------------------------------------------------------------------- |
-| `children` | `ReactNode`      | 是   | 按顺序声明的 `<Field />` 列，以及可选的 `<Action />` 行级操作（见 [行内操作](#row-actions)）。 |
-| `orders`   | `OrderCondition` | 否   | 关联表格默认排序。支持单个元组或多个元组。                                                |
-| `pageSize` | `number`         | 否   | 关联表格页大小。仅对分页关联表格（`isPaged={true}`）生效。                                |
+| Prop       | 类型             | 必填 | 说明                                                                                                     |
+| ---------- | ---------------- | ---- | -------------------------------------------------------------------------------------------------------- |
+| `children` | `ReactNode`      | 是   | 按顺序声明的 `<Field />` 列，以及可选的 `<Action />` 行级操作（见 [行内操作](#row-actions)）。           |
+| `orders`   | `OrderCondition` | 否   | 关联表格默认排序。支持单个元组或多个元组。                                                               |
+| `pageSize` | `number`         | 否   | 关联表格页大小。仅对分页关联表格（`isPaged={true}`）生效。                                               |
 
 排序示例：
 
@@ -79,7 +79,7 @@ function OptionItemsTableView() {
 - `RelationTable.orders` 同时支持单个元组与多个元组
 - 列声明仍由子级 `<Field />` 的顺序决定
 
-### 行内操作 {#row-actions}
+### 行内操作
 
 `RelationTable` 可与 `<Field />` 并列接受 `<Action />` 子节点。它们渲染在末尾的 `Actions` 列中，作为每行操作，并面向**关联模型**派发——动作的 `operation` / `href` / `onClick` 会以该行的 `id` 作为记录 id。
 
@@ -90,15 +90,15 @@ function OptionItemsTableView() {
   return (
     <RelationTable orders={["sequence", "ASC"]}>
       <Field fieldName="itemCode" />
-      <Field fieldName="itemName" />
+      <Field fieldName="label" />
       <Action
         type="link"
-        labelName="打开"
+        label="Open"
         placement="inline"
         href="/config/option-item/{id}"
       />
       <Action
-        labelName="归档"
+        label="Archive"
         operation="archive"
         placement="more"
       />
@@ -117,7 +117,7 @@ function OptionItemsTableView() {
 
 - 仅当行存在 `id` 时才渲染操作；草稿/未保存行对应单元格为空
 - 动作派发使用**关联**模型名（而非父表单的模型），因此 `operation` 针对关联实体执行，查询失效会刷新该模型
-- `disabled` / `hidden` 条件基于**已保存**的行数据求值——不会跟踪未保存的内联编辑值（与 `ModelTable` 不同）
+- `disabled` / `hidden` 条件基于已保存的行数据求值——不会跟踪未保存的内联编辑值（与 `ModelTable` 不同）
 - 此上下文中 `ActionExecutionContext.scope` 报告为 `"model-table"`（关联行复用同一套派发器）
 
 ## `ManyToOne` / `OneToOne`
@@ -146,7 +146,7 @@ function OptionItemsTableView() {
 说明：
 
 - `filters` 作用于默认的可搜索关联查询
-- 当依赖的 `{{ fieldName }}` 在当前作用域没有值时，选择器保持**查询禁用**，而不会加载全部选项
+- 当依赖的 `{{ fieldName }}` 在当前作用域没有值时，选择器保持查询禁用，而不会加载全部选项
 
 #### `filterBySource` —— 由后端驱动的上下文过滤
 
@@ -219,6 +219,31 @@ interface SourceRecord {
 - 依赖的 `{{ fieldName }}` 缺失时，树选择器保持查询禁用，不会加载未过滤的整棵树
 - 底层 `Tree` / `SelectTreePanel` 属于内部基础设施
 
+#### 递归父级选择器：`preventCycle`
+
+对于常见的「自引用模型，父级不能是自身或其后代」场景（Department、Category、JobFamily 等树形结构），只需设置一个标志：
+
+```tsx
+<Field
+  fieldName="parentId"
+  widgetType="SelectTree"
+  widgetProps={{ preventCycle: true }}
+/>
+```
+
+作用：
+
+- 从外层 `ModelForm` 运行时上下文（`useOptionalModelFormRuntimeContext().id`）读取 `selfId`
+- 从 `metaField.relatedModel` 读取目标模型，并校验其与表单模型一致（不一致时警告并跳过）
+- 将 `selfId` 作为 `disableSubtreeRootId` 传给树；选择器的 `searchList` 返回后，树对 `selfId` 的 `childrenIds` 链做 DFS，将整棵子树（自身 + 后代）加入禁用集合
+- 无额外请求——唯一请求是树在首次打开 popover 时已发起的请求；后续打开命中缓存
+- 无需 `idPath` 列——子树遍历使用从已加载行构建的内存 parent→children 链
+- 创建模式（无 `selfId`）下不会禁用任何节点，因此同一 `widgetProps` 可安全用于 `ModelTable` 创建对话框
+
+更新端点上的后端环检测仍建议作为安全网保留。
+
+注意：若 `treeFilters` 将 `selfId` 本身过滤出树外，子树遍历将无锚点，不会禁用任何节点——仅在编辑的记录被选择器自身过滤排除时才有实际影响。
+
 ## `OneToMany`
 
 渲染为关联表格，支持行内编辑或对话框编辑。对外仍统一使用 `Field`。
@@ -231,7 +256,7 @@ function OptionItemsTableView() {
     <RelationTable orders={["sequence", "ASC"]} pageSize={10}>
       <Field fieldName="sequence" />
       <Field fieldName="itemCode" />
-      <Field fieldName="itemName" />
+      <Field fieldName="label" />
       <Field fieldName="active" />
     </RelationTable>
   );
@@ -242,7 +267,7 @@ function OptionItemsTableView() {
 
 常用 props：
 
-- `tableView`：零 props 的关联表格视图组件，内部渲染 `<RelationTable><Field /></RelationTable>`
+- `tableView`：渲染 `<RelationTable><Field /></RelationTable>` 的关联表格视图组件
 - `formView`：行创建/编辑用的对话框表单
 - `isPaged`：启用分页 / 远程关联模式
 
@@ -335,7 +360,7 @@ function UserTableView() {
 function UserRoleUserIdsFormView() {
   return (
     <ModelDialog title="User Detail">
-      <FormSection labelName="General" hideHeader>
+      <FormSection label="General" hideHeader>
         <Field fieldName="username" />
         <Field fieldName="nickname" />
         <Field fieldName="email" />

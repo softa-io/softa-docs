@@ -18,14 +18,14 @@ List<Job> jobs = this.searchList(flexQuery);
 
 Professional implementation:
 ```java
-private List<DesignAppVersion> getHistoricalVersion(Long envId) {
+private List<DesignActivity> listEnvActivities(Long envId) {
     List<String> fields = ListUtils.getLambdaFields(
-            DesignAppVersion::getName,
-            DesignAppVersion::getAppId,
-            DesignAppVersion::getLocked,
-            DesignAppVersion::getPublished);
-    Filters filters = new Filters().eq(DesignAppVersion::getEnvId, envId)
-            .eq(DesignAppVersion::getLocked, false);
+            DesignActivity::getKind,
+            DesignActivity::getStatus,
+            DesignActivity::getAppId,
+            DesignActivity::getStartedTime);
+    Filters filters = new Filters().eq(DesignActivity::getEnvId, envId)
+            .eq(DesignActivity::getStatus, DesignActivityStatus.SUCCESS);
     FlexQuery flexQuery = new FlexQuery().select(fields).where(filters);
     return this.searchList(flexQuery);
 }

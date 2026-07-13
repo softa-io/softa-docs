@@ -403,7 +403,7 @@ When read-only and the value is empty (or whitespace only), the editor body show
 `Option` / `MultiOption` fields **automatically** render as a read-only display when the surrounding context is read-only — no `widgetType` declaration needed.
 
 - Any selected option carrying `itemTone` → coloured `StatusBadge`.
-- No `itemTone` on any selected option → plain text (`itemName`, comma-separated for MultiOption).
+- No `itemTone` on any selected option → plain text (`label`, comma-separated for MultiOption).
 - Empty value → `-`.
 
 ```tsx
@@ -417,7 +417,7 @@ When read-only and the value is empty (or whitespace only), the editor body show
 Compact icon-only indicator for `Option` fields. Use this in dense table cells, board cards, and status strips where a colored icon conveys the state more directly than a labeled badge.
 
 ```tsx
-<Field fieldName="deployStatus" widgetType="StatusIcon" />
+<Field fieldName="status" widgetType="StatusIcon" />
 ```
 
 **Zero per-page config** — colour and icon are read entirely from the option-set's `itemTone` and `itemIcon` metadata. To change the visual for a status, edit the option-set, not the page.
@@ -433,7 +433,7 @@ For value-driven use outside a `Field` (e.g. when the value comes from sidecar d
 ```tsx
 import { StatusIcon } from "@/components/fields/widgets/option/StatusIconWidget";
 
-<StatusIcon value={lastDeployment.deployStatus} />
+<StatusIcon value={lastActivity.status} />
 ```
 
 #### Option metadata → presentation
@@ -443,7 +443,7 @@ The `OptionReference` shape that drives all presentation:
 ```ts
 {
   itemCode: string;
-  itemName: string;
+  label: string;
   itemTone?: "Success" | "Warning" | "Error" | "Info" | "Neutral";
   itemIcon?: string;  // key into STATUS_ICON_REGISTRY
 }
@@ -479,6 +479,100 @@ Tone codes match the backend `OptionItemTone` enum (Title-Case). `itemTone` reso
 Adding a new icon key requires (a) adding the code to the backend `OptionItemIcon` enum + the system option-set, (b) adding the entry to `icon-registry.ts`. Keep the set small — most cases are covered by the 5 tone-default icons.
 
 ## Date And Time Widgets
+
+### `Date` / `DateTime` — range bounds (`dateOptions`)
+
+`Date` and `DateTime` fields accept an optional `<Field dateOptions={...}>` prop that constrains the selectable range. It is a `<Field>`-level prop (not `widgetProps`) and applies to both the default editor and the column-header date filter.
+
+```ts
+interface DateFieldOptions {
+  /** Lower bound (inclusive). */
+  min?: DateBound;
+  /** Upper bound (inclusive). */
+  max?: DateBound;
+}
+
+type DateBound =
+  | Date                       // absolute Date object
+  | string                     // absolute bound parsed using the widget's dateFormat
+  | "today"                    // sentinel: start of today for `min`, end of today for `max`
+  | { fromField: string };     // live-watched from another form field via RHF useWatch
+```
+
+Each `DateBound` resolves as follows:
+
+| Shape           | Behavior                                                                                                                                                                                  |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Date`          | Used directly. Invalid `Date` is ignored.                                                                                                                                                 |
+| `string`        | Parsed with the widget's `dateFormat` — default `"yyyy-MM-dd"` for `Date`, `"yyyy-MM-dd HH:mm:ss"` for `DateTime`. Unparseable strings are ignored.                                       |
+| `"today"`       | Resolved at render time. `min` snaps to **start** of today, `max` snaps to **end** of today, so today itself is always inside the range.                                                  |
+| `{ fromField }` | Subscribes to another form field via `useWatch`; the bound recomputes whenever that field changes. Resolves through the same `string` parser, so the referenced field must use the same machine format. |
+
+**`Date` examples**
+
+```tsx
+// Absolute lower bound — disable everything before 2024-01-01.
+<Field fieldName="effectiveDate" dateOptions={{ min: "2024-01-01" }} />
+
+// "No past dates" — today is selectable, anything before is disabled.
+<Field fieldName="plannedHireDate" dateOptions={{ min: "today" }} />
+
+// "No future dates" — anything after today is disabled.
+<Field fieldName="dateOfBirth" dateOptions={{ max: "today" }} />
+
+// Bounded window.
+<Field
+  fieldName="contractStartDate"
+  dateOptions={{ min: "2024-01-01", max: "2026-12-31" }}
+/>
+
+// Cross-field — termination date must be on or after hire date.
+<Field
+  fieldName="terminationDate"
+  dateOptions={{ min: { fromField: "hireDate" } }}
+/>
+
+// Cross-field — expected confirmation date must be after hire date but
+// before contract end. Both bounds live-watch their source fields.
+<Field
+  fieldName="expectedConfirmationDate"
+  dateOptions={{
+    min: { fromField: "hireDate" },
+    max: { fromField: "contractEndDate" },
+  }}
+/>
+```
+
+**`DateTime` examples**
+
+For `DateTime`, bounds apply at full datetime granularity — the calendar disables out-of-range days, the time column tightens on boundary days, picking a date clamps the time into the allowed window, and the `Now` quick action disables when the wall clock falls outside `[min, max]`.
+
+```tsx
+// Absolute datetime window.
+<Field
+  fieldName="windowStartTime"
+  dateOptions={{
+    min: "2026-01-01 00:00:00",
+    max: "2026-12-31 23:59:59",
+  }}
+/>
+
+// Cross-field — end timestamp must be ≥ start timestamp.
+<Field
+  fieldName="endTime"
+  dateOptions={{ min: { fromField: "startTime" } }}
+/>
+
+// "No past" with second precision — start of today.
+<Field fieldName="scheduledAt" dateOptions={{ min: "today" }} />
+```
+
+**Notes**
+
+- Bounds are **inclusive** on both sides.
+- Out-of-range days are rendered but disabled in the calendar (greyed out). The trigger button stays enabled so the user can open the picker and see why dates are disabled.
+- Pass only the side you need — `{ min }`, `{ max }`, or both.
+- Combine with `widgetType="yyyy-MM"` / `"MM-dd"` is **not** supported — those widgets carry their own `min`/`max` `widgetProps` in the matching format (see below).
 
 ### `HH:mm` / `HH:mm:ss`
 
@@ -624,9 +718,17 @@ Concrete use case: surfacing employees whose birthday falls in the next 30 days 
 
 ### `SelectTree`
 
+Hierarchical relation picker: a combobox trigger that opens a tree in a popover. Works for both single-value and multi-value relations — the selection mode is inferred from `fieldType`.
+
 ```tsx
+// Single-value (ManyToOne / OneToOne): click-to-select, closes on pick
 <Field fieldName="departmentId" widgetType="SelectTree" />
+
+// Multi-value (ManyToMany): checkbox multi-select in the tree, applied immediately; selected items show as removable tags below the trigger
+<Field fieldName="departmentIds" widgetType="SelectTree" />
 ```
+
+For a recursive self-referencing parent picker (e.g. `Department.parentId`), pass `widgetProps={{ preventCycle: true }}` to grey out the current record and its descendants.
 
 ### `TagList`
 

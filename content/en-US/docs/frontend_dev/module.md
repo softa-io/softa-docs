@@ -47,37 +47,37 @@ Type definitions live in `src/navigation/types.ts`.
 
 ### 3.1 `module` fields
 
-| Field | Type | Required | Notes |
-| --- | --- | --- | --- |
-| `id` | `string` | Yes | Globally unique module id. |
-| `label` | `string` | Yes | Module display name. |
-| `description` | `string` | Yes | Used by navigation/search/help text. |
-| `order` | `number` | Yes | Stable sort key (ascending). |
-| `category` | `string` | No | Used by module grouping in UI. |
-| `defaultPageId` | `string` | No | Must reference a valid page id in this module if provided. |
-| `icon` | `LucideIcon` | No | Module icon. |
+| Field           | Type         | Required | Notes                                                      |
+| --------------- | ------------ | -------- | ---------------------------------------------------------- |
+| `id`            | `string`     | Yes      | Globally unique module id.                                 |
+| `label`         | `string`     | Yes      | Module display name.                                       |
+| `description`   | `string`     | Yes      | Used by navigation/search/help text.                       |
+| `order`         | `number`     | Yes      | Stable sort key (ascending).                               |
+| `category`      | `string`     | No       | Used by module grouping in UI.                             |
+| `defaultPageId` | `string`     | No       | Must reference a valid page id in this module if provided. |
+| `icon`          | `LucideIcon` | No       | Module icon.                                               |
 
 ### 3.2 `group` fields
 
-| Field | Type | Required | Notes |
-| --- | --- | --- | --- |
-| `id` | `string` | Yes | Unique within module. |
-| `label` | `string` | Yes | Group display name. |
-| `order` | `number` | Yes | Stable sort key (ascending). |
-| `icon` | `LucideIcon` | No | Optional group icon. |
-| `pages` | `NavigationPage[]` | Yes | Group pages. |
+| Field   | Type               | Required | Notes                        |
+| ------- | ------------------ | -------- | ---------------------------- |
+| `id`    | `string`           | Yes      | Unique within module.        |
+| `label` | `string`           | Yes      | Group display name.          |
+| `order` | `number`           | Yes      | Stable sort key (ascending). |
+| `icon`  | `LucideIcon`       | No       | Optional group icon.         |
+| `pages` | `NavigationPage[]` | Yes      | Group pages.                 |
 
 ### 3.3 `page` fields
 
-| Field | Type | Required | Notes |
-| --- | --- | --- | --- |
-| `id` | `string` | Yes | Globally unique page id. |
-| `label` | `string` | Yes | Page display name. |
-| `route` | `string` | Yes | Globally unique route (must match Next.js page route). |
-| `order` | `number` | Yes | Stable sort key (ascending). |
-| `icon` | `LucideIcon` | No | Page icon. |
-| `description` | `string` | No | Used by command palette and navigation hints. |
-| `permission` | `NavigationPermission` | No | Optional permission metadata. |
+| Field         | Type                   | Required | Notes                                                  |
+| ------------- | ---------------------- | -------- | ------------------------------------------------------ |
+| `id`          | `string`               | Yes      | Globally unique page id.                               |
+| `label`       | `string`               | Yes      | Page display name.                                     |
+| `route`       | `string`               | Yes      | Globally unique route (must match Next.js page route). |
+| `order`       | `number`               | Yes      | Stable sort key (ascending).                           |
+| `icon`        | `LucideIcon`           | No       | Page icon.                                             |
+| `description` | `string`               | No       | Used by command palette and navigation hints.          |
+| `permission`  | `NavigationPermission` | No       | Optional permission metadata.                          |
 
 ## 4) Validation Rules
 
@@ -114,7 +114,15 @@ Type definitions live in `src/navigation/types.ts`.
 
 ```ts
 import type { NavigationManifest } from "@/navigation/types";
-import { AlertCircle, History, Shield, User, UserCircle, UserPlus, Users } from "lucide-react";
+import {
+  AlertCircle,
+  History,
+  Shield,
+  User,
+  UserCircle,
+  UserPlus,
+  Users,
+} from "lucide-react";
 
 export const USER_NAVIGATION_MANIFESTS: NavigationManifest[] = [
   {
@@ -178,7 +186,53 @@ export const USER_NAVIGATION_MANIFESTS: NavigationManifest[] = [
 ];
 ```
 
-## 7) Current Module Inventory
+## 7) Chrome-less Pages
+
+Most app routes render inside the global shell from `src/app/layout.tsx`:
+
+- `Sidebar`
+- `Header`
+- footer/status bar
+
+Some routes intentionally skip that chrome while still keeping root-level
+providers such as auth, React Query, workspace context, density, and toaster.
+This is used for focused workspace pages that are usually opened in their own
+tab and need maximum horizontal space.
+
+Current route matcher:
+
+- `src/app/chrome-less-routes.ts`
+
+Current examples:
+
+- `/login`
+- `/login/oauth-callback`
+- `/admin/document-template/[id]/preview`
+- `/admin/signing-document/[id]/sign`
+
+Current signing-related examples:
+
+- `/admin/document-template/[id]/preview` is a chrome-less template review workspace with inline placeholder editing and `Preview As` role switching for signature slots such as `Sender` and `Receiver`
+- `/admin/signing-document/[id]/sign` is a chrome-less signing workspace that focuses the user on one assigned signature slot via `SigningDocument.signSlotCode`
+
+Use a chrome-less page when all of the following are true:
+
+- the page is task-focused and benefits from a distraction-free workspace
+- global navigation is low-value during the task
+- the page still belongs to the same app/runtime and should keep shared providers
+
+Do **not** use a chrome-less page for ordinary list/detail/create/edit screens
+that users navigate within the main app shell.
+
+When adding a new chrome-less page:
+
+1. Add the route matcher to `src/app/chrome-less-routes.ts`.
+2. Keep the page under the normal `src/app/**` tree unless it truly needs a
+   separate app/runtime.
+3. Prefer adding an obvious local back/close affordance inside the page itself,
+   since the global shell navigation will be absent.
+
+## 8) Current Module Inventory
 
 From current manifests:
 
@@ -186,7 +240,7 @@ From current manifests:
 - `users` (default page inferred from first page)
 - `AI` (default page inferred from first page)
 
-## 8) Checklist Before Merge
+## 9) Checklist Before Merge
 
 - Route file exists and is reachable.
 - `page.id` and `page.route` are globally unique.

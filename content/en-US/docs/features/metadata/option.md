@@ -7,7 +7,7 @@ and the ORM layer caches them for fast lookup.
 
 ### Data Source
 Option items are stored in the metadata table `SysOptionItem`. Each item belongs to an `optionSetCode` and has an
-`itemCode`, `itemName`, and a `sequence` used for ordering.
+`itemCode`, `label`, and a `sequence` used for ordering.
 
 ### Cache Behavior
 At application startup, `OptionManager.init()` loads all `SysOptionItem` rows, ordered by `sequence`, and stores them
@@ -31,7 +31,7 @@ Response is a list of `OptionReference` objects.
     "data": [
         {
             "itemCode": "Male",
-            "itemName": "Male",
+            "label": "Male",
             "itemTone": "",
             "itemIcon": ""
         },
@@ -46,34 +46,35 @@ Use `OptionManager` in service code:
 ```java
 List<MetaOptionItem> items = OptionManager.getMetaOptionItems("OrderStatus");
 MetaOptionItem pending = OptionManager.getMetaOptionItem("OrderStatus", "PENDING");
-String pendingName = OptionManager.getItemNameByCode("OrderStatus", "PENDING");
+String pendingLabel = OptionManager.getLabelByCode("OrderStatus", "PENDING");
+String pendingCode = OptionManager.getItemCodeByLabel("OrderStatus", "Pending");
 boolean exists = OptionManager.existsItemCode("OrderStatus", "PENDING");
 ```
 
 ### Localization
-`MetaOptionItem.getItemName()` returns a translated name if a translation exists for the current language in context.
-If no translation exists, it returns the original `itemName`.
+`MetaOptionItem.getLabel()` returns a translated label if a translation exists for the current language in context.
+If no translation exists, it returns the original `label`.
 
 ### OptionReference Structure
 When option values are expanded or returned as references, they use `OptionReference`.
 
 Fields:
 - `itemCode`: option item code.
-- `itemName`: option item display name.
-- `itemTone`: optional semantic tone (e.g. `success`, `warning`, `error`, `info`, `neutral`).
+- `label`: option item display label.
+- `itemTone`: optional semantic tone (`Success` / `Warning` / `Error` / `Info` / `Neutral`).
 - `itemIcon`: optional icon code (e.g. `check`, `x`, `ban`, `alert`, `pause`, `info`, `eye`, `loader`, `clock`, `pending`, `undo`, `lock`).
 
 ###  API Return by Option / MultiOption fields
 Default API return (`REFERENCE`):
 1. `Option` -> `OptionReference` object:
 ```json
-{ "itemCode": "Active", "itemName": "Active", "itemTone": "success", "itemIcon": "check" }
+{ "itemCode": "Active", "label": "Active", "itemTone": "Success", "itemIcon": "check" }
 ```
 2. `MultiOption` -> `List<OptionReference>`:
 ```json
 [
-  { "itemCode": "A", "itemName": "Tag A", "itemTone": "", "itemIcon": "" },
-  { "itemCode": "B", "itemName": "Tag B", "itemTone": "", "itemIcon": "" }
+  { "itemCode": "A", "label": "Tag A", "itemTone": "", "itemIcon": "" },
+  { "itemCode": "B", "label": "Tag B", "itemTone": "", "itemIcon": "" }
 ]
 ```
 

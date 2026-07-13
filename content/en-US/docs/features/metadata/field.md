@@ -45,11 +45,11 @@ A date-time type accurate to seconds. In code, it is a `LocalDateTime` object. I
 
 ### 1.3 `Option`
 
-A single-select field. You must configure the `optionCode` attribute (the option set code).
+A single-select field. You must configure the `optionSetCode` attribute (the option set code). For annotation-declared entities it is derived automatically from the enum type.
 
 When saving a single-select field, the value passed and stored is the option item code.
 
-When fetching a single-select field through the API, the default response format is `[itemCode, itemName]` (both the code and name are returned).
+When fetching a single-select field through the API, the default response is an `OptionReference` object (`itemCode` + `label`, plus optional `itemTone` / `itemIcon`).
 
 For option set configuration and usage, see the [Option Set](option) section.
 
@@ -57,7 +57,7 @@ For option set configuration and usage, see the [Option Set](option) section.
 
 Multi-select fields allow selecting multiple options from the same option set. When saving, you pass a list of option item codes, and the database stores the codes separated by `,`.
 
-When reading a multi-select field through the API, the default response format is `[[itemCode, itemName], ...]`.
+When reading a multi-select field through the API, the default response is a list of `OptionReference` objects (`[{itemCode, label, ...}, ...]`).
 
 ### 1.5 `MultiString`
 
@@ -85,11 +85,11 @@ Used only for storing the JSON string of an `Orders` object.
 
 ### 1.11 `OneToOne`
 
-A relational field. Configure `relatedModel` and `relatedField`. The selected data is unique.
+A relational field. Configure `relatedModel` and `relatedField`. The selected data is unique. Optionally set `onDelete` for the FK delete strategy when the referenced row is deleted (see [`onDelete`](#224-ondelete)).
 
 ### 1.12 `ManyToOne`
 
-A relational field. Configure `relatedModel` and `relatedField`.
+A relational field. Configure `relatedModel` and `relatedField`. Optionally set `onDelete` for the FK delete strategy when the referenced row is deleted (see [`onDelete`](#224-ondelete)).
 
 ### 1.13 `OneToMany`
 
@@ -140,36 +140,40 @@ Note:
 
 | No. | Attribute | Data Type | Description | Notes |
 | --- | --- | --- | --- | --- |
-| 1 | labelName | String | Field label |  |
+| 1 | label | String | Field label |  |
 | 2 | modelName | String | Model name |  |
 | 3 | fieldName | String | Field name |  |
-| 4 | fieldType | Option | Field type |  |
-| 5 | optionCode | String | Option set code |  |
-| 6 | defaultValue | String | Default value |  |
-| 7 | length | Integer | Field length |  |
-| 8 | scale | Integer | Decimal places |  |
-| 9 | required | Boolean | Required, default `false` |  |
-| 10 | readonly | Boolean | Readonly, default `false` |  |
-| 11 | hidden | Boolean | Hidden, default `false` |  |
-| 12 | copyable | Boolean | Copyable, default `true` |  |
-| 13 | searchable | Boolean | Searchable, default `true` |  |
-| 14 | dynamic | Boolean | Dynamic, default `false` |  |
-| 15 | translatable | Boolean | Translatable, default `false` |  |
-| 16 | encrypted | Boolean | Encrypted, default `false` |  |
-| 17 | maskingType | Option | Masking type |  |
-| 18 | computed | Boolean | Computed, default `false` |  |
-| 19 | expression | String | Computation expression |  |
-| 20 | cascadedField | String | Cascaded field | Relationship attribute |
-| 21 | relatedModel | String | Related model | Relationship attribute |
-| 22 | relatedField | String | Related field | For OneToMany: the Many-side field name |
-| 23 | joinModel | String | Join model (ManyToMany) | Middle model |
-| 24 | joinLeft | String | Left-side field in join model | Stores the left model FK |
-| 25 | joinRight | String | Right-side field in join model | Stores the right model FK |
-| 26 | filters | String | Relational field filter conditions | Relationship attribute |
-| 27 | columnName | String | Table column name | Read-only |
-| 28 | description | String | Field description |  |
+| 4 | renamedFrom | String | Immediately-prior field name for a rename | Single-step, no chain |
+| 5 | fieldType | Option | Field type |  |
+| 6 | optionSetCode | String | Option set code | Derived from the enum type for annotated entities |
+| 7 | defaultValue | String | Default value |  |
+| 8 | length | Integer | Field length |  |
+| 9 | scale | Integer | Decimal places |  |
+| 10 | required | Boolean | Required, default `false` |  |
+| 11 | readonly | Boolean | Readonly, default `false` |  |
+| 12 | hidden | Boolean | Hidden, default `false` | UI-only flag set via Studio |
+| 13 | copyable | Boolean | Copyable, default `true` | `false` ⇒ value not carried by `copyById` |
+| 14 | unsearchable | Boolean | Excluded from default search, default `false` |  |
+| 15 | dynamic | Boolean | Dynamic, default `false` |  |
+| 16 | translatable | Boolean | Translatable, default `false` |  |
+| 17 | encrypted | Boolean | Encrypted, default `false` |  |
+| 18 | maskingType | Option | Masking type |  |
+| 19 | computed | Boolean | Computed, default `false` |  |
+| 20 | expression | String | Computation expression |  |
+| 21 | cascadedField | String | Cascaded field | Relationship attribute |
+| 22 | relatedModel | String | Related model | Relationship attribute |
+| 23 | relatedField | String | Related field | For OneToMany: the Many-side field name; TO_ONE joins on `id` only |
+| 24 | relatedFieldType | Option | Physical type of a TO_ONE FK column | System-computed, mirrored from the referenced model's `id` |
+| 25 | onDelete | Option | TO_ONE FK delete strategy (`RESTRICT` / `CASCADE` / `SET_NULL`) | Unset = KEEP; see [§2.24](#224-ondelete) |
+| 26 | joinModel | String | Join model (ManyToMany) | Middle model |
+| 27 | joinLeft | String | Left-side field in join model | Stores the left model FK |
+| 28 | joinRight | String | Right-side field in join model | Stores the right model FK |
+| 29 | filters | String | Relational field filter conditions | Relationship attribute |
+| 30 | widgetType | Option | Preferred UI widget |  |
+| 31 | columnName | String | Table column name | Read-only |
+| 32 | description | String | Field description |  |
 
-### 2.1 `labelName`
+### 2.1 `label`
 
 The label (semantic) name of the field. It is typically displayed as a column header on list pages or as a field label on forms, e.g. `Contact Number`.
 
@@ -187,11 +191,11 @@ Before querying, Softa converts field names to underscore naming based on the st
 
 The field type from the built-in type set, including string, numeric, date/time, option set, JSON, and relationship types. See the field types section above for details.
 
-### 2.5 `optionCode`
+### 2.5 `optionSetCode`
 
 Option sets are suitable for business scenarios where options are relatively stable, the number of options is limited, but extensibility is needed. In Softa, option information is stored in the `OptionSet` model and the `OptionItem` model.
 
-When the field type is `Option` or `MultiOption`, you must configure `optionCode`.
+When the field type is `Option` or `MultiOption`, you must configure `optionSetCode`.
 
 ### 2.6 `defaultValue`
 
@@ -308,7 +312,32 @@ The related model for relationship fields (OneToOne, ManyToOne, OneToMany, ManyT
 - For OneToMany, this is the field name in the related model (Many side) that stores the foreign key of the current model; it must not be empty.
 - For OneToOne/ManyToOne, this defaults to the related model’s `id`.
 
-### 2.23 `joinModel`
+### 2.23 `relatedFieldType`
+
+System-computed physical type of a TO_ONE FK column (`STRING` / `LONG` / …), mirrored from the referenced model’s `id` (and mirrored `length` / `scale`) at reconciliation time. Never declared on `@Field`; used so DDL can render the correct column type while `fieldType` stays the logical `MANY_TO_ONE` / `ONE_TO_ONE`. Null for non-FK fields.
+
+### 2.24 `onDelete`
+
+Delete strategy for a **TO_ONE** foreign key (`ManyToOne` / `OneToOne`): what happens to **referencing** rows when the referenced ("One") row is deleted.
+
+This is an **application-level** policy enforced in `ModelServiceImpl.deleteByIds`. Softa does **not** emit physical database `FOREIGN KEY ... ON DELETE` constraints — relations stay app-level.
+
+| Value | Behavior |
+| --- | --- |
+| `RESTRICT` | Block the delete if any live (`deleted=false`) referrer exists. |
+| `CASCADE` | Delete referrers in the same transaction; each child follows its own soft/hard delete mode. |
+| `SET_NULL` | Null the referrer FK; only on a **hard** delete of the One (no-op on soft delete so a restore still resolves). Requires a nullable FK (`required=false`). |
+| unset (`null`) | **KEEP** (default) — the framework does nothing to referrers. |
+
+Key rules:
+
+- Declare `onDelete` only on the **TO_ONE back-reference FK** (the child side). It is **not** set on `OneToMany` / `ManyToMany` virtual fields — for "delete parent → delete children", put `CASCADE` on the child's FK.
+- This is **not** the same as frontend `cascadedField` (value auto-fill) or UI row-delete callbacks (`onDeleteRow` on relation tables).
+- Frontend `<Field>` has no `onDelete` prop; runtimes consume it from metadata when deleting models.
+
+Boot-time guards reject unsafe combinations (for example soft-delete parent cascading to hard-delete children, cyclic `CASCADE`, shared parent to multi-tenant child). Full matrix, batch limits, and annotation mapping: [Delete strategy (`onDelete`)](../../backend_dev/model_dev/annotation#delete-strategy-ondelete) and ADR-0022.
+
+### 2.25 `joinModel`
 
 For ManyToMany, `joinModel` must not be empty. It is the join (middle) model that stores the mapping relationship between the two models.
 
@@ -316,28 +345,28 @@ When querying, Softa first queries the mapping relationships from `joinModel`, t
 
 Default naming rule: Softa automatically concatenates the left model name + right model name + `Rel`, e.g. `User` + `Role` + `Rel` → `UserRoleRel`.
 
-### 2.24 `joinLeft`
+### 2.26 `joinLeft`
 
 For ManyToMany, the field name in the join model that stores the foreign key of the left model.
 
 Default naming rule: lowercase the first letter of the left model name, then append `Id`, e.g. `User` → `userId`.
 
-### 2.25 `joinRight`
+### 2.27 `joinRight`
 
 For ManyToMany, the field name in the join model that stores the foreign key of the right model.
 
 Default naming rule: lowercase the first letter of the right model name, then append `Id`, e.g. `Role` → `roleId`.
 
-### 2.26 `filters`
+### 2.28 `filters`
 
 Basic filtering conditions for OneToOne/ManyToOne relationship fields. This is a fixed filter based on business scenarios; it is combined with user search conditions using `AND`.
 
-### 2.27 `columnName`
+### 2.29 `columnName`
 
 Read-only attribute: the physical table column name derived from the field name (e.g. `unitPrice` → `unit_price`).
 
 When `fieldName` changes, Softa synchronizes the column name by default. You can disable automatic table column renaming via a global DDL switch to support workflows where DDL is applied by other means.
 
-### 2.28 `description`
+### 2.30 `description`
 
 The business description of the field.

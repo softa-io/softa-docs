@@ -61,7 +61,6 @@ Example with all slots:
     <Field fieldName="appName" />
   </ModelCard.Header>
   <Field fieldName="appCode" />
-  <Field fieldName="portfolioId" />
   <Field fieldName="appType" />
   <ModelCard.Footer>
     <Field fieldName="updatedTime" />
@@ -76,7 +75,7 @@ Slots accept dot-notation `<Field>` declarations to read fields off related reco
 ```tsx
 <ModelCard modelName="AppEnv">
   <Field fieldName="name" />
-  <Field fieldName="lastDeploymentId.deployStatus" widgetType="StatusIcon" />
+  <Field fieldName="lastActivityId.status" widgetType="StatusIcon" />
   <Field fieldName="ownerId.email" />
 </ModelCard>
 ```
@@ -103,8 +102,8 @@ The explicit `placement` prop is only consulted to detect `"more"`. For `"header
     <Field fieldName="appName" />
     <Action
       type="link"
-      labelName="Edit"
-      href="/studio/app/{id}/workbench"
+      label="Edit"
+      href="/studio/app/{id}/design-model"
     />
   </ModelCard.Header>
 </ModelCard>
@@ -121,7 +120,7 @@ The explicit `placement` prop is only consulted to detect `"more"`. For `"header
   </ModelCard.Header>
   <Field fieldName="status" />
   <Action
-    labelName="Publish"
+    label="Publish"
     operation="publish"
     confirmMessage="Publish this app?"
   />
@@ -137,7 +136,7 @@ Top-level `Action` children (not inside a slot wrapper) render to the right of t
   <ModelCard.Header>
     <Field fieldName="appName" />
     <Action
-      labelName="Archive"
+      label="Archive"
       operation="archive"
       placement="more"
     />
@@ -159,13 +158,13 @@ String `href` values support `{placeholder}` template variables. Supported place
 
 ```tsx
 // Record ID
-<Action type="link" labelName="Edit" href="/studio/app/{id}/workbench" />
+<Action type="link" label="Edit" href="/studio/app/{id}/design-model" />
 
 // Any record field
-<Action type="link" labelName="Open" href="/studio/{appCode}/workbench" />
+<Action type="link" label="Open" href="/studio/app/{appCode}/design-model" />
 
 // Multiple placeholders
-<Action type="link" labelName="Open" href="/studio/app/{id}/version/{currentVersion}" />
+<Action type="link" label="Open" href="/studio/app/{id}/version/{currentVersion}" />
 ```
 
 Use the function form when you need conditional logic:
@@ -173,8 +172,8 @@ Use the function form when you need conditional logic:
 ```tsx
 <Action
   type="link"
-  labelName="Open"
-  href={({ id }) => `/studio/app/${id}/workbench`}
+  label="Open"
+  href={({ id }) => `/studio/app/${id}/design-model`}
 />
 ```
 
@@ -185,14 +184,14 @@ Use the function form when you need conditional logic:
   <ModelCard.Header>
     <Field fieldName="appName" />
     {/* → outline button in CardHeader */}
-    <Action type="link" labelName="Edit" href="/studio/app/{id}/workbench" />
+    <Action type="link" label="Edit" href="/studio/app/{id}/design-model" />
     {/* → ... dropdown */}
-    <Action type="default" labelName="Archive" operation="archive" placement="more" />
+    <Action type="default" label="Archive" operation="archive" placement="more" />
   </ModelCard.Header>
 
   <Field fieldName="status" />
   {/* → inline button in CardContent */}
-  <Action type="default" labelName="Publish" operation="publish" />
+  <Action type="default" label="Publish" operation="publish" />
 
   <ModelCard.Footer>
     <Field fieldName="updatedTime" />
@@ -258,19 +257,19 @@ When `enableDelete={true}`, each card shows a `...` menu on hover with a "Delete
 ```tsx
 import { SideTree } from "@/components/views/shared/side-panel/SideTree";
 
-<ModelCard modelName="DesignApp" enableDelete>
+<ModelCard modelName="Product" enableDelete>
   <SideTree
-    title="Portfolio"
-    modelName="DesignPortfolio"
-    filterField="portfolioId"
+    title="Category"
+    modelName="Category"
+    filterField="categoryId"
     labelField="name"
     parentField="parentId"
     selectionMode="single"
   />
   <ModelCard.Header>
-    <Field fieldName="appName" />
+    <Field fieldName="name" />
   </ModelCard.Header>
-  <Field fieldName="appCode" />
+  <Field fieldName="sku" />
   <Field fieldName="status" />
 </ModelCard>
 ```
@@ -333,7 +332,7 @@ Active filter/sort states are shown as clearable badges below the toolbar.
 | Prop          | Type                                                          | Required | Default | Notes                                                                                                        |
 | ------------- | ------------------------------------------------------------- | -------- | ------- | ------------------------------------------------------------------------------------------------------------ |
 | `modelName`   | `string`                                                      | Yes      | -       | Model name for metadata and data API.                                                                        |
-| `labelName`   | `string`                                                      | No       | -       | Overrides the page title in the header. Defaults to `metaModel.labelName`.                                   |
+| `label`   | `string`                                                      | No       | -       | Overrides the page title in the header. Defaults to `metaModel.label`.                                   |
 | `description` | `string`                                                      | No       | -       | Overrides the subtitle in the header. Defaults to `metaModel.description`.                                   |
 | `orders`      | `OrderCondition`                                              | No       | -       | Recommended default sort. Wins over `initialParams.orders` and `MultiView.Tab.orders` (context).            |
 | `filters`     | `FilterCondition`                                             | No       | -       | Recommended base filter. Wins over `initialParams.filters` and `MultiView.Tab.filters` (context). AND-merged with workspace/runtime filters. See [precedence](./multi-view#filter--order-precedence). |

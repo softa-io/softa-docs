@@ -110,7 +110,7 @@ function HeaderStatusBadge() {
 
 ### `Group`
 
-Inline flex container that groups multiple `Field` elements on a single line. Inner Field labels are always suppressed — use `labelName` on `Group` instead.
+Inline flex container that groups multiple `Field` elements on a single line. Inner Field labels are always suppressed — use `label` on `Group` instead.
 
 **Location:** `@/components/fields/composition`
 
@@ -118,7 +118,7 @@ Inline flex container that groups multiple `Field` elements on a single line. In
 
 | Prop        | Type        | Required | Default | Notes                                                      |
 | ----------- | ----------- | -------- | ------- | ---------------------------------------------------------- |
-| `labelName` | `string`    | No       | -       | Label rendered above the inline group. Replaces individual Field labels. |
+| `label` | `string`    | No       | -       | Label rendered above the inline group. Replaces individual Field labels. |
 | `separator` | `ReactNode` | No       | -       | Separator rendered between children (e.g. `"-"`, `"·"`, `"/"`). |
 | `className` | `string`    | No       | -       | Additional CSS classes for the flex container.              |
 | `children`  | `ReactNode` | Yes      | -       | Typically `Field` elements.                                 |
@@ -126,7 +126,7 @@ Inline flex container that groups multiple `Field` elements on a single line. In
 #### Label Behavior
 
 - **Display mode** (inside `FormHeader`, `SideCard`, etc.): Fields render as value-only `<span>` — no labels by default.
-- **Form mode** (inside `FormBody`): Group clones child Fields with `hideLabel={true}` to suppress individual labels. If `labelName` is provided, it renders as a single `FormLabel` above the group.
+- **Form mode** (inside `FormBody`): Group clones child Fields with `hideLabel={true}` to suppress individual labels. If `label` is provided, it renders as a single `FormLabel` above the group.
 
 #### Examples
 
@@ -146,8 +146,8 @@ Inline flex container that groups multiple `Field` elements on a single line. In
 ```tsx
 import { Group } from "@/components/fields/composition";
 
-<FormSection labelName="Name">
-  <Group labelName="Full Name" separator="-">
+<FormSection label="Name">
+  <Group label="Full Name" separator="-">
     <Field fieldName="firstName" />
     <Field fieldName="lastName" />
   </Group>
@@ -215,17 +215,18 @@ function UserTableView() {
 | `placeholder`  | `string`                           | No       | Field-level input placeholder. Prefer this over `widgetProps.placeholder`.                                                                                |
 | `hideLabel`    | `boolean`                          | No       | Hides the whole label block.                                                                                                                              |
 | `fullWidth`    | `boolean`                          | No       | Layout hint for text-like and relation fields.                                                                                                            |
-| `labelName`    | `string`                           | No       | Metadata label override.                                                                                                                                  |
+| `label`    | `string`                           | No       | Metadata label override.                                                                                                                                  |
 | `required`     | `FieldCondition`                   | No       | Dynamic required control. Supports `boolean`, `FilterCondition`, or `dependsOn(...)`.                                                                    |
 | `readonly`     | `FieldCondition`                   | No       | Dynamic readonly control. Supports `boolean`, `FilterCondition`, or `dependsOn(...)`.                                                                    |
 | `hidden`       | `FieldCondition`                   | No       | Dynamic visibility control. Hidden fields are not rendered and their validation is suppressed.                                                            |
 | `defaultValue` | `unknown`                          | No       | Create-only default override. Has higher priority than `metaField.defaultValue` and dialog/page `defaultValues`.                                         |
 | `filters`      | `string \| FilterCondition`        | No       | Filter override. Used by relation queries and by `Option` / `MultiOption` client-side option filtering (matched on `itemCode`). `Field.filters` overrides `metaField.filters`. Supports JSON-string metadata filters and `{{ expr }}` (e.g. `{{ fieldName }}`) references.            |
-| `filterBySource` | `boolean`                        | No       | When true, sends a `SourceRecord` snapshot (owning model + recordId + current form values) with server-side search calls such as `searchName`, so backend handlers can apply business rules that depend on the calling form. Default `false`; opt in per call site. See [Relation Fields — filterBySource](./relations.md). |
+| `filterBySource` | `boolean`                        | No       | When true, sends a `SourceRecord` snapshot (owning model + recordId + current form values) with server-side search calls such as `searchName`, so backend handlers can apply business rules that depend on the calling form. Default `false`; opt in per call site. See [Relation Fields — filterBySource](./relations). |
 | `onChange`     | `FieldOnChangeProp`                | No       | Remote field linkage. Supports shorthand `string[]` or `{ update?, with? }`.                                                                              |
 | `tableView`    | `RelationTableView`                | No       | Relation-table view for `OneToMany` / `ManyToMany`. Must be a zero-prop component that renders `<RelationTable />`. See [Relation Fields](./relations).          |
 | `formView`     | `RelationFormView`                 | No       | Relation dialog/detail view config. See [Relation Fields](./relations).                                                                                            |
 | `isPaged`      | `boolean`                          | No       | Enables paged relation-table mode for `OneToMany` / `ManyToMany`. See [Relation Fields](./relations).                                                            |
+| `dateOptions`  | `{ min?: DateBound; max?: DateBound }` | No   | `Date` / `DateTime` range bounds (both inclusive). Each side accepts `Date \| string \| "today" \| { fromField }`. See [Widgets — Date / DateTime range bounds](./widgets#date--datetime--range-bounds-dateoptions). |
 
 `FieldCondition`:
 
@@ -286,7 +287,7 @@ import { dependsOn, Field } from "@/components/fields";
 />
 
 <Field
-  fieldName="itemName"
+  fieldName="label"
   required={dependsOn(["active", "itemCode"], ({ values, isEditing }) =>
     !isEditing && values.active === true && values.itemCode !== "Temp"
   )}
@@ -301,7 +302,7 @@ Use `dependsOn([...], evaluator)` when a field rule depends on other values and 
 import { dependsOn, Field } from "@/components/fields";
 
 <Field
-  fieldName="itemName"
+  fieldName="label"
   required={dependsOn(["active", "itemCode"], ({ values, isEditing }) =>
     !isEditing && values.active === true && values.itemCode !== "Temp"
   )}
@@ -401,11 +402,11 @@ type FieldOnChangeProp =
 Common examples:
 
 ```tsx
-<Field fieldName="itemCode" onChange={["itemName", "itemTone"]} />
+<Field fieldName="itemCode" onChange={["label", "itemTone"]} />
 
 <Field
   fieldName="itemCode"
-  onChange={{ update: ["itemName"], with: ["active"] }}
+  onChange={{ update: ["label"], with: ["active"] }}
 />
 
 <Field
@@ -462,11 +463,11 @@ Response payload:
 ```json
 {
   "values": {
-    "itemName": "Open",
+    "label": "Open",
     "itemTone": "Success"
   },
   "readonly": {
-    "itemName": true
+    "label": true
   },
   "required": {
     "itemTone": true
@@ -491,8 +492,8 @@ Scope notes:
 Dot-notation in `fieldName` reads a field off a related record (through `ManyToOne` / `OneToOne`) and renders it read-only — no manual SubQuery, no extra display widget code, no hand-rolled hook.
 
 ```tsx
-{/* Renders DesignDeployment.deployStatus on each AppEnv card */}
-<Field fieldName="lastDeploymentId.deployStatus" widgetType="StatusIcon" />
+{/* Renders DesignActivity.status on each AppEnv card */}
+<Field fieldName="lastActivityId.status" widgetType="StatusIcon" />
 
 {/* Depth 3: AppEnv → Owner → Department.name */}
 <Field fieldName="ownerId.departmentId.name" />
@@ -501,7 +502,7 @@ Dot-notation in `fieldName` reads a field off a related record (through `ManyToO
 Behavior:
 
 - always read-only — never registers with react-hook-form, never appears in `formState.dirtyFields`, doesn't participate in validation
-- effective `metaField` is the **leaf** field on the deepest model (e.g. `DesignDeployment.deployStatus`); `fieldType` / `widgetType` / `optionSetCode` / `labelName` all come from the leaf, and props on `<Field>` (`label` / `widgetType` / `hideLabel` / `className`) override as usual
+- effective `metaField` is the **leaf** field on the deepest model (e.g. `DesignActivity.status`); `fieldType` / `widgetType` / `optionSetCode` / `label` all come from the leaf, and props on `<Field>` (`label` / `widgetType` / `hideLabel` / `className`) override as usual
 - supported in `ModelForm`, `ModelSideForm`, `ModelTable`, `ModelBoard`, `ModelCard` — the host walker auto-folds the matching SubQuery into its data request and the `CascadedResolutionsProvider` injects per-path leaf metadata
 - intermediate `null` is rendered as the leaf type's empty placeholder (same as a plain null field), with no special tombstone for "deleted reference"
 - only traverses `*-to-One` relations; OneToMany / ManyToMany in the path is rejected by the backend (`TRAVERSE_TO_MANY`) and the field falls back to a "-" placeholder + dev `console.error`
@@ -514,12 +515,12 @@ import { getValueAtPath } from "@/utils/object-path";
 
 function HealthDot() {
   const { record } = useRecordContext();
-  const deployStatus = getValueAtPath(record, "lastDeploymentId.deployStatus");
-  // ...derive UI from deployStatus
+  const status = getValueAtPath(record, "lastActivityId.status");
+  // ...derive UI from status
 }
 ```
 
-The `<Field fieldName="lastDeploymentId.deployStatus">` declaration somewhere in the host view's JSX is what registers the path with the walker so the SubQuery is folded — `getValueAtPath` is just the typed accessor for the resulting nested object.
+The `<Field fieldName="lastActivityId.status">` declaration somewhere in the host view's JSX is what registers the path with the walker so the SubQuery is folded — `getValueAtPath` is just the typed accessor for the resulting nested object.
 
 Limitations:
 
@@ -635,6 +636,19 @@ Special format-oriented widgets:
 <Field fieldName="period" widgetType="yyyy-MM" />
 <Field fieldName="startTime" widgetType="HH:mm" />
 ```
+
+Range bounds — `Date` and `DateTime` fields accept a `dateOptions={{ min, max }}` prop (both inclusive). Each side is `Date | string | "today" | { fromField: string }`, so absolute bounds, today-relative bounds, and cross-field bounds all use the same shape:
+
+```tsx
+<Field fieldName="plannedHireDate" dateOptions={{ min: "today" }} />
+<Field fieldName="dateOfBirth" dateOptions={{ max: "today" }} />
+<Field
+  fieldName="terminationDate"
+  dateOptions={{ min: { fromField: "hireDate" } }}
+/>
+```
+
+See [Widgets — Date / DateTime range bounds](./widgets#date--datetime--range-bounds-dateoptions) for the full `DateBound` semantics and `DateTime` granularity behavior.
 
 ### Reference Types
 

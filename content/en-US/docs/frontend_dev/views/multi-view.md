@@ -30,7 +30,7 @@ What MultiView gives you:
 Each tab body is extracted into its own `<view-kind>-view.tsx` file (e.g. `board-view.tsx`, `table-view.tsx`) that exports a component. The page composes them via MultiView:
 
 ```tsx
-// design-app-version/board-view.tsx
+// design-app-env/board-view.tsx
 "use client";
 import { Field } from "@/components/fields";
 import { ModelBoard } from "@/components/views/board";
@@ -38,39 +38,34 @@ import { ModelBoard } from "@/components/views/board";
 export function BoardView() {
   return (
     <ModelBoard
-      modelName="DesignAppVersion"
-      groupBy={{
-        type: "enum",
-        field: "status",
-        columns: [
-          { value: "Draft", label: "Draft" },
-          { value: "Sealed", label: "Sealed" },
-          { value: "Frozen", label: "Frozen" },
-        ],
-      }}
+      modelName="DesignAppEnv"
+      filters={["active", "=", true]}
+      orders={["sequence", "ASC"]}
+      groupBy={{ field: "envType" }}
+      enableColumnCreate
     >
       <ModelBoard.Header>
         <Field fieldName="name" />
-        <Field fieldName="versionType" />
       </ModelBoard.Header>
-      <Field fieldName="sealedTime" />
+      <Field fieldName="connectorType" />
+      <Field fieldName="databaseType" />
     </ModelBoard>
   );
 }
 ```
 
 ```tsx
-// design-app-version/table-view.tsx
+// design-app-env/table-view.tsx
 "use client";
 import { Field } from "@/components/fields";
 import { ModelTable } from "@/components/views/table/ModelTable";
 
 export function TableView() {
   return (
-    <ModelTable modelName="DesignAppVersion">
+    <ModelTable modelName="DesignAppEnv">
       <Field fieldName="name" />
-      <Field fieldName="status" />
-      <Field fieldName="sealedTime" />
+      <Field fieldName="envType" />
+      <Field fieldName="envStatus" />
       <Field fieldName="updatedTime" />
     </ModelTable>
   );
@@ -78,20 +73,20 @@ export function TableView() {
 ```
 
 ```tsx
-// design-app-version/page.tsx
+// design-app-env/page.tsx
 "use client";
 import { MultiView } from "@/components/views/multi-view";
 
 import { BoardView } from "./board-view";
 import { TableView } from "./table-view";
 
-export default function DesignAppVersionPage() {
+export default function DesignAppEnvPage() {
   return (
-    <MultiView labelName="Design App Version">
+    <MultiView label="Design App Env">
       <MultiView.Tab
         id="board"
         label="Board"
-        orders={["updatedTime", "DESC"]}
+        orders={["sequence", "ASC"]}
         view={BoardView}
       />
       <MultiView.Tab id="table" label="Table" view={TableView} />
@@ -100,7 +95,7 @@ export default function DesignAppVersionPage() {
 }
 ```
 
-`labelName` is the page title text shown in the header. MultiView is model-agnostic and does not fetch metadata — pass title text directly. Each view component reads `filters` / `orders` / `linkTo` / `embedded` from `useMultiViewContext()` (Model\* views do this internally).
+`label` is the page title text shown in the header. MultiView is model-agnostic and does not fetch metadata — pass title text directly. Each view component reads `filters` / `orders` / `linkTo` / `embedded` from `useMultiViewContext()` (Model\* views do this internally).
 
 The active tab id is automatically synced to `?tab=<id>`. First visit reads the URL on mount; clicking a tab updates the URL via `router.push` (so browser back/forward navigates between tabs). No opt-in flag needed.
 
@@ -129,7 +124,7 @@ export function TableView() {
   return (
     <ModelTable modelName="SysModel">
       <Field fieldName="modelName" />
-      <Field fieldName="labelName" />
+      <Field fieldName="label" />
       {/* ... */}
     </ModelTable>
   );
@@ -138,7 +133,7 @@ export function TableView() {
 
 ```tsx
 // sys-model/page.tsx
-<MultiView labelName="Sys Model">
+<MultiView label="Sys Model">
   <MultiView.Tab
     id="all"
     label="All"
@@ -168,7 +163,7 @@ Each view component provides its own `modelName` on its inner Model\* element, s
 import { VersionsView } from "./versions/table-view";
 import { EnvsView } from "./envs/table-view";
 
-<MultiView labelName="App Overview">
+<MultiView label="App Overview">
   <MultiView.Tab
     id="versions"
     label="Versions"
@@ -184,7 +179,7 @@ import { EnvsView } from "./envs/table-view";
 </MultiView>
 ```
 
-The shared header (title + description) is page-level text — it is not derived from any model's metadata. Pass `labelName` / `description` directly.
+The shared header (title + description) is page-level text — it is not derived from any model's metadata. Pass `label` / `description` directly.
 
 ### Click navigation (`linkTo`)
 
@@ -200,7 +195,31 @@ For multi-model MultiView (or any case where the detail page lives in a subdirec
 
 `linkTo` must be a **single subdirectory name** matching `/^[a-zA-Z0-9_-]+$/` (no slashes, no `..`, no leading dot). Invalid values fall back to the default and emit a `console.warn` in development.
 
+Returning from a `linkTo` detail page is derived purely from the breadcrumb (navigation manifest + pathname), no carried query state. The header breadcrumb emits the tab-level crumb as `type: "tab"` pointing at `${listRoute}?tab=<tab>` (the `linkTo` segment doubles as the tab id), and the detail page's `Back` button (`resolveBackRoute`) navigates to that same crumb. So both the breadcrumb tab crumb and Back land on the MultiView list page with the originating tab selected (`/list?tab=<tab>`, never the route-less `/list/<tab>`) — refresh / deep-link resolve identically.
+
+For status-filter tabs that share a single `[id]` detail page (no `linkTo`, e.g. preboarding), the detail path is identical across tabs, so Back resolves to the list page's default tab (still a valid route, never a 404).
+
 This constraint is intentional: click navigation always stays within the current route subtree, aligned with permission boundaries. Free-form click handlers and cross-route URLs are not supported on Model\* views — if you genuinely need that, the page-level click can be implemented around the view (not on it).
+
+### Per-tab visibility (`navId`)
+
+Pass `navId` on a `MultiView.Tab` to gate that tab on the current user's nav grants. When the user's `PermissionInfo.navigations` set doesn't include the id (and they're not SUPER_ADMIN), the tab pill is hidden and the URL `?tab=<id>` silently falls back to the first visible tab. The active tab is also re-snapped when a permission change makes the current tab disappear mid-session. Tabs without `navId` are universally accessible — use that for UI-only grouping where every variant is just a different filter on the same underlying perm.
+
+```tsx
+<MultiView label="Contracts">
+  <MultiView.Tab
+    id="unsigned-new-hires"
+    navId="navigation.core-hr.employee-document.contract.unsigned-new-hires"
+    label="Unsigned New Hires"
+    view={UnsignedNewHiresView}
+  />
+  {/* Sibling tabs without their own nav id stay visible to anyone who can see the parent. */}
+  <MultiView.Tab id="signing-processes" label="Signing Processes" view={SigningProcessesView} />
+  <MultiView.Tab id="signed" label="Signed" view={SignedView} />
+</MultiView>
+```
+
+Note that backend access control is endpoint-level — sibling tabs that share the same `/Model/searchPage` URL can't be distinguished by Spring's PermissionInterceptor. Per-tab `navId` here is therefore the source of truth for whether an admin should see a tab at all; a user with the parent perm could still POST the underlying endpoint directly, but the FE no longer offers the affordance.
 
 ### Custom (non-model) views
 
@@ -210,7 +229,7 @@ Any component works. Custom views ignore the context and render as-is:
 import { EnvDashboard } from "./components/env-dashboard";
 import { TableView } from "./table-view";
 
-<MultiView labelName="Design App Env">
+<MultiView label="Design App Env">
   <MultiView.Tab id="dashboard" label="Dashboard" view={EnvDashboard} />
   <MultiView.Tab
     id="table"
@@ -233,7 +252,7 @@ export function EnvDashboard() {
     <div className="flex h-full flex-col">
       {!isEmbedded && (
         <div className="border-b border-border/60" style={{ padding: "var(--ui-page-padding)" }}>
-          <ViewTitle labelName="Design App Env" />
+          <ViewTitle label="Design App Env" />
         </div>
       )}
       {/* dashboard body — refresh button, cards, etc. */}
@@ -344,7 +363,7 @@ Why "replacement" and not "merge" at runtime? Sort always has a single effective
 
 | Prop          | Type        | Required | Default                  | Notes                                                                |
 | ------------- | ----------- | -------- | ------------------------ | -------------------------------------------------------------------- |
-| `labelName`   | `string`    | No       | -                        | Title text in the shared header.                                     |
+| `label`   | `string`    | No       | -                        | Title text in the shared header.                                     |
 | `description` | `string`    | No       | -                        | Subtitle text in the shared header.                                  |
 | `className`   | `string`    | No       | `"flex h-full flex-col"` | Outer wrapper className.                                             |
 | `children`    | `ReactNode` | Yes      | -                        | One or more `<MultiView.Tab>` markers. Non-Tab children are ignored. |
@@ -374,6 +393,8 @@ type MultiViewContextValue = {
   linkTo?: string;
   /** Always true inside MultiView. Custom views check this to suppress duplicate headers. */
   embedded: true;
+  /** Active tab id. More reliable than the `?tab=` URL param (absent on first visit). Used to scope persisted view state. */
+  tabId: string;
 };
 ```
 

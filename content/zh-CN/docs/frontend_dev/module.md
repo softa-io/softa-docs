@@ -1,11 +1,11 @@
-# 前端模块开发
+# 应用导航 Manifest 指南
 
 本文是 `src/app` 模块导航的开发者指南。
 它定义了导航声明的**唯一可信来源**，以及如何安全地新增页面/模块。
 
 ## 1) 唯一来源
 
-模块 Manifest 文件：
+领域 Manifest 文件：
 
 - `src/app/system/manifest.ts` -> `SYSTEM_NAVIGATION_MANIFESTS`
 - `src/app/user/manifest.ts` -> `USER_NAVIGATION_MANIFESTS`
@@ -15,9 +15,9 @@
 
 - `src/modules.ts` -> `MODULE_NAVIGATION_MANIFESTS`
 
-自动注册消费方：
+注册消费方：
 
-- `src/navigation/registry.ts` 自动读取 `MODULE_NAVIGATION_MANIFESTS` 并构建：
+- `src/navigation/registry.ts` 读取 `MODULE_NAVIGATION_MANIFESTS` 并构建：
   - 模块列表
   - 默认路由
   - 页面查找/面包屑/命令面板/侧边栏索引
@@ -47,37 +47,37 @@
 
 ### 3.1 `module` 字段
 
-| 字段 | 类型 | 必填 | 说明 |
-| --- | --- | --- | --- |
-| `id` | `string` | 是 | 全局唯一模块 id。 |
-| `label` | `string` | 是 | 模块展示名称。 |
-| `description` | `string` | 是 | 用于导航/搜索/帮助文案。 |
-| `order` | `number` | 是 | 稳定排序键（升序）。 |
-| `category` | `string` | 否 | 用于 UI 中的模块分组。 |
-| `defaultPageId` | `string` | 否 | 若提供，必须引用本模块中有效页面 id。 |
-| `icon` | `LucideIcon` | 否 | 模块图标。 |
+| 字段            | 类型         | 必填 | 说明                                                       |
+| --------------- | ------------ | ---- | ---------------------------------------------------------- |
+| `id`            | `string`     | 是   | 全局唯一模块 id。                                          |
+| `label`         | `string`     | 是   | 模块展示名称。                                             |
+| `description`   | `string`     | 是   | 用于导航/搜索/帮助文案。                                   |
+| `order`         | `number`     | 是   | 稳定排序键（升序）。                                       |
+| `category`      | `string`     | 否   | 用于 UI 中的模块分组。                                     |
+| `defaultPageId` | `string`     | 否   | 若提供，必须引用本模块中有效页面 id。                      |
+| `icon`          | `LucideIcon` | 否   | 模块图标。                                                 |
 
 ### 3.2 `group` 字段
 
-| 字段 | 类型 | 必填 | 说明 |
-| --- | --- | --- | --- |
-| `id` | `string` | 是 | 在模块内唯一。 |
-| `label` | `string` | 是 | 分组展示名称。 |
-| `order` | `number` | 是 | 稳定排序键（升序）。 |
-| `icon` | `LucideIcon` | 否 | 可选分组图标。 |
-| `pages` | `NavigationPage[]` | 是 | 分组页面列表。 |
+| 字段    | 类型               | 必填 | 说明                         |
+| ------- | ------------------ | ---- | ---------------------------- |
+| `id`    | `string`           | 是   | 在模块内唯一。               |
+| `label` | `string`           | 是   | 分组展示名称。               |
+| `order` | `number`           | 是   | 稳定排序键（升序）。         |
+| `icon`  | `LucideIcon`       | 否   | 可选分组图标。               |
+| `pages` | `NavigationPage[]` | 是   | 分组页面列表。               |
 
 ### 3.3 `page` 字段
 
-| 字段 | 类型 | 必填 | 说明 |
-| --- | --- | --- | --- |
-| `id` | `string` | 是 | 全局唯一页面 id。 |
-| `label` | `string` | 是 | 页面展示名称。 |
-| `route` | `string` | 是 | 全局唯一路由（必须匹配 Next.js 页面路由）。 |
-| `order` | `number` | 是 | 稳定排序键（升序）。 |
-| `icon` | `LucideIcon` | 否 | 页面图标。 |
-| `description` | `string` | 否 | 用于命令面板和导航提示。 |
-| `permission` | `NavigationPermission` | 否 | 可选权限元数据。 |
+| 字段          | 类型                   | 必填 | 说明                                                   |
+| ------------- | ---------------------- | ---- | ------------------------------------------------------ |
+| `id`          | `string`               | 是   | 全局唯一页面 id。                                      |
+| `label`       | `string`               | 是   | 页面展示名称。                                         |
+| `route`       | `string`               | 是   | 全局唯一路由（必须匹配 Next.js 页面路由）。            |
+| `order`       | `number`               | 是   | 稳定排序键（升序）。                                   |
+| `icon`        | `LucideIcon`           | 否   | 页面图标。                                             |
+| `description` | `string`               | 否   | 用于命令面板和导航提示。                               |
+| `permission`  | `NavigationPermission` | 否   | 可选权限元数据。                                       |
 
 ## 4) 校验规则
 
@@ -95,7 +95,7 @@
 
 1. 创建路由页面文件（示例）：
    - `src/app/user/user-role/page.tsx`
-2. 在模块 Manifest 声明文件的对应分组中添加页面元数据：
+2. 在该领域 Manifest 的目标分组下添加页面元数据：
    - `src/app/user/manifest.ts`
 3. 确保：
    - `page.id` 全局唯一。
@@ -110,11 +110,19 @@
 3. 在 `src/app/<domain>/...` 下添加与声明路由匹配的页面。
 4. 验证模块排序/分类/默认页行为。
 
-## 6) Manifest 示例
+## 6) Manifest 示例片段
 
 ```ts
 import type { NavigationManifest } from "@/navigation/types";
-import { AlertCircle, History, Shield, User, UserCircle, UserPlus, Users } from "lucide-react";
+import {
+  AlertCircle,
+  History,
+  Shield,
+  User,
+  UserCircle,
+  UserPlus,
+  Users,
+} from "lucide-react";
 
 export const USER_NAVIGATION_MANIFESTS: NavigationManifest[] = [
   {
@@ -178,15 +186,56 @@ export const USER_NAVIGATION_MANIFESTS: NavigationManifest[] = [
 ];
 ```
 
-## 7) 当前模块 Manifest
+## 7) 无 Chrome 页面
+
+大多数应用路由在 `src/app/layout.tsx` 的全局壳层内渲染：
+
+- `Sidebar`
+- `Header`
+- 页脚/状态栏
+
+部分路由会刻意跳过该 chrome，同时仍保留根级 Provider，例如认证、React Query、工作区上下文、密度与 toaster。
+这适用于通常在新标签页中打开、需要最大横向空间的专注型工作区页面。
+
+当前路由匹配器：
+
+- `src/app/chrome-less-routes.ts`
+
+当前示例：
+
+- `/login`
+- `/login/oauth-callback`
+- `/admin/document-template/[id]/preview`
+- `/admin/signing-document/[id]/sign`
+
+当前签署相关示例：
+
+- `/admin/document-template/[id]/preview` 是无 chrome 的模板审阅工作区，支持内联占位符编辑，以及针对 `Sender`、`Receiver` 等签名槽位的 `Preview As` 角色切换
+- `/admin/signing-document/[id]/sign` 是无 chrome 的签署工作区，通过 `SigningDocument.signSlotCode` 将用户聚焦到其被分配的一个签名槽位
+
+在以下**全部**条件成立时使用无 chrome 页面：
+
+- 页面以任务为中心，适合无干扰的工作区
+- 任务期间全局导航价值较低
+- 页面仍属于同一应用/运行时，且应保留共享 Provider
+
+**不要**为普通列表/详情/新建/编辑页面使用无 chrome 页面——这些页面应在主应用壳层内导航。
+
+新增无 chrome 页面时：
+
+1. 将路由匹配规则添加到 `src/app/chrome-less-routes.ts`。
+2. 页面仍放在常规 `src/app/**` 树下，除非确实需要独立应用/运行时。
+3. 建议在页面内提供明显的本地返回/关闭入口，因为全局壳层导航将不可用。
+
+## 8) 当前模块清单
 
 基于当前 Manifest：
 
 - `system`（默认页由第一个页面推断）
 - `users`（默认页由第一个页面推断）
-- `ai`（默认页由第一个页面推断）
+- `AI`（默认页由第一个页面推断）
 
-## 8) 提交代码前检查 Manifest
+## 9) 合并前检查清单
 
 - 路由文件存在且可访问。
 - `page.id` 和 `page.route` 全局唯一。

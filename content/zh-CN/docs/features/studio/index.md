@@ -1,309 +1,215 @@
-# Studio 模块使用指南
+# Studio 模块用户指南
 
-本文面向使用 Studio 配置业务应用的开发人员。它说明在前端 Studio 中如何创建应用、设计元数据、管理变更、预览代码和 DDL、发布版本以及处理运行环境差异。
+本指南面向使用 Studio 配置业务应用的开发者。说明如何创建应用、设计各环境元数据、预览 DDL、发布到运行时、比较漂移、在环境间合并设计，以及从 Studio 前端审计操作。
 
 ## 1. Studio 是什么
 
-Studio 是元数据驱动应用的设计时工作台，用于把业务对象、字段、视图、导航、选项集等配置成可发布的应用元数据，并通过版本和环境流程发布到目标运行系统。
+Studio 是元数据驱动应用的设计时 IDE。每个**环境**拥有完整的设计工作区（模型、字段、索引、选项集、视图、导航）。发布将该设计收敛到环境的运行时。没有独立的版本或部署流水线——环境的实时设计**就是**你发布的内容。
 
-Studio 的核心工作包括：
+Studio 核心工作包括：
 
-- 管理 Portfolio 和 App。
-- 在 App 下设计模型、字段、索引、选项集、视图和导航。
-- 配置字段类型默认值、数据库类型映射、代码类型映射、代码模板和 SQL 模板。
-- 通过 WorkItem 追踪一组可发布的设计变更。
-- 将完成的 WorkItem 加入版本，封版后部署到 Dev、Test、UAT、Prod 等环境。
-- 预览模型、WorkItem、Version 和 Deployment 维度的变更、代码和 DDL。
-- 对比设计态元数据和运行态元数据，并在需要时从运行态导入或接受运行态差异。
+- 管理应用（Apps）。
+- 在应用下设计模型、字段、索引、选项集、视图和导航（后端按 env 限定范围）。
+- 配置字段域、数据库类型映射和 SQL 模板。
+- 将环境绑定到 Softa 运行时或原始 JDBC 目标，签发签名密钥，并将设计发布到运行时。
+- 比较设计时元数据与运行时元数据，应用漂移，为空环境播种，并在环境间合并设计。
+- 审查不可变审计轨迹（`DesignActivity`），必要时从快照恢复。
 
 ## 2. 关键概念
 
 | 概念 | 说明 |
 | --- | --- |
-| Portfolio | 项目或产品线分组，用来归类多个 App。 |
-| App | 一个元数据应用。进入 App 后，左侧菜单会围绕当前 App 展示 Workbench、模型、版本、环境和部署记录。 |
-| WorkItem | 一次业务变更的工作单元。需要发布的模型、选项集、视图和导航变更应放在一个进行中的 WorkItem 下完成。 |
-| Version | 一个应用版本，聚合多个已完成的 WorkItem。Draft 版本可以继续调整，Sealed/Frozen 版本可以部署。 |
-| Env | 应用运行环境，例如 DEV、TEST、UAT、PROD。部署时只会展示当前 App 下启用的环境。 |
-| Deployment | 一次实际部署记录，包含合并后的变更内容、表结构 DDL、索引 DDL、执行状态和错误信息。 |
-| Drift | 设计态和运行态之间的差异。用于发现运行环境中被手工改动或首次接入已有运行系统的情况。 |
+| App | 元数据应用。进入应用后，左侧导航限定于该应用，显示其模型、环境、活动及相关设计页面。 |
+| Env | 部署环境（DEV、TEST、UAT、PROD、…）。每个环境拥有独立设计工作区并连接一个运行时（Softa 或 JDBC）。 |
+| Design workspace | 按 `envId` 键控的每环境 `DesignModel`、`DesignField`、`DesignOptionSet` 等行集合。 |
+| Publish | 将环境当前设计收敛到其运行时（`POST /DesignAppEnv/publish`）。记录为 kind 为 `Publish` 的 `DesignActivity`。 |
+| Snapshot | 操作后对环境设计的捕获。链接自 `DesignActivity.snapshotId`，供 `restore` 使用。 |
+| Activity | 针对环境的 Publish / Import / Reverse / Merge 操作的不可变审计记录。 |
+| Drift | 设计时元数据与运行时元数据的差异。按需计算——无缓存漂移行。 |
+| Field domain | 可复用字段属性模板（`DesignFieldDomain`），通过 `applyDomain` 一次性应用于字段。 |
 
 ## 3. 菜单结构
 
-Studio 入口在左侧导航的 `Studio` 模块下。
+Studio 可从左侧导航的 `Studio` 模块进入。
 
-### Portfolio & Apps
+### Apps
 
-- `Apps`：管理应用定义。应用详情页可以维护应用名称、编码、类型、所属 Portfolio、负责人、状态、数据库类型和包名。
-- `Portfolios`：管理 Portfolio。可将 Portfolio 设为 Active 或 Archived。
-
-### App Design
-
-这些页面依赖当前选中的 App：
-
-- `Workbench`：当前 App 的变更工作台。用于创建和管理 WorkItem，并从 WorkItem 进入元数据设计页面。
-- `Environments`：配置当前 App 的运行环境、部署地址、密钥和环境差异检查。
-- `Versions`：创建版本、封版、解封、冻结和发起部署。
-- `Deployments`：查看部署记录、部署 DDL、部署状态、错误信息，以及失败后的重试或卡住后的取消。
+- `Apps`：管理应用定义（名称、编码、类型、所有者、状态、包名）。
 
 ### App Metadata
 
-这些页面也依赖当前 App：
+这些页面依赖当前选中的应用：
 
-- `Models`：设计业务模型、字段、索引、表名、存储策略和运行特性。
-- `Option Sets`：维护选项集和选项项。
-- `Views`：配置模型视图、结构、默认过滤和排序。
+- `Models`：设计业务模型、字段和索引。
+- `Option Sets`：维护选项集和选项条目。
+- `Views`：配置模型视图、结构、过滤和排序。
 - `Navigations`：配置运行时导航结构和页面入口。
+
+### Release
+
+- `Environments`：为每个环境配置运行时连接器、签名密钥、漂移、发布、播种和合并。
+- `Activities`：发布 / 导入 / 反向 / 合并运行的审计轨迹，含变更集和快照。
 
 ### Generation
 
-这些是生成规则配置，通常由平台开发人员或资深业务开发人员维护：
+平台级生成规则（不限于单个应用）：
 
-- `Field DB Mapping`：配置字段类型到数据库列类型的映射。
-- `Field Code Mapping`：配置字段类型到代码属性类型的映射。
-- `Field Type Defaults`：配置字段类型默认值、长度和精度。
-- `Code Templates`：配置代码生成模板。
-- `SQL Templates`：配置 SQL DDL 生成模板。
+- `Field Domains`：可复用字段类型 + 组件 + 默认模板。
+- `Field DB Mapping`：按数据库将字段类型映射到数据库列类型。
+- `SQL Templates`：按数据库类型的 SQL DDL 生成模板。
 
 ## 4. 推荐工作流
 
-### 4.1 创建 Portfolio 和 App
+### 4.1 创建应用
 
-1. 进入 `Studio / Portfolios`，创建 Portfolio。
-2. 进入 `Studio / Apps`，创建 App。
-3. 在 App 详情页维护：
-   - `appName`：应用名称。
-   - `appCode`：应用编码。
-   - `portfolioId`：所属 Portfolio。
-   - `databaseType`：目标数据库类型。
-   - `packageName`：代码生成时使用的基础包名。
-4. 在 App 卡片上点击 `Design App`，进入该 App 的 Workbench。
+1. 进入 `Studio / Apps` 并创建应用。
+2. 维护 `appName`、`appCode`、`appType`、`ownerId` 和 `status`。
+3. 在工作区选择器中选择应用以进入应用范围的设计页面。
 
-App 状态说明：
+应用状态：
 
-- `Active`：正常维护。
-- `Maintenance`：维护中，可从详情页重新 Activate。
-- `Deprecated`：已废弃。
+- `Active`：应用处于积极维护中。
+- `Maintenance`：维护中；可从详情页重新激活。
+- `Deprecated`：不再维护。
 
 ### 4.2 配置环境
 
-进入当前 App 的 `Environments` 页面，创建 DEV、TEST、UAT 或 PROD 环境。
+打开当前应用的 `Environments` 页面，创建 DEV、TEST、UAT、PROD 或其他环境。
 
 重要字段：
 
-- `envType`：环境类型。
-- `sequence`：环境排序。
-- `active`：是否启用。部署弹窗只展示启用的环境。
-- `upgradeEndpoint`：目标运行系统的基础地址。后端会自动拼接运行时元数据升级和导出接口。
-- `publicKey`：由 `Issue Key` 生成，用于配置到目标运行系统。
-- `currentVersionId`：当前环境已经部署到的版本，由部署流程维护。
+- `envType`：环境类型（DEV / TEST / UAT / PROD）。
+- `envStatus`：互斥状态（`Stable`、`Deploying`、`Importing`、`Merging`）。UI 中只读——发布 / 导入 / 合并时获取。
+- `sequence`：看板和表格视图中的显示顺序。
+- `active`：环境是否启用。
+- `protectedEnv`：为 true 时环境拒绝删除。
+- `databaseType`：DDL 渲染的目标数据库风格。
+- `connectorType`：`Softa`（签名升级 API）或 `JDBC`（原始连接）。
+- `upgradeEndpoint`：Softa 运行时的基础 URL（`connectorType = Softa` 时必填）。
+- `jdbcUrl` / `jdbcUsername` / `jdbcPassword`：JDBC 连接（`connectorType = JDBC` 时）。
+- `publicKey`：由 `Issue Key` 签发，并在目标运行时配置为 `system.metadata.public-key`。
+- `autoExecuteDDL`：发布是否自动执行渲染的 DDL（取决于连接器）。
 
-首次远程部署前，推荐流程是：
+首次向 Softa 运行时发布前的推荐流程：
 
 1. 在环境详情页点击 `Issue Key`。
-2. 将返回或写入的 public key 配置到对应运行系统的 `system.runtime-public-key`。
-3. 确认运行系统可以访问 Studio 后端的部署回调地址。
-4. 再从 Version 发起部署。
+2. 在运行时配置返回的公钥。
+3. 确认 Studio 与运行时升级端点之间的网络可达性。
+4. 在环境工作区下设计元数据，然后点击 `Publish`。
 
-注意：`protectedEnv` 和 `autoUpgrade` 目前是配置字段，但当前部署流程不会强制执行保护或自动升级策略。涉及生产环境时仍应以团队发布规范为准。
+要从现有环境引导空环境：使用 `Seed from Environment`（幂等——目标已有设计行时跳过）。
 
-### 4.3 创建 WorkItem 并开始设计
+### 4.3 设计模型
 
-进入当前 App 的 `Workbench`：
+在当前应用下打开 `Models` 以创建或编辑业务模型。
 
-1. 创建 WorkItem，填写名称和描述。
-2. 保持 WorkItem 处于 `InProgress`。
-3. 在 WorkItem 详情页的 `Related Metadata` 区域进入：
-   - `Models`
-   - `Option Sets`
-   - `Views`
-   - `Navigations`
-4. 在这些入口下完成需要发布的设计变更。
+模型详情页有三个标签：
 
-推荐所有需要进入发布流程的元数据变更都从 WorkItem 详情页进入。这样当前路由会携带 `workItemId`，前端会把它作为变更追踪上下文，后端才能按 WorkItem 聚合变更。
+- `Model Info`：模型名、label、表名、app/env 范围、显示/搜索字段、默认排序、ID 策略、存储、软删除、多租户、timeline、版本锁及相关设置。
+- `Fields`：模型字段（含关联、域、on-delete 策略、数据保护）。
+- `Indexes`：模型索引。
 
-Workbench 常用动作：
+重要字段配置：
 
-- `Done`：完成 WorkItem，停止继续累积变更。
-- `Add to Version`：把 WorkItem 加入一个 Draft 版本。
-- `Remove from Version`：从当前 Draft 版本移除。
-- `Cancel`：取消 WorkItem。
-- `Defer`：延期 WorkItem。
-- `Reopen`：重新打开已取消或延期的 WorkItem。
-- `Preview Changes`：按模型查看本 WorkItem 的创建、更新、删除记录。
-- `Preview DDL`：预览本 WorkItem 会产生的 DDL。
+- `fieldName` / `columnName`：逻辑名与物理名。
+- `fieldType` / `optionSetCode` / `length` / `scale` / `defaultValue`：类型与约束。
+- `domainId`：一次性域模板应用的来源（非实时绑定）。
+- `relatedModel` / `relatedField` / `onDelete` / `relatedFieldType`：关联配置（`relatedFieldType` 为系统计算、只读）。
+- `renamedFrom`：声明重命名后的紧邻前一个名称（只读）。
+- `widgetType`、校验、加密和脱敏字段：显示与访问行为。
 
-### 4.4 设计模型
+模型详情工具栏提供 `Preview DDL` 以预览此模型的表和索引 SQL。
 
-进入 WorkItem 下的 `Models`，创建或编辑业务模型。
+### 4.4 配置选项集、视图和导航
 
-模型详情包含三个页签：
+选项集用于类枚举值，视图用于模型呈现，导航用于运行时菜单结构。在发布清扫模型扩展包含它们之前，这些仅为设计时。
 
-- `Model Info`：维护模型名称、显示名、表名、应用、描述、显示字段、搜索字段、默认排序、ID 策略、存储类型、数据源、服务名、软删除、多租户、时间线、版本锁等。
-- `Fields`：维护模型字段。
-- `Indexes`：维护模型索引。
+### 4.5 将设计发布到运行时
 
-字段配置重点：
+在环境详情页：
 
-- `fieldName`：代码和元数据字段名。
-- `columnName`：数据库列名。
-- `fieldType`：字段类型。
-- `optionSetCode`：选项字段关联的选项集编码。
-- `length` / `scale` / `defaultValue`：长度、精度和默认值。
-- `relatedModel` / `relatedField` / `joinModel` / `joinLeft` / `joinRight`：关系字段配置。
-- `filters`：关系字段过滤条件。
-- `widgetType`：前端控件类型。
-- `required` / `readonly` / `hidden`：校验和展示行为。
-- `translatable` / `encrypted` / `maskingType`：翻译、加密和脱敏能力。
+1. 通过 `Runtime Drift` 面板或 `View Drift Report` 审查漂移。
+2. 点击 `Publish` 将环境设计收敛到其运行时。
+3. 在 `Activities` 上跟踪操作（kind `Publish`，状态 `Running` → `Success` / `Failure`）。
 
-模型详情页提供：
+发布开始前环境互斥必须为 `Stable`。针对同一环境的并发操作会被拒绝。
 
-- `Preview DDL`：预览该模型建表和索引 DDL。
-- `Preview Code`：预览该模型生成的代码。弹窗中可以按语言切换、查看文件树、复制代码、下载当前文件、下载当前语言 ZIP 或下载全部语言 ZIP。
+### 4.6 处理设计时与运行时漂移
 
-### 4.5 配置选项集、视图和导航
+环境详情页顶部显示 `Runtime Drift` 面板。漂移由 `GET /DesignAppEnv/compareDesignWithRuntime` 按需计算——点击 **Check now** 刷新。
 
-`Option Sets` 用于配置枚举类业务值：
+工具栏操作：
 
-- 选项集维护 `name`、`optionSetCode`、`appId` 和描述。
-- 选项项维护 `itemCode`、`itemName`、`sequence`、`parentItemCode`、`itemTone`、`itemIcon`、`active` 和描述。
+- `View Drift Report`：打开详细的模型 / 字段 / 索引级 diff 对话框。
+- `Apply Drift`：用当前运行时状态覆盖设计工作区（漂移修复或从现有运行时首次导入）。
+- `Seed from Environment`：将源环境的完整设计克隆到空目标环境。
+- `Merge from Environment`：以覆盖方式将目标环境设计从源环境收敛（运行时不受影响，直至下次发布）。
+- `Issue Key`：为 Softa 连接器签名生成或轮换 Ed25519 密钥对。
 
-`Views` 用于配置模型视图：
+使用指引：
 
-- 维护视图名称、编码、模型、类型、排序。
-- 在配置区维护 `structure`、`defaultFilter` 和 `defaultOrder`。
-- 可设置 `navId`、`publicView` 和 `defaultView`。
+- 接入已有运行时元数据的系统时，打开漂移报告、审查后运行 `Apply Drift`。
+- 新建环境需匹配现有环境设计时，使用 `Seed from Environment`。
+- 在环境间提升设计而不触及运行时时，使用 `Merge from Environment`，就绪后分别发布各环境。
+- `Apply Drift` 和 merge/seed 都会重写设计时元数据。运行破坏性操作前确认真相来源。
 
-`Navigations` 用于配置运行时导航：
+### 4.7 审查与恢复活动
 
-- 维护导航名称、编码、类型、关联模型、父级导航、描述和过滤条件。
+在当前应用下打开 `Activities`：
 
-### 4.6 预览变更和 DDL
+- 列表按 id 降序显示操作（kind、status、env、source env、时间戳）。
+- 详情页显示变更集 JSON、渲染的 DDL 详情（仅发布）、错误消息和链接的快照 id。
+- `Retry Publish`：对失败的发布活动重新发布环境。
+- `Cancel`：释放卡住的 `Running` 发布和环境互斥（无自动运行时回滚）。
+- `Restore`：向前滚动——从活动的快照恢复设计，然后发布以收敛运行时。
 
-Studio 支持多个阶段的预览：
+## 5. 生成配置
 
-- 模型详情页：预览单个模型的建表 DDL 和生成代码。
-- WorkItem 详情页：预览该 WorkItem 累积的元数据变更和 DDL。
-- Version 详情页：预览版本聚合后的元数据变更和 DDL。
-- Deployment 详情页：查看本次部署实际保存的 `mergedDdlTable` 和 `mergedDdlIndex`。
+DDL 生成基于 Pebble SQL 模板和字段数据库映射。
 
-如果是上线前检查，应优先看 Version 和 Deployment 维度。模型维度适合开发中快速检查单个模型，WorkItem 维度适合检查一个需求内的变更是否完整。
+### Field Domains
 
-### 4.7 创建版本、封版和部署
-
-进入当前 App 的 `Versions`：
-
-1. 创建 Version，选择 `versionType`：
-   - `Normal`：常规版本。
-   - `Hotfix`：紧急修复版本。
-2. 回到 Workbench，将已完成的 WorkItem 通过 `Add to Version` 加入该 Draft 版本。
-3. 在 Version 详情页点击 `Preview Changes` 和 `Preview DDL` 做发布前检查。
-4. 点击 `Seal Version`。封版后，后端会聚合 WorkItem 变更并计算 `diffHash`。
-5. 如封版后发现问题，且版本尚未部署，可以点击 `Unseal Version` 回到 Draft。
-6. 对已封版或已冻结版本点击 `Deploy to Env`，选择启用的目标环境并确认部署。
-
-版本状态说明：
-
-- `Draft`：草稿，可加入或移除 WorkItem。
-- `Sealed`：已封版，可部署；未部署前可解封。
-- `Frozen`：已冻结，不应继续修改。
-
-部署是异步流程。发起部署后，前端会创建 Deployment 记录；真正完成状态由目标运行系统回调 Studio 后更新。
-
-### 4.8 查看部署记录
-
-进入当前 App 的 `Deployments`：
-
-- 列表按创建时间倒序展示部署记录。
-- 详情页 `General` 页签显示源版本、目标版本、目标环境、部署状态、操作人和耗时。
-- `Content` 页签显示合并后的元数据内容、表 DDL 和索引 DDL。
-- `Version List` 页签显示本次部署合并进来的版本。
-- `Error` 页签显示失败原因。
-
-部署状态为 `Failure` 时，可以点击 `Retry` 重新发起。状态为 `Pending` 或 `Deploying` 且确认已经卡住时，可以点击 `Cancel` 释放环境部署锁。
-
-重要限制：`Cancel` 不会自动回滚目标运行库中已经执行过的 DDL 或数据变更，只会把部署记录标记为取消并释放环境锁。
-
-### 4.9 处理设计态和运行态差异
-
-进入环境详情页，可以查看 `Runtime Drift` 面板。
-
-常用动作：
-
-- `Compare (cached)`：查看当前缓存的设计态和运行态差异。
-- `Refresh Drift`：异步重新拉取运行态元数据并计算差异。面板会轮询刷新状态。
-- `Apply Drift`：接受当前缓存差异，用运行态内容覆盖设计态元数据。
-- `Import from Runtime`：重新从运行态拉取元数据，并用当前运行态内容覆盖设计态元数据。
-
-使用建议：
-
-- 首次接入一个已经有运行态元数据的系统时，使用 `Import from Runtime` 更合适。
-- 运行环境被临时手工修复后，如果决定把运行态作为新的设计基准，先 `Refresh Drift`，确认差异，再 `Apply Drift`。
-- `Apply Drift` 和 `Import from Runtime` 都会改写设计态元数据，执行前必须确认目标环境就是要接受的事实来源。
-
-## 5. 生成配置说明
-
-代码和 DDL 生成基于 Pebble 模板，模板变量使用 `{{ var }}` 形式。
-
-### Code Templates
-
-代码模板按 `codeLang` 和 `sequence` 加载。每条模板可以配置：
-
-- `subDirectory`：输出子目录，可使用 Pebble 表达式。
-- `fileName`：输出文件名，可使用 Pebble 表达式，必须包含期望的后缀，例如 `{{modelName}}Service.java`。
-- `templateContent`：模板内容。
-
-如果数据库中没有配置代码模板，后端会使用内置 classpath 模板作为兜底。
+命名、可复用模板（`fieldType`、`widgetType`、`length`、`scale`、`defaultValue`）。通过后端 `POST /DesignField/applyDomain` API 应用于字段（一次性复制——非实时绑定）。
 
 ### SQL Templates
 
-SQL 模板按 `databaseType` 加载，用于生成建表、改表、索引和删表 SQL。模板作者主要面对的是模型、字段、索引的差异上下文，不需要自己读取原始实体并计算 diff。
+按 `databaseType` 加载，用于生成 CREATE TABLE、ALTER TABLE、索引和 DROP TABLE SQL。
 
-### Mapping 和 Defaults
+### Field DB Mapping
 
-- `Field DB Mapping` 决定字段类型生成什么数据库列类型。
-- `Field Code Mapping` 决定字段类型生成什么代码属性类型。
-- `Field Type Defaults` 决定字段类型默认长度、精度和默认值。
+决定每种字段类型生成哪种数据库列类型。
 
-调整这些配置后，模型的代码预览和 DDL 预览会反映新的生成规则。
+调整这些配置后，模型 DDL 预览将反映新生成规则。
 
-## 6. 上线前检查清单
+## 6. 发布前检查清单
 
-发布前建议逐项确认：
+发布到生产前，确认：
 
-- 变更是否都在正确的 App 下完成。
-- 需要发布的模型、选项集、视图和导航变更是否都来自正确的 WorkItem。
-- WorkItem 的 `Preview Changes` 中是否只包含本次需求变更。
-- WorkItem 的 `Preview DDL` 是否符合预期。
-- Version 是否包含所有需要发布的 WorkItem，且没有误加入其他 WorkItem。
-- Version 的 `Preview Changes` 和 `Preview DDL` 是否通过评审。
-- 目标 Env 是否启用，`upgradeEndpoint` 是否正确。
-- 首次部署或密钥轮换后，目标运行系统是否已配置最新 public key。
-- 生产环境部署前，Deployment 里的表 DDL 和索引 DDL 是否已经确认。
-- 失败重试或取消前，是否确认目标运行系统的实际执行状态。
+- 所有变更属于正确的应用和环境工作区。
+- 模型 / 选项集变更已通过漂移报告或同行评审审查。
+- 目标环境 `connectorType`、端点和凭证正确。
+- 首次发布或密钥轮换后，运行时携带最新公钥。
+- 启用 `autoExecuteDDL` 时已审查发布活动中的渲染 DDL。
+- 知晓若 merge 或 apply drift 出错如何从快照 `Restore`。
 
 ## 7. 常见问题
 
-### 为什么 WorkItem 里看不到我刚改的元数据？
+### 为什么看不到 Workbench、Versions 或 Deployments？
 
-需要确认修改是否是在 WorkItem 详情页的 `Related Metadata` 入口下完成。只有当前路由带有 `workItemId` 时，前端才会把 WorkItem 作为变更追踪上下文传给后端。
+Studio 2.0 移除了 WorkItem → Version → Deployment 流水线。设计按 env 限定范围；发布 + 活动 + 快照取代版本化部署。
 
-### 为什么 Deploy to Env 弹窗没有目标环境？
+### 为什么移除了 Refresh Drift？
 
-部署弹窗只展示当前 App 下 `active = true` 的环境。请检查环境是否属于当前 App，并且是否已启用。
+漂移按需计算。使用漂移面板上的 **Check now** 或漂移报告对话框内的 **Refresh**，而非单独的缓存刷新 RPC。
 
-### Compare (cached) 和 Refresh Drift 有什么区别？
+### Apply Drift 与 Seed from Environment 有何区别？
 
-`Compare (cached)` 只读取上一次计算好的差异。`Refresh Drift` 会请求后端异步重新对比设计态快照和运行态元数据。
+`Apply Drift` 读取环境的实时运行时并将差异反演到设计工作区。`Seed from Environment` 将另一环境的设计行克隆到空目标环境（不接触运行时）。
 
-### Apply Drift 和 Import from Runtime 应该怎么选？
+### 活动上的 Cancel 是数据库回滚吗？
 
-如果已经刷新并审阅过差异，决定接受缓存的运行态差异，使用 `Apply Drift`。如果是首次从已有运行系统初始化设计态，或希望先重新拉取运行态再覆盖设计态，使用 `Import from Runtime`。
+不是。Cancel 释放卡住的环境互斥并将活动标记为已取消。已应用的运行时变更保持应用。
 
-### Cancel Deployment 是回滚吗？
+### 何时使用 Merge vs Publish？
 
-不是。Cancel 只释放卡住的环境部署锁并标记部署记录，不会自动撤销目标运行系统中已经执行的 DDL 或数据变更。
-
-### 什么时候看 Model DDL，什么时候看 Version 或 Deployment DDL？
-
-模型 DDL 用于开发中检查单个模型。发布前应看 Version DDL。部署后应看 Deployment 详情中的 `mergedDdlTable` 和 `mergedDdlIndex`，这是本次部署保存下来的最终执行产物。
+`Merge` 仅改变环境间的设计元数据。`Publish` 将环境设计推送到其运行时。典型提升：merge DEV → TEST 设计，审查，然后 publish TEST。

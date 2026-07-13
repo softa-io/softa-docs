@@ -60,9 +60,9 @@ function OptionItemsDialogView() {
     <ModelDialog title="Option Item">
       <FormHeader />
       <FormBody enableAuditLog={false}>
-        <FormSection labelName="General" hideHeader>
+        <FormSection label="General" hideHeader>
           <Field fieldName="itemCode" />
-          <Field fieldName="itemName" />
+          <Field fieldName="label" />
           <Field fieldName="sequence" />
           <Field fieldName="active" />
         </FormSection>
@@ -82,8 +82,10 @@ Features:
 - bulk action (`ids` merged into payload body)
 - runtime injection when used by `<Action type="dialog" />` / `<BulkAction type="dialog" />`
 - declare payload fields with child `<Field />` elements
-- `Field.fieldName` is required; `fieldType` defaults to `"String"` and `labelName` defaults to `fieldName`
-- explicit `Field` props win; missing metadata falls back to the bound `metaField` when one can be resolved
+- `Field.fieldName` is required; `fieldType` defaults to `"String"` and `label` defaults to `fieldName`
+- dialog fields are treated as action input parameters — ActionDialog builds a virtual model from the declared `<Field />` children and does **not** fetch the target model's metaModel
+- when rendered inside a `ModelForm` whose `modelName` matches the action's target model, missing field metadata is enriched from the surrounding `ModelForm` metaModel (no extra network call); otherwise only the declared `<Field />` props are used
+- `Field.defaultValue` populates the form on open and is included in the submit payload — this also applies to `hidden` fields, so `<Field hidden defaultValue="..." />` is the idiomatic way to submit a fixed parameter
 
 ### ActionDialog Props
 
@@ -107,7 +109,7 @@ export function UserAccountUnlockActionDialog() {
     >
       <Field
         fieldName="reason"
-        labelName="Reason (Optional)"
+        label="Reason (Optional)"
         widgetType="Text"
       />
     </ActionDialog>

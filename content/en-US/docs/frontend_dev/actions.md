@@ -55,7 +55,7 @@ type ActionValue<T> =
 | Prop             | Type                                                    | Required | Default             | Notes                                                     |
 | ---------------- | ------------------------------------------------------- | -------- | ------------------- | --------------------------------------------------------- |
 | `type`           | `"default" \| "dialog" \| "link" \| "custom" \| "form"` | No       | `"default"`         | Action behavior. Omit to use direct API invoke.           |
-| `labelName`      | `ReactNode`                                             | Yes      | -                   | Action label.                                             |
+| `label`      | `ReactNode`                                             | Yes      | -                   | Action label.                                             |
 | `style`          | `"primary" \| "danger"`                                 | No       | -                   | Visual style. Omit for neutral default appearance. See [Action Style](#action-style). |
 | `placement`      | `"toolbar" \| "more" \| "header" \| "inline"`           | No       | container-dependent | Placement support depends on parent container.            |
 | `confirmMessage` | `ActionValue<string>`                                   | No       | -                   | Optional confirmation prompt before action execution.     |
@@ -111,16 +111,16 @@ Use `style` to express the visual intent of an action button. Omitting `style` r
 
 ```tsx
 // Primary: highlight the key action
-<Action labelName="Submit for Approval" operation="submit" style="primary" />
+<Action label="Submit for Approval" operation="submit" style="primary" />
 
 // Danger: signal risk explicitly
-<Action labelName="Deactivate Account" operation="deactivate" style="danger" confirmMessage="Deactivate this account?" />
+<Action label="Deactivate Account" operation="deactivate" style="danger" confirmMessage="Deactivate this account?" />
 
 // No style: neutral appearance
-<Action labelName="Export" operation="export" />
+<Action label="Export" operation="export" />
 ```
 
-> **Auto-detection**: If `style` is omitted, actions whose `operation` or `labelName` contains keywords like `delete`, `remove`, `disable`, `deactivate`, `archive`, or `reject` are automatically treated as `"danger"`. Explicitly setting `style="danger"` is recommended for clarity.
+> **Auto-detection**: If `style` is omitted, actions whose `operation` or `label` contains keywords like `delete`, `remove`, `disable`, `deactivate`, `archive`, or `reject` are automatically treated as `"danger"`. Explicitly setting `style="danger"` is recommended for clarity.
 
 ### Condition props (`disabled` / `hidden`)
 
@@ -161,7 +161,7 @@ disabled={dependsOn([], ({ isDirty }) => isDirty)}
 ```tsx
 // 1) default (type omitted): direct API invoke
 <Action
-  labelName="Lock Account"
+  label="Lock Account"
   operation="lockAccount"
   placement="more"
   confirmMessage="Lock this user account?"
@@ -171,7 +171,7 @@ disabled={dependsOn([], ({ isDirty }) => isDirty)}
 // 2) dialog: open custom dialog component, operation injected into dialog runtime
 <Action
   type="dialog"
-  labelName="Unlock Account"
+  label="Unlock Account"
   operation="unlockAccount"
   placement="more"
   component={UserAccountUnlockActionDialog}
@@ -181,14 +181,14 @@ disabled={dependsOn([], ({ isDirty }) => isDirty)}
 // 3) link: open URL in current tab by default — string template or function
 <Action
   type="link"
-  labelName="Open Audit"
+  label="Open Audit"
   placement="more"
   href="/{modelName}/audit?id={id}"
 />
 // Explicit new-tab behavior:
 <Action
   type="link"
-  labelName="Open Docs"
+  label="Open Docs"
   placement="more"
   href="https://docs.example.com"
   target="_blank"
@@ -196,7 +196,7 @@ disabled={dependsOn([], ({ isDirty }) => isDirty)}
 // Function form (required when you need conditional logic):
 <Action
   type="link"
-  labelName="Open Audit"
+  label="Open Audit"
   placement="more"
   href={({ id, modelName }) => `/${modelName}/audit?id=${id}`}
 />
@@ -204,7 +204,7 @@ disabled={dependsOn([], ({ isDirty }) => isDirty)}
 // 4) custom: local UI logic
 <Action
   type="custom"
-  labelName="Run Health Check"
+  label="Run Health Check"
   placement="more"
   onClick={({ modelName }) => console.log(`${modelName} health check started.`)}
 />
@@ -212,7 +212,7 @@ disabled={dependsOn([], ({ isDirty }) => isDirty)}
 // 5) form: open independent ModelForm in dialog
 <Action
   type="form"
-  labelName="Add Config Group"
+  label="Add Config Group"
   placement="toolbar"
   component={ConfigGroupForm}
   relatedField="tenantConfigId"
@@ -240,7 +240,7 @@ function ConfigGroupForm() {
     <ModelForm modelName="TenantConfigGroup">
       <FormToolbar />
       <FormBody enableAuditLog={false}>
-        <FormSection labelName="General" hideHeader>
+        <FormSection label="General" hideHeader>
           <Field fieldName="groupName" />
           <Field fieldName="description" />
         </FormSection>
@@ -268,7 +268,7 @@ Supported behavior:
 
 - types: `default | dialog`
 - placements: `toolbar | more`
-- common visual props follow the same pattern as `Action`: `labelName`, `style`, `confirmMessage`, `successMessage`, `icon`, `disabled`
+- common visual props follow the same pattern as `Action`: `label`, `style`, `confirmMessage`, `successMessage`, `icon`, `disabled`
 
 Behavior-specific props:
 
@@ -310,7 +310,7 @@ import { ExternalLink, Lock, RefreshCw, ShieldCheck } from "lucide-react";
 function UnlockDialog() {
   return (
     <ActionDialog title="Unlock Account">
-      <Field fieldName="reason" labelName="Reason" widgetType="Text" />
+      <Field fieldName="reason" label="Reason" widgetType="Text" />
     </ActionDialog>
   );
 }
@@ -318,7 +318,7 @@ function UnlockDialog() {
 <ModelForm modelName="UserAccount">
   <FormToolbar>
     <Action
-      labelName="Lock"
+      label="Lock"
       operation="lockAccount"
       placement="toolbar"
       icon={Lock}
@@ -326,7 +326,7 @@ function UnlockDialog() {
     />
     <Action
       type="dialog"
-      labelName="Unlock"
+      label="Unlock"
       operation="unlockAccount"
       placement="more"
       icon={ShieldCheck}
@@ -335,10 +335,10 @@ function UnlockDialog() {
   </FormToolbar>
 
   <FormBody>
-    <FormSection labelName="Credentials">
+    <FormSection label="Credentials">
       <Action
         type="link"
-        labelName="Open Docs"
+        label="Open Docs"
         placement="header"
         icon={ExternalLink}
         href="https://docs.example.com/credentials"
@@ -346,7 +346,7 @@ function UnlockDialog() {
       />
       <Action
         type="custom"
-        labelName="Regenerate Preview"
+        label="Regenerate Preview"
         placement="inline"
         icon={RefreshCw}
         onClick={() => console.log("regenerate")}
@@ -379,16 +379,16 @@ String `href` values support `{placeholder}` interpolation. Supported placeholde
 
 ```tsx
 // Record ID
-<Action type="link" labelName="Edit" href="/studio/app/{id}/workbench" />
+<Action type="link" label="Edit" href="/studio/app/{id}/design-model" />
 
 // Any record field
-<Action type="link" labelName="Open" href="/studio/{appCode}/workbench" />
+<Action type="link" label="Open" href="/studio/app/{appCode}/design-model" />
 
 // Multiple placeholders
-<Action type="link" labelName="Open" href="/studio/app/{id}/version/{currentVersion}" />
+<Action type="link" label="Open" href="/studio/app/{id}/version/{currentVersion}" />
 
 // Function form (for conditional logic)
-<Action type="link" labelName="Edit" href={({ id }) => `/studio/app/${id}/workbench`} />
+<Action type="link" label="Edit" href={({ id }) => `/studio/app/${id}/design-model`} />
 ```
 
 Complete example:
@@ -397,15 +397,15 @@ Complete example:
 <ModelCard modelName="DesignApp" enableDelete>
   <ModelCard.Header>
     <Field fieldName="appName" />
-    <Action type="link" labelName="Edit" href="/studio/app/{id}/workbench" />
+    <Action type="link" label="Edit" href="/studio/app/{id}/design-model" />
     <Action
-      labelName="Archive"
+      label="Archive"
       operation="archive"
       placement="more"
     />
   </ModelCard.Header>
   <Field fieldName="status" />
-  <Action labelName="Publish" operation="publish" />
+  <Action label="Publish" operation="publish" />
   <ModelCard.Footer>
     <Field fieldName="updatedTime" />
   </ModelCard.Footer>
@@ -438,7 +438,7 @@ import { ExternalLink, Lock, Pencil, ShieldCheck } from "lucide-react";
 function UnlockDialog() {
   return (
     <ActionDialog title="Unlock Account">
-      <Field fieldName="reason" labelName="Reason" widgetType="Text" />
+      <Field fieldName="reason" label="Reason" widgetType="Text" />
     </ActionDialog>
   );
 }
@@ -450,21 +450,21 @@ function UnlockDialog() {
 
   <Action
     type="custom"
-    labelName="Refresh"
+    label="Refresh"
     placement="toolbar"
     onClick={() => console.log("refresh")}
   />
 
   <Action
     type="custom"
-    labelName="Quick Edit"
+    label="Quick Edit"
     placement="inline"
     icon={Pencil}
     onClick={({ id }) => console.log("quick edit:", id)}
   />
 
   <Action
-    labelName="Lock Account"
+    label="Lock Account"
     placement="more"
     icon={Lock}
     operation="lockAccount"
@@ -473,7 +473,7 @@ function UnlockDialog() {
 
   <Action
     type="dialog"
-    labelName="Unlock Account"
+    label="Unlock Account"
     placement="more"
     icon={ShieldCheck}
     operation="unlockAccount"
@@ -482,21 +482,21 @@ function UnlockDialog() {
 
   <Action
     type="link"
-    labelName="Open Audit"
+    label="Open Audit"
     placement="more"
     icon={ExternalLink}
     href={({ id }) => `/user/user-account/${id}/audit`}
   />
 
   <BulkAction
-    labelName="Lock Selected"
+    label="Lock Selected"
     operation="lockByIds"
     placement="toolbar"
   />
 
   <BulkAction
     type="dialog"
-    labelName="Unlock Selected"
+    label="Unlock Selected"
     operation="unlockByIds"
     placement="more"
     component={UnlockDialog}
@@ -534,12 +534,12 @@ function AgreementLineTableView() {
 
       <Action
         type="link"
-        labelName="Open"
+        label="Open"
         placement="inline"
         href="/sales/agreement-line/{id}"
       />
       <Action
-        labelName="Recalculate"
+        label="Recalculate"
         operation="recalculate"
         placement="more"
         successMessage="Line recalculated."
@@ -551,4 +551,4 @@ function AgreementLineTableView() {
 <Field fieldName="lines" tableView={AgreementLineTableView} />;
 ```
 
-See also [Relation Fields — Row Actions](./fields/relations.md#row-actions).
+See also [Relation Fields — Row Actions](./fields/relations#row-actions).

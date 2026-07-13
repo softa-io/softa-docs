@@ -403,7 +403,7 @@
 `Option` / `MultiOption` 在周围上下文为只读时 **会自动** 按只读展示渲染——无需声明 `widgetType`。
 
 - 任一选中项带 `itemTone` → 彩色 `StatusBadge`。
-- 选中项均无 `itemTone` → 纯文本（`itemName`；`MultiOption` 为逗号分隔）。
+- 选中项均无 `itemTone` → 纯文本（`label`，`MultiOption` 为逗号分隔）。
 - 空值 → `-`。
 
 ```tsx
@@ -417,7 +417,7 @@
 用于 `Option` 的紧凑纯图标指示器。适合密集表格单元格、看板卡片和状态条等场景，彩色图标比带标签徽章更直接。
 
 ```tsx
-<Field fieldName="deployStatus" widgetType="StatusIcon" />
+<Field fieldName="status" widgetType="StatusIcon" />
 ```
 
 **零页面级配置**——颜色与图标完全来自选项集的 `itemTone`、`itemIcon` 元数据。调整状态外观请改选项集，而非页面。
@@ -433,7 +433,7 @@
 ```tsx
 import { StatusIcon } from "@/components/fields/widgets/option/StatusIconWidget";
 
-<StatusIcon value={lastDeployment.deployStatus} />
+<StatusIcon value={lastActivity.status} />
 ```
 
 #### 选项元数据 → 展示
@@ -443,7 +443,7 @@ import { StatusIcon } from "@/components/fields/widgets/option/StatusIconWidget"
 ```ts
 {
   itemCode: string;
-  itemName: string;
+  label: string;
   itemTone?: "Success" | "Warning" | "Error" | "Info" | "Neutral";
   itemIcon?: string;  // STATUS_ICON_REGISTRY 中的 key
 }
@@ -479,6 +479,100 @@ import { StatusIcon } from "@/components/fields/widgets/option/StatusIconWidget"
 新增图标 key 需要：(a) 在后端 `OptionItemIcon` 枚举与系统选项集中添加代码；(b) 在 `icon-registry.ts` 中添加入口。保持集合精简——多数场景五种色调默认图标已够用。
 
 ## 日期与时间类 Widgets
+
+### `Date` / `DateTime` — range bounds (`dateOptions`)
+
+`Date` 与 `DateTime` 字段可接受可选的 `<Field dateOptions={...}>` prop 来约束可选范围。这是 `<Field>` 级 prop（不是 `widgetProps`），对默认编辑器与列头日期筛选均生效。
+
+```ts
+interface DateFieldOptions {
+  /** 下界（含）。 */
+  min?: DateBound;
+  /** 上界（含）。 */
+  max?: DateBound;
+}
+
+type DateBound =
+  | Date                       // 绝对 Date 对象
+  | string                     // 使用 widget 的 dateFormat 解析的绝对边界
+  | "today"                    // 哨兵值：`min` 为今天起始，`max` 为今天结束
+  | { fromField: string };     // 通过 RHF useWatch 从另一表单字段实时监听
+```
+
+各 `DateBound` 的解析方式：
+
+| 形态 | 行为 |
+| ---- | ---- |
+| `Date` | 直接使用。无效 `Date` 会被忽略。 |
+| `string` | 使用 widget 的 `dateFormat` 解析——`Date` 默认为 `"yyyy-MM-dd"`，`DateTime` 默认为 `"yyyy-MM-dd HH:mm:ss"`。无法解析的字符串会被忽略。 |
+| `"today"` | 在渲染时解析。`min` 对齐到**今天起始**，`max` 对齐到**今天结束**，因此今天本身始终在范围内。 |
+| `{ fromField }` | 通过 `useWatch` 订阅另一表单字段；该字段变化时边界会重新计算。使用相同的 `string` 解析器，因此被引用字段须使用相同的机器格式。 |
+
+**`Date` 示例**
+
+```tsx
+// 绝对下界 —— 禁用 2024-01-01 之前的所有日期。
+<Field fieldName="effectiveDate" dateOptions={{ min: "2024-01-01" }} />
+
+// 「不可选过去日期」—— 今天可选，更早日期禁用。
+<Field fieldName="plannedHireDate" dateOptions={{ min: "today" }} />
+
+// 「不可选未来日期」—— 今天之后的日期禁用。
+<Field fieldName="dateOfBirth" dateOptions={{ max: "today" }} />
+
+// 有界窗口。
+<Field
+  fieldName="contractStartDate"
+  dateOptions={{ min: "2024-01-01", max: "2026-12-31" }}
+/>
+
+// 跨字段 —— 终止日期须不早于入职日期。
+<Field
+  fieldName="terminationDate"
+  dateOptions={{ min: { fromField: "hireDate" } }}
+/>
+
+// 跨字段 —— 预期转正日期须晚于入职日期且早于合同结束。
+// 两侧边界均 live-watch 其源字段。
+<Field
+  fieldName="expectedConfirmationDate"
+  dateOptions={{
+    min: { fromField: "hireDate" },
+    max: { fromField: "contractEndDate" },
+  }}
+/>
+```
+
+**`DateTime` 示例**
+
+对 `DateTime`，边界按完整日期时间粒度生效——日历会禁用范围外日期，时间列在边界日会收紧，选择日期时会将时间钳制到允许窗口内，`Now` 快捷操作在墙钟时间落在 `[min, max]` 外时会禁用。
+
+```tsx
+// 绝对日期时间窗口。
+<Field
+  fieldName="windowStartTime"
+  dateOptions={{
+    min: "2026-01-01 00:00:00",
+    max: "2026-12-31 23:59:59",
+  }}
+/>
+
+// 跨字段 —— 结束时间戳须 ≥ 开始时间戳。
+<Field
+  fieldName="endTime"
+  dateOptions={{ min: { fromField: "startTime" } }}
+/>
+
+// 「不可选过去」且精确到秒 —— 今天起始时刻。
+<Field fieldName="scheduledAt" dateOptions={{ min: "today" }} />
+```
+
+**说明**
+
+- 边界**两端均含**。
+- 范围外日期在日历中仍会渲染但为禁用（灰显）。触发按钮保持可点，以便用户打开选择器并理解为何某些日期不可选。
+- 只需传入需要的一侧——`{ min }`、`{ max }` 或两者兼有。
+- 与 `widgetType="yyyy-MM"` / `"MM-dd"` **不可**组合使用——这些 widget 自带匹配格式的 `min`/`max` `widgetProps`（见下文）。
 
 ### `HH:mm` / `HH:mm:ss`
 
@@ -557,8 +651,6 @@ import { RelativeTimeDisplay } from "@/components/fields/widgets/relative";
 <RelativeTimeDisplay value={drift.lastCheckedTime} className="text-muted-foreground" />
 ```
 
-<a id="quick-range-filter-column-header"></a>
-
 ### 快捷范围筛选（列头）
 
 `Date` / `DateTime` 列在列表头筛选浮层中除了标准「操作符 + 取值」表单外，还提供日期范围预设区。用户可一键选中语义区间；需要精细控制时仍可使用具体操作符路径。
@@ -626,9 +718,17 @@ import { RelativeTimeDisplay } from "@/components/fields/widgets/relative";
 
 ### `SelectTree`
 
+层级关联选择器：组合框触发器打开浮层中的树。适用于单值与多值关联——选择模式由 `fieldType` 推断。
+
 ```tsx
+// 单值（ManyToOne / OneToOne）：点击即选，选中后关闭
 <Field fieldName="departmentId" widgetType="SelectTree" />
+
+// 多值（ManyToMany）：树内复选多选，立即生效；已选项在触发器下方以可移除标签展示
+<Field fieldName="departmentIds" widgetType="SelectTree" />
 ```
+
+对于递归自引用父级选择器（例如 `Department.parentId`），可传入 `widgetProps={{ preventCycle: true }}`，将当前记录及其后代置灰。
 
 ### `TagList`
 

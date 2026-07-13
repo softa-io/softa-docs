@@ -37,7 +37,7 @@ function OptionItemsTableView() {
     <RelationTable orders={["sequence", "ASC"]} pageSize={10}>
       <Field fieldName="sequence" />
       <Field fieldName="itemCode" />
-      <Field fieldName="itemName" />
+      <Field fieldName="label" />
       <Field fieldName="active" />
     </RelationTable>
   );
@@ -90,15 +90,15 @@ function OptionItemsTableView() {
   return (
     <RelationTable orders={["sequence", "ASC"]}>
       <Field fieldName="itemCode" />
-      <Field fieldName="itemName" />
+      <Field fieldName="label" />
       <Action
         type="link"
-        labelName="Open"
+        label="Open"
         placement="inline"
         href="/config/option-item/{id}"
       />
       <Action
-        labelName="Archive"
+        label="Archive"
         operation="archive"
         placement="more"
       />
@@ -219,6 +219,31 @@ Behavior:
 - when a dependent `{{ fieldName }}` value is missing, the tree selector stays query-disabled instead of loading an unfiltered tree
 - low-level `Tree` / `SelectTreePanel` are internal infrastructure
 
+#### Recursive parent picker: `preventCycle`
+
+For the very common "self-referencing model where parent must not be self or a descendant" case (Department, Category, JobFamily — anything tree-shaped), set one flag:
+
+```tsx
+<Field
+  fieldName="parentId"
+  widgetType="SelectTree"
+  widgetProps={{ preventCycle: true }}
+/>
+```
+
+What it does:
+
+- reads `selfId` from the enclosing `ModelForm` runtime context (`useOptionalModelFormRuntimeContext().id`)
+- reads the target model from `metaField.relatedModel` and verifies it matches the form's model (warns + skips if not recursive)
+- forwards `selfId` to the tree as `disableSubtreeRootId`; once the picker's `searchList` arrives the tree DFS-walks `selfId`'s `childrenIds` chain and adds the whole subtree (self + descendants) to the disabled set
+- no extra request — the only fetch is the one the tree already issues on first popover open; subsequent opens are cache hits
+- no `idPath` column required — the subtree walk uses the in-memory parent→children chain built from the loaded rows
+- in create mode (no `selfId`) nothing is disabled, so the same `widgetProps` is safe to keep in `ModelTable` create dialogs
+
+Backend cycle guards on the update endpoint are still recommended as a safety net.
+
+Caveat: if `treeFilters` filters `selfId` itself out of the tree, the subtree walk has no anchor and nothing is disabled — only practically relevant when editing a record that's excluded by the picker's own filter.
+
 ## `OneToMany`
 
 Rendered as relation table with inline or dialog editing. Public usage stays on `Field`.
@@ -231,7 +256,7 @@ function OptionItemsTableView() {
     <RelationTable orders={["sequence", "ASC"]} pageSize={10}>
       <Field fieldName="sequence" />
       <Field fieldName="itemCode" />
-      <Field fieldName="itemName" />
+      <Field fieldName="label" />
       <Field fieldName="active" />
     </RelationTable>
   );
@@ -335,7 +360,7 @@ Shared behavior across relation fields:
 function UserRoleUserIdsFormView() {
   return (
     <ModelDialog title="User Detail">
-      <FormSection labelName="General" hideHeader>
+      <FormSection label="General" hideHeader>
         <Field fieldName="username" />
         <Field fieldName="nickname" />
         <Field fieldName="email" />

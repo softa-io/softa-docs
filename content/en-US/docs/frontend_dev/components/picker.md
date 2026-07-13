@@ -54,7 +54,7 @@ metadata to choose the right display extractor:
 
 | Field type | Extractor |
 | ---------- | --------- |
-| `Option` / `MultiOption` | `itemName` (option-set localized label) |
+| `Option` / `MultiOption` | `label` (option-set localized label) |
 | `ManyToOne` / `OneToOne` | `displayName` of the referenced record |
 | anything else | `String(value)` |
 
@@ -75,14 +75,14 @@ exposing `name` / `required` like any other form field.
 <RecordPickerField
   name="versionId"
   required           // boolean — gates submit, no message
-  modelName="DesignAppVersion"
+  modelName="DesignAppEnv"
   ...
 />
 
 <RecordPickerField
   name="versionId"
   required="Please pick a version."  // string — same gating, shows message
-  modelName="DesignAppVersion"
+  modelName="DesignAppEnv"
   ...
 />
 ```
@@ -115,12 +115,12 @@ ad-hoc inline picker driven by component state.
 const [pickedId, setPickedId] = React.useState<string>();
 
 <RecordPickerList
-  modelName="DesignAppVersion"
+  modelName="DesignAppEnv"
   filters={[["status", "=", "Sealed"]]}
   value={pickedId}
   onChange={(id) => setPickedId(id)}
   titleField="name"
-  badgeField="versionType"
+  badgeField="envType"
 />
 ```
 

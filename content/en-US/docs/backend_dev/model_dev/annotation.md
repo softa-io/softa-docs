@@ -12,7 +12,10 @@ through Java annotations on the entity classes. A boot-time scanner reads
 these annotations, reconciles them with the `sys_*` catalog tables managed
 by `metadata-starter`, and (for packages in `scanner-scope`) applies the matching DDL.
 
-**Five annotations**, all in `io.softa.framework.orm.annotation`:
+**Five annotations** — `@Model` / `@Field` / `@Index` live in
+`io.softa.framework.orm.annotation`; `@OptionSet` / `@OptionItem` live in
+`io.softa.framework.base.annotation` (so framework-level enums in `softa-base`
+can carry them without a module cycle):
 
 | Annotation | Target | `sys_*` table written | Purpose |
 |---|---|---|---|
@@ -65,7 +68,7 @@ public enum CustomerTier {
 | `tableName` | `snake_case(modelName)` | `@Model.tableName` |
 | `columnName` | `snake_case(fieldName)` | `@Field.columnName` |
 | `fieldType` | Java type via `TypeInference` (e.g. `String`→`STRING`, enum→`OPTION`, `List<enum>`→`MULTI_OPTION`, `@Model` POJO→`MANY_TO_ONE`) | `@Field.fieldType = FieldType.X` (single value, no braces); **`OPTION` / `MULTI_OPTION` cannot be written explicitly** |
-| index `indexName` | `idx_<table>_<col>...` / `uk_<table>_<col>...` for unique | `@Index.name` |
+| index `indexName` | `idx_<table>_<col>...` / `uk_<table>_<col>...` for unique | `@Index.indexName` |
 
 ### `@Model` ↔ `SysModel`
 
@@ -73,6 +76,7 @@ public enum CustomerTier {
 |---|---|---|---|---|
 | (class simple name) | — | — | `modelName` | inferred, no override |
 | `label` | String | `""` | `label` | empty → humanized class name (`DeptInfo`→"Dept Info"); i18n translations override by id |
+| `renamedFrom` | String | `""` | `renamedFrom` | immediately-prior model name for a rename (single-step, no chain) — see "Renames" below |
 | `tableName` | String | `""` | `tableName` | empty → `snake_case(modelName)` |
 | `description` | String | `""` | `description` | |
 | `displayName` | String[] | `{}` | `displayName` | list-display defaults |
@@ -92,7 +96,6 @@ public enum CustomerTier {
 | `partitionField` | String | `""` | `partitionField` | |
 | (scanner sets) | — | — | `appCode` | always set by scanner / Studio |
 | (DB auto) | — | — | `id` | primary key |
-| (scanner sets) | — | — | `ownership` | `PLATFORM_MAINTAINED` for scanner writes |
 
 Audit fields (`createdTime` / `createdBy` / `createdId` / `updatedTime` /
 `updatedBy` / `updatedId`) come from `AuditableModel` and are **not** declared
@@ -106,6 +109,7 @@ extends `AuditableModel`.
 | (Java field name) | — | — | `fieldName` | inferred, no override |
 | (Java type) | — | — | `fieldType` | inferred via `TypeInference` |
 | `label` | String | `""` | `label` | empty → humanized field name (`deptId`→"Dept Id"); i18n translations override by id |
+| `renamedFrom` | String | `""` | `renamedFrom` | immediately-prior field name for a rename (single-step) — see "Renames" below |
 | `description` | String | `""` | `description` | |
 | `fieldType` | `FieldType[]` | `{}` | `fieldType` | single value, no braces (e.g. `fieldType = FieldType.MULTI_FILE`); `OPTION`/`MULTI_OPTION` **cannot** be written explicitly |
 | `columnName` | String | `""` | `columnName` | empty → `snake_case(fieldName)` |
@@ -134,8 +138,9 @@ extends `AuditableModel`.
 | `widgetType` | `WidgetType[]` | `{}` | `widgetType` | single-element override |
 | (scanner sets) | — | — | `modelName` | from enclosing `@Model` class |
 | (scanner sets) | — | — | `optionSetCode` | derived from enum type when fieldType is `OPTION`/`MULTI_OPTION` |
-| (scanner sets) | — | — | `appCode` / `id` / `ownership` | |
+| (scanner sets) | — | — | `appCode` / `id` | |
 | (FK fixup post-init) | — | — | `modelId` | |
+| (system-computed) | — | — | `relatedFieldType` | physical type of a TO_ONE FK column, mirrored from the referenced model's `id` (+ mirrored `length`/`scale`) at reconciliation time (ADR-0024); never declared on `@Field` |
 | (not exposed via `@Field`) | — | — | `hidden` | UI-only flag set via Studio |
 
 #### Delete strategy (`onDelete`)
@@ -181,15 +186,18 @@ hierarchies — org trees, BOM, category trees — in application code); a **`CA
 `CASCADE` from a **soft-delete parent to a hard-delete child**, or from a **shared parent to a
 multi-tenant child**, is rejected (see the matrix above).
 
+Field-level overview for product/metadata authors: [`onDelete` in Field metadata](../../features/metadata/field#224-ondelete).
+
 ### `@OptionSet` ↔ `SysOptionSet`
 
 | `@OptionSet` attribute | Type | Default | `SysOptionSet` column | Notes |
 |---|---|---|---|---|
 | (enum simple name) | — | — | `optionSetCode` | inferred, no override |
-| `name` | String | `""` | `name` | display label; empty → humanized enum name (`TenantStatus`→"Tenant Status") |
+| `label` | String | `""` | `label` | display label; empty → humanized enum name (`TenantStatus`→"Tenant Status") |
+| `renamedFrom` | String | `""` | `renamedFrom` | immediately-prior option-set code for a rename (single-step) |
 | `description` | String | `""` | `description` | |
-| (scanner sets) | — | — | `appCode` / `id` / `ownership` | |
-| (Studio toggle) | — | — | `deleted` / `optionItems` | runtime aggregation |
+| (scanner sets) | — | — | `appCode` / `id` | |
+| (Studio toggle) | — | — | `active` / `optionItems` | runtime aggregation |
 
 ### `@OptionItem` ↔ `SysOptionItem`
 
@@ -198,12 +206,13 @@ multi-tenant child**, is rejected (see the matrix above).
 | (`@JsonValue` field value on enum) | — | — | `itemCode` | fallback to `enum.name()` when no `@JsonValue` |
 | (enclosing enum simple name) | — | — | `optionSetCode` | inferred |
 | `label` | String | `""` | `label` | defaults to humanized constant name (`MULTI_FILE`→"Multi File"); declare explicitly to customize. Omit when it equals the humanized name (and omit the whole `@OptionItem` if nothing else remains) |
+| `renamedFrom` | String | `""` | `renamedFrom` | immediately-prior item code for a rename (single-step) |
 | `description` | String | `""` | `description` | |
 | `sequence` | int | `-1` | `sequence` | `-1` → use `ordinal() + 1` |
 | `parentItemCode` | String | `""` | `parentItemCode` | hierarchy |
 | `itemTone` | `OptionItemTone[]` | `{}` | `itemTone` | single element |
 | `itemIcon` | `OptionItemIcon[]` | `{}` | `itemIcon` | single element |
-| (scanner sets) | — | — | `appCode` / `id` / `ownership` / `optionSetId` | |
+| (scanner sets) | — | — | `appCode` / `id` / `optionSetId` | |
 | (Studio toggle) | — | — | `active` | |
 
 ### `@Index` ↔ `SysModelIndex`
@@ -213,11 +222,11 @@ multi-tenant child**, is rejected (see the matrix above).
 | `@Index` attribute | Type | Default | `SysModelIndex` column | Notes |
 |---|---|---|---|---|
 | (enclosing class) | — | — | `modelName` | inferred |
-| `name` | String | `""` | `name` | display title; auto-derived from fields when empty |
-| `name` (or auto-derived) | — | — | `indexName` | `idx_<table>_<col>...` / `uk_<table>_<col>...` for unique |
+| `indexName` | String | `""` | `indexName` | empty → auto-derived `idx_<table>_<col>...` / `uk_<table>_<col>...` for unique; index names are **globally unique** (≤ 60 chars, boot-enforced) |
 | `fields` | String[] | required | `indexFields` | **camelCase Java field names**, not column names |
 | `unique` | boolean | `false` | `uniqueIndex` | |
-| (scanner sets) | — | — | `appCode` / `id` / `ownership` | |
+| `message` | String | `""` | `message` | unique-only: user-facing message shown on a uniqueness violation (has its own i18n key) |
+| (scanner sets) | — | — | `appCode` / `id` | |
 | (FK fixup post-init) | — | — | `modelId` | |
 
 **Note**: `@Model.businessKey` does **not** auto-create a UNIQUE index.
@@ -228,20 +237,96 @@ declare such indexes explicitly:
 @Index(fields = {"tenantId", "code"}, unique = true)
 ```
 
-## Row ownership (`Ownership` enum)
+## Renames (`renamedFrom`)
 
-Every row in `sys_model` / `sys_field` / `sys_option_set` / `sys_option_item`
-/ `sys_model_index` carries an `ownership` column
-(`io.softa.framework.orm.enums.Ownership`):
+The scanner's diff is keyed by `modelName` / `fieldName` / `optionSetCode` /
+`itemCode`, so an *undeclared* rename looks like "drop old + add new": the new
+column is auto-added, dropping the old one is warn-only — and the data stays
+in the orphaned column (**silent data divorce**).
 
-| Value | Writer | Tenants may modify? |
-|---|---|---|
-| `PLATFORM_MAINTAINED` | Scanner (from `@Model` / `@Field` / `@OptionSet` / `@OptionItem` / `@Index`) | ❌ |
-| `PLATFORM_DEFAULT` | DML seed (currently narrow: framework enums like `Language` that can't carry `@OptionSet`). Reserved for future business-data scenarios (roles, templates, default categories). | ✅ in principle, but on `sys_*` rarely exercised |
-| `TENANT` (default) | Studio UI / Open API | ✅ |
+Declare the immediately-prior name instead:
 
-The scanner reads / writes are filtered with
-`WHERE ownership = 'PLATFORM_MAINTAINED'`, so platform defaults and tenant
-customizations are never clobbered by an annotation reconcile.
+```java
+@Model(renamedFrom = "OldCustomer")          // model rename
+public class Customer extends AuditableModel {
 
-See `Ownership.java` javadoc for the full merge-rule contract.
+    @Field(renamedFrom = "customerName")     // field rename
+    private String name;
+}
+```
+
+The `DiffEngine` then pairs the two sides into a single rename modification,
+auto-executes `CHANGE COLUMN` (field) / `ALTER TABLE … RENAME TO` (model), and
+updates the `sys_*` row in place (id preserved) — data is carried, not
+divorced. A model rename cascades onto its fields and indexes, so it shows no
+field churn. `@OptionSet` / `@OptionItem` support the same attribute.
+
+Rules and guards:
+
+- `renamedFrom` is a **single** String — the immediately-prior name only
+  (single-step, no chain). A skipped-version chain needs a manual migration.
+- Declaring a prior name that is still a live field/model, or two siblings
+  claiming the same prior name, fails at parse time.
+- "Both the new and the prior name already exist" fails fast — resolve the
+  half-applied rename manually.
+- An `@OptionItem` code rename that also carries business-data UPDATEs still
+  needs a hand-written migration.
+
+## `scanner-scope` (which packages the scanner manages)
+
+`scanner-scope` is a list of regex patterns full-matched against each
+`@Model` / `@OptionSet` class's **package name**. `"*"` (sole entry) = all
+packages; empty / unset = manage nothing. It should **never be non-empty in
+production** — in production, Studio / connector publish applies the
+app-scoped design catalog instead.
+
+```yaml
+# application-dev.yml
+system:
+  metadata:
+    scanner-scope:
+      - "*"          # manage every package; on a shared dev DB, narrow to
+                     # your own packages, e.g. ["io\\.acme\\.app.*"]
+```
+
+| `system.metadata.scanner-scope` | Scanner runs | DDL execution | Drift detection |
+|---|---|---|---|
+| `["*"]` | Boot-time, eager, all packages | Auto: `CREATE TABLE` / `ADD COLUMN` / `MODIFY COLUMN` / `ADD INDEX`. **Never auto-DROP** | n/a |
+| `["io\\.acme\\.foo.*", …]` | Boot-time, in-scope packages only | Same auto-policy, in-scope models only | n/a |
+| empty / unset (default, prod) | n/a | n/a | `MetadataAnnotationChecker` runs post-boot on a virtual thread; logs WARN if code-vs-DB drift detected |
+
+On a **shared dev database**, give each developer a narrow scope (their own
+packages) so the scanner only reconciles the Java packages they are actively
+changing. Scope is per-package, not per-class; app identity is still
+`app_code`, and physical table-name collisions remain a database-level
+concern.
+
+### DDL auto-execute policy
+
+| Operation | Auto-executed |
+|---|---|
+| `CREATE TABLE IF NOT EXISTS` | ✅ |
+| `ADD COLUMN` | ✅ |
+| `MODIFY COLUMN` (type / nullable / length / default) | ✅ |
+| `ADD INDEX` | ✅ |
+| `DROP TABLE` / `DROP COLUMN` / `DROP INDEX` | ❌ — logs WARN with copy-paste SQL |
+
+Rationale: additive DDL doesn't lose data; `DROP` operations are destructive
+and may take minutes on large tables. Even in dev, you should consciously
+choose to drop schema.
+
+## Metadata identity (`app_code`)
+
+There is **no ownership tier column** on the `sys_*` catalog. The annotation
+lane and the Studio no-code lane reconcile the **same rows, matched by
+business key** (`modelName` / `fieldName` / `optionSetCode` / `itemCode`, plus
+`renamedFrom`) — a same-key row is updated in place, never duplicated per
+channel.
+
+Every runtime declares `system.app-code` in `application.yml` (mandatory when
+`metadata-starter` is active; fail-fast at boot). All swept `sys_*` rows carry
+`app_code`, stamped **server-side** on every write path (scanner, Studio
+envelope, plan/apply) — wire values are never trusted. Signed Studio calls
+carry the target `appCode` and the runtime rejects mismatches. Multiple apps
+can safely share one database: rows are matched per `app_code`, so shared
+databases never cross-link catalogs.

@@ -6,6 +6,7 @@ Composable data table view with:
 - server-side query integration
 - toolbar filter/sort/group controls
 - optional side tree filter panel
+- **automatic permission gating** by `modelName` (see §"Permission Integration")
 
 ## Related Docs
 
@@ -13,7 +14,6 @@ Composable data table view with:
 - [Dialogs](./dialogs)
 - [ModelForm](./form)
 - [Actions](../actions)
-
 ## Quick Start
 
 ```tsx
@@ -35,7 +35,7 @@ export default function UserAccountPage() {
       <Field fieldName="status" />
       <Field fieldName="createdTime" />
       <Action
-        labelName="Lock Account"
+        label="Lock Account"
         operation="lockAccount"
         placement="more"
         confirmMessage="Lock this user account?"
@@ -43,7 +43,7 @@ export default function UserAccountPage() {
       />
       <Action
         type="dialog"
-        labelName="Unlock Account"
+        label="Unlock Account"
         operation="unlockAccount"
         placement="more"
         successMessage="User account unlocked."
@@ -112,7 +112,7 @@ Multi-sort syntax:
 Table declaration notes:
 
 - `Field` order is the rendered column order
-- `widgetType`, `labelName`, `filters`, `onChange`, and static `required` / `readonly` overrides are reused by both read cells and inline editors
+- `widgetType`, `label`, `filters`, `onChange`, and static `required` / `readonly` overrides are reused by both read cells and inline editors
 - `defaultValue` is create-only; in table flows it is used for relation row creation and inline editors, not for read-mode cells
 - inline-edit field values use the same UI value contracts as forms; for example `File -> FileInfo | null`, `MultiFile -> FileInfo[]`, and `JSON` / `DTO` / `Filters` / `Orders` stay structured
 - table read cells intentionally do not consume `widgetProps`; v1 uses a unified compact table renderer instead of form-style widget variants
@@ -130,12 +130,12 @@ A column can pull a value from a related (`ManyToOne` / `OneToOne`) record using
 ```tsx
 <ModelTable modelName="AppEnv">
   <Field fieldName="name" />
-  <Field fieldName="lastDeploymentId.deployStatus" widgetType="StatusIcon" />
+  <Field fieldName="lastActivityId.status" widgetType="StatusIcon" />
   <Field fieldName="ownerId.email" />
 </ModelTable>
 ```
 
-The list query controller folds the matching SubQuery into `searchPage` automatically — no need to hand-roll `initialParams.subQueries` for the displayed paths. Cascaded columns are always read-only (no inline-edit support) and use the leaf field's metadata (`fieldType` / `widgetType` / `labelName`) for rendering. Hand-rolled `initialParams.subQueries` still merges with the auto-collected ones for advanced cases.
+The list query controller folds the matching SubQuery into `searchPage` automatically — no need to hand-roll `initialParams.subQueries` for the displayed paths. Cascaded columns are always read-only (no inline-edit support) and use the leaf field's metadata (`fieldType` / `widgetType` / `label`) for rendering. Hand-rolled `initialParams.subQueries` still merges with the auto-collected ones for advanced cases.
 
 Full reference & semantics: [Cascaded Field Path](../fields/fields#cascaded-field-path-display) in the fields README.
 
@@ -196,7 +196,7 @@ Example:
     fieldName="departmentId"
     filters={[["companyId", "=", "{{ companyId }}"]]}
   />
-  <Field fieldName="itemName" readonly={[["active", "=", false]]} />
+  <Field fieldName="label" readonly={[["active", "=", false]]} />
   <Field fieldName="active" />
 </ModelTable>
 ```
@@ -207,7 +207,7 @@ Example:
 import { dependsOn, Field } from "@/components/fields";
 
 <Field
-  fieldName="itemName"
+  fieldName="label"
   required={dependsOn(
     ["active"],
     ({ values, scope, rowId }) =>
@@ -219,8 +219,8 @@ import { dependsOn, Field } from "@/components/fields";
 Behavior:
 
 - default is `inlineEdit={false}`
-- `false`: row click navigates to detail page in read mode
-- `true`: row click activates inline edit for that row
+- `false`: row click navigates to detail page in read mode (unless `enableClick={false}`, which disables row click entirely)
+- `true`: row click activates inline edit for that row (takes precedence over `enableClick`)
 - editable cells render `Field` directly inside the table cell
 - active row shows row-level `Save` / `Cancel`
 - `Save` stays disabled until the active row has actual changes
@@ -286,7 +286,7 @@ type UserAccountRow = ModelTableRowWith<{
   <SideTree
     modelName="SysModel"
     filterField="modelId"
-    labelField="labelName"
+    labelField="label"
     parentField="parentId"
   />
   <Field fieldName="modelName" />
@@ -327,12 +327,35 @@ Toolbar active state area can show and clear:
 
 `Clear all` clears all active toolbar states together.
 
+## View State Persistence
+
+The table remembers its **query state** so that navigating into a record detail page and clicking Back — or refreshing the same tab — returns you to exactly where you were instead of resetting to the default view.
+
+Persisted query state: pagination (page number + page size), sorting, group-by, the toolbar filter tree, column header filters, the search term, and side-panel (`SideTree` / `SideList` / `SideCard`) selection. State is stored in `sessionStorage`, scoped per `view kind + modelName + route + active MultiView tab`, via the shared `src/components/views/shared/view-state/` module.
+
+Behavior:
+
+- Restore is "always on mount": re-entering the same view in the same tab (including from the sidebar) restores the last query state. `Clear all` resets it, so the next visit starts fresh.
+- `sessionStorage` survives reloads and same-tab Back/forward, and is isolated per browser tab. It is cleared when the tab is closed and is not shared to newly opened tabs — query state is intentionally ephemeral and not part of the URL (the list URL stays clean and is not a shareable filtered view).
+- Row selection is never persisted.
+- Column layout (order / visibility / pinning / freeze) is a durable preference and is **not** persisted by this mechanism yet.
+- Side-panel selection persists the *selection source* (selected ids + filter field + operator + minimal labels), not the derived filter condition. On restore the panel re-highlights, the query is filtered, and the toolbar "Filter status" tag is shown — all derived from that one source. For `SideTree`, highlight restore matches node ids; when `filterValueField` is customized (filter value ≠ node id) the query still restores correctly while the tree highlight keys off node id.
+
+`ModelBoard` (search term only) and `ModelCard` (pagination + sort + filter + search) share the same mechanism.
+
+## Data Freshness
+
+Restoring *where you were* is only half of Back navigation — the data may have changed while you were on the detail page (form save, action buttons, server-side cascades, other users). Two layers keep views fresh:
+
+- **Stale-while-revalidate everywhere**: the global query default is `staleTime: 0` (`src/providers/query-provider.tsx`), so every mount renders cached data instantly — no skeleton flash — while a background refetch replaces it with fresh data. This covers the table's main query, side panels, sidecar, and detail `getById` alike, and is the safety net for changes no invalidation call can enumerate. Hooks with genuinely static data (metadata, option sets, dial codes, default values) pin their own longer `staleTime`.
+- **Prefix invalidation on write**: every mutation path (form save, default / dialog / custom actions, bulk operations, delete) calls `invalidateModelQueries`, which invalidates *all* cached queries whose key starts with the model name — table pages, side panels, board counts, sidecar joins, and record caches alike. This is what refreshes views that are still mounted when the write happens.
+
 ## Core Props
 
 | Prop               | Type                       | Required | Default | Notes                                                                                                                                      |
 | ------------------ | -------------------------- | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | `modelName`        | `string`                   | Yes      | -       | Used to fetch metadata API.                                                                                                                |
-| `labelName`        | `string`                   | No       | -       | Overrides the page title shown in the table header. Defaults to `metaModel.labelName` when omitted.                                        |
+| `label`        | `string`                   | No       | -       | Overrides the page title shown in the table header. Defaults to `metaModel.label` when omitted.                                        |
 | `description`      | `string`                   | No       | -       | Overrides the subtitle shown in the table header. Defaults to `metaModel.description` when omitted.                                        |
 | `inlineEdit`       | `boolean`                  | No       | `false` | Enable row-click inline edit mode. When enabled, active-row editable cells render `Field` components instead of navigating to detail.      |
 | `orders`           | `OrderCondition`           | No       | -       | Recommended default sort. Supports a single tuple (`["createdTime", "DESC"]`) or multiple tuples. Wins over `initialParams.orders` and `MultiView.Tab.orders` (context). |
@@ -346,6 +369,7 @@ Toolbar active state area can show and clear:
 | `bulkEditFields`   | `string[]`                 | No       | -       | Optional bulk-edit allowlist. If omitted, built-in Bulk Edit uses all metadata fields.                                                     |
 | `excludeFields`    | `string[]`                 | No       | -       | Optional bulk-edit denylist. Always excluded from built-in Bulk Edit (in addition to reserved fields).                                     |
 | `linkTo`           | `string`                   | No       | -       | Subdirectory name (single segment) for row click navigation. Goes to `${pathname}/${linkTo}/${id}?mode=read`. Omit for default `${pathname}/${id}?mode=read`. |
+| `enableClick`      | `boolean`                  | No       | `true`  | Whether clicking a row navigates to the detail page. Set `false` for view-only / report tables that have no detail route, so rows are not rendered as clickable (no `cursor-pointer`, no navigation). Ignored when `inlineEdit` is enabled. |
 | `freezeColumnIndex`| `number`                   | No       | `1`     | Initial count of left-side data columns kept frozen. The select column remains pinned ahead of the frozen range when enabled.             |
 
 ## Built-in Import / Export
@@ -473,6 +497,8 @@ runtime:
 - column filter tags
 - toolbar condition filter
 
+The header search box is driven by model metadata (`resolveTableSearchConfig`): its placeholder reads `Search by <label>...` using the `label` of the field(s) the backend actually matches — the model's configured `searchName`, falling back to the `name` field. When the model declares neither `searchName` nor a `name` field there is nothing to free-text search against, so the search box is hidden entirely.
+
 Example merged condition:
 
 ```ts
@@ -488,6 +514,47 @@ Example merged condition:
 For the full layered model (including how `MultiView.Tab.filters` interacts
 with this), see
 [Filter & order precedence](./multi-view#filter--order-precedence).
+
+## Permission Integration
+
+`ModelTable` auto-gates by `modelName` against the generated `MODEL_PERMISSIONS` lookup — business pages do not call `usePermission` for standard CRUD or for any custom action that declares a `permission` field.
+
+What gets gated for free, just from passing `modelName`:
+
+| Built-in control       | Action segment checked  | Effect when denied                              |
+| ---------------------- | ----------------------- | ----------------------------------------------- |
+| Toolbar "Create"       | `create`                | Hidden (alongside quickAdd)                     |
+| Toolbar "Import"       | `import`                | Hidden                                          |
+| Toolbar "Export"       | `export`                | Hidden                                          |
+| Toolbar bulk "Delete"  | `delete`                | Hidden + row-selection auto-disabled if no other bulk action |
+| Inline edit            | `update`                | Force-disabled even when `inlineEdit` prop is true |
+
+Custom `<Action permission="…" />` / `<BulkAction permission="…" />` children are filtered before render — no flash, no click handler installed. Pass the manifest's action segment (`"transfer"`, `"initiate-signing"`, or any of the standard CRUD names) — `useActionPermission(modelName, permission)` does the lookup internally.
+
+Status semantics (intentional three-state):
+
+- **Granted** → control / action stays visible (business `enable*` and `hidden` still apply).
+- **Denied** → control / action is hidden; row selection / inline edit also collapses if it depends on the missing right.
+- **Unmanaged** → the `(modelName, action)` pair isn't in `MODEL_PERMISSIONS` because the model is ambiguous across pages (see `pnpm gen:permissions` warnings) or simply not declared. Auto-gate has no opinion and lets the page's own `enableCreate=` / `hidden=` / `usePermission` decide. Use this escape hatch for pages on shared models like `EmpDocument` / `LeaveRequest`.
+
+Business props still win when set to `false` — a page that explicitly passes `enableCreate={false}` keeps Create hidden for SUPER_ADMIN too. SUPER_ADMIN short-circuits the permission check itself (every action returns `Granted`) but does NOT override an explicit business `false`.
+
+Example — auto-gated list with one custom action:
+
+```tsx
+<ModelTable modelName="Employee">
+  <Field fieldName="fullName" />
+  <Action
+    type="custom"
+    label="Transfer"
+    placement="more"
+    permission="transfer"        {/* gated by Employee.transfer */}
+    onClick={openTransferDialog}
+  />
+</ModelTable>
+```
+
+The toolbar Create / Import / Export / bulk Delete are auto-shown / auto-hidden purely from `modelName="Employee"`; "Transfer" is auto-hidden when the user lacks `Employee.transfer`.
 
 ## Actions
 
@@ -525,7 +592,7 @@ import { ExternalLink, Lock, Pencil, ShieldCheck } from "lucide-react";
 function UnlockDialog() {
   return (
     <ActionDialog title="Unlock Account">
-      <Field fieldName="reason" labelName="Reason" widgetType="Text" />
+      <Field fieldName="reason" label="Reason" widgetType="Text" />
     </ActionDialog>
   );
 }
@@ -537,14 +604,14 @@ function UnlockDialog() {
 
   <Action
     type="custom"
-    labelName="Refresh"
+    label="Refresh"
     placement="toolbar"
     onClick={() => console.log("refresh")}
   />
 
   <Action
     type="custom"
-    labelName="Quick Edit"
+    label="Quick Edit"
     placement="inline"
     icon={Pencil}
     onClick={({ id }) => {
@@ -553,7 +620,7 @@ function UnlockDialog() {
   />
 
   <Action
-    labelName="Lock Account"
+    label="Lock Account"
     placement="more"
     icon={Lock}
     operation="lockAccount"
@@ -563,7 +630,7 @@ function UnlockDialog() {
 
   <Action
     type="dialog"
-    labelName="Unlock Account"
+    label="Unlock Account"
     placement="more"
     icon={ShieldCheck}
     operation="unlockAccount"
@@ -573,14 +640,14 @@ function UnlockDialog() {
 
   <Action
     type="link"
-    labelName="Open Audit"
+    label="Open Audit"
     placement="more"
     icon={ExternalLink}
     href={({ id }) => `/user/user-account/${id}/audit`}
   />
 
   <BulkAction
-    labelName="Lock Selected"
+    label="Lock Selected"
     operation="lockByIds"
     placement="toolbar"
     confirmMessage={({ ids }) => `Lock ${ids.length} selected accounts?`}
@@ -588,7 +655,7 @@ function UnlockDialog() {
 
   <BulkAction
     type="dialog"
-    labelName="Unlock Selected"
+    label="Unlock Selected"
     operation="unlockByIds"
     placement="more"
     component={UnlockDialog}

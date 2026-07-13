@@ -37,7 +37,7 @@ export default function SettingPage() {
       <FormHeader />
       <FormToolbar />
       <FormBody>
-        <FormSection labelName="General">
+        <FormSection label="General">
           <Field fieldName="key" />
           <Field fieldName="value" />
         </FormSection>
@@ -64,10 +64,10 @@ Cascaded `<Field fieldName="a.b">` declarations work inside `ModelSideForm` auto
 | Prop                   | Type        | Required | Default                                                   | Notes                                                                                                   |
 | ---------------------- | ----------- | -------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
 | `modelName`            | `string`    | Yes      | -                                                         | The model to load into `ModelForm`.                                                                     |
-| `labelName`            | `string`    | No       | -                                                         | Overrides the model label used in "No X selected" / "Create X" text and `FormHeader`. Defaults to `metaModel.labelName`. |
+| `label`            | `string`    | No       | -                                                         | Overrides the model label used in "No X selected" / "Create X" text and `FormHeader`. Defaults to `metaModel.label`. |
 | `enableWorkflow`       | `boolean`   | No       | `false`                                                   | Show workflow action group in right-side form toolbar (edit mode only).                                |
 | `enableCreate`         | `boolean`   | No       | `true`                                                    | Master switch for create entry points (side panel + empty state + toolbar Create New).                 |
-| `enableDuplicate`      | `boolean`   | No       | auto                                                      | Built-in duplicate action switch in right-side toolbar. `false` disables.                               |
+| `enableDuplicate`      | `boolean`   | No       | auto                                                      | Built-in duplicate action switch in right-side toolbar. `false` disables. Duplicate enters inline create mode prefilled with the source record's copyable values (no direct insert).                               |
 | `enableDelete`         | `boolean`   | No       | auto                                                      | Built-in delete action switch in right-side toolbar. `false` disables.                                  |
 | `confirmDeleteMessage` | `string`    | No       | `Delete this {modelLabel}? This action cannot be undone.` | Confirm text for built-in delete action in right-side toolbar.                                          |
 | `selectedRecordId`     | `string \| null` | No   | uncontrolled                                              | Controlled record id for detail-route variants of the same side-form page.                              |
@@ -129,7 +129,7 @@ Any side panel component can be used. The component determines the record select
     title="System Model"
     modelName="SysModel"
     filterField="modelId"
-    labelField="labelName"
+    labelField="label"
     parentField="parentId"
     sortField="modelName"
     selectionMode="single"
@@ -137,9 +137,9 @@ Any side panel component can be used. The component determines the record select
   />
   <FormHeader />
   <FormBody>
-    <FormSection labelName="Field Info">
+    <FormSection label="Field Info">
       <Field fieldName="fieldName" />
-      <Field fieldName="labelName" />
+      <Field fieldName="label" />
       <Field fieldName="fieldType" />
     </FormSection>
   </FormBody>
@@ -149,21 +149,21 @@ Any side panel component can be used. The component determines the record select
 ### SideList Example
 
 ```tsx
-<ModelSideForm modelName="DesignWorkItem">
+<ModelSideForm modelName="DesignActivity">
   <SideList
-    modelName="DesignWorkItem"
+    modelName="DesignActivity"
     filterField="id"
     filters={[["status", "=", "IN_PROGRESS"], "OR", ["status", "=", "READY"]]}
     searchable
     remoteSearch
   >
-    <WorkItemListItem />
+    <ActivityListItem />
   </SideList>
 
   <FormHeader />
   <FormToolbar />
   <FormBody>
-    <FormSection labelName="General">
+    <FormSection label="General">
       <Field fieldName="name" />
       <Field fieldName="status" />
     </FormSection>
@@ -177,7 +177,7 @@ Any side panel component can be used. The component determines the record select
 import { useRecordContext } from "@/components/contexts/RecordContext";
 import { Badge } from "@/components/ui/badge";
 
-function WorkItemListItem() {
+function ActivityListItem() {
   const { record } = useRecordContext();
   return (
     <div className="flex w-full items-center justify-between gap-2">
@@ -193,7 +193,7 @@ function WorkItemListItem() {
 ### SideCard Example
 
 ```tsx
-<ModelSideForm modelName="DesignWorkItem">
+<ModelSideForm modelName="DesignActivity">
   <SideCard
     modelName="DesignApp"
     filterField="appId"
@@ -214,7 +214,7 @@ function WorkItemListItem() {
 
   <FormHeader />
   <FormBody>
-    <FormSection labelName="General">
+    <FormSection label="General">
       <Field fieldName="name" />
       <Field fieldName="description" />
     </FormSection>
@@ -244,16 +244,16 @@ import { Action } from "@/components/actions/Action";
 import { CheckCircle, XCircle } from "lucide-react";
 
 // Form-scope actions are implicitly disabled in `create` mode — no need to
-// repeat `mode === "create"` in `disabled`. See actions/README.md.
-<ModelSideForm modelName="DesignWorkItem">
+// repeat `mode === "create"` in `disabled`. See [Actions](../actions).
+<ModelSideForm modelName="DesignActivity">
   <SideList filterField="id" searchable>
-    <WorkItemListItem />
+    <ActivityListItem />
   </SideList>
 
   <FormHeader />
   <FormToolbar>
     <Action
-      labelName="Approve"
+      label="Approve"
       icon={CheckCircle}
       operation="approve"
       placement="toolbar"
@@ -262,7 +262,7 @@ import { CheckCircle, XCircle } from "lucide-react";
       hidden={["status", "!=", "PENDING"]}
     />
     <Action
-      labelName="Reject"
+      label="Reject"
       icon={XCircle}
       operation="reject"
       placement="more"
@@ -273,7 +273,7 @@ import { CheckCircle, XCircle } from "lucide-react";
   </FormToolbar>
 
   <FormBody>
-    <FormSection labelName="General">
+    <FormSection label="General">
       <Field fieldName="name" />
       <Field fieldName="status" />
       <Field fieldName="description" />
@@ -296,17 +296,17 @@ import { CheckCircle, XCircle } from "lucide-react";
   <FormHeader />
   <FormToolbar />
   <FormBody>
-    <FormSection labelName="Basic Info">
+    <FormSection label="Basic Info">
       <Field fieldName="firstName" />
       <Field fieldName="lastName" />
       <Field fieldName="email" />
     </FormSection>
-    <FormSection labelName="Employment">
+    <FormSection label="Employment">
       <Field fieldName="departmentId" />
       <Field fieldName="positionId" />
       <Field fieldName="hireDate" />
     </FormSection>
-    <FormSection labelName="Custom Content">
+    <FormSection label="Custom Content">
       <MyCustomComponent />
     </FormSection>
   </FormBody>
@@ -330,29 +330,29 @@ import { ModelSideForm } from "@/components/views/side-form/ModelSideForm";
 import { fillRouteTemplate } from "@/navigation";
 import { useParams, useRouter } from "next/navigation";
 
-export default function WorkbenchDetailPage() {
+export default function DesignActivityDetailPage() {
   const router = useRouter();
-  const params = useParams<{ appId: string; workItemId: string }>();
+  const params = useParams<{ appId: string; activityId: string }>();
 
   return (
     <ModelSideForm
-      modelName="DesignWorkItem"
-      selectedRecordId={params.workItemId}
+      modelName="DesignActivity"
+      selectedRecordId={params.activityId}
       onSelectedRecordChange={(nextId) => {
         if (!nextId) {
-          router.push(fillRouteTemplate(routes.workbench, { appId: params.appId })!);
+          router.push(fillRouteTemplate(routes.designActivity, { appId: params.appId })!);
           return;
         }
         router.push(
-          fillRouteTemplate(routes.workbenchDetail, {
+          fillRouteTemplate(routes.designActivityDetail, {
             appId: params.appId,
-            workItemId: nextId,
+            activityId: nextId,
           })!,
         );
       }}
     >
-      <SideList modelName="DesignWorkItem" filterField="id" searchable remoteSearch>
-        <WorkItemListItem />
+      <SideList modelName="DesignActivity" filterField="id" searchable remoteSearch>
+        <ActivityListItem />
       </SideList>
 
       <FormHeader />
@@ -369,7 +369,7 @@ Notes:
 
 - The right-side form can open a record from the route even when the current side-panel query does not contain that id.
 - In that case, the side panel shows no highlighted row, but the form still loads the detail record via `getById`.
-- This is useful for browse/detail route pairs such as `/workbench` and `/workbench/[workItemId]`.
+- This is useful for browse/detail route pairs such as `/design-model` and `/design-activity/[id]`.
 
 ## Dirty State & Record Switching
 

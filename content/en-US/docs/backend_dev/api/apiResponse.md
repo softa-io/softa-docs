@@ -8,21 +8,22 @@ By default, ModelController uses `ConvertType.REFERENCE`.
 Default API return (`OptionReference`):
 1. `Option` -> `OptionReference` object:
 ```json
-{ "itemCode": "ACTIVE", "itemName": "Active", "itemColor": "green" }
+{ "itemCode": "ACTIVE", "label": "Active", "itemTone": "Success", "itemIcon": "" }
 ```
 
 2. `MultiOption` -> `List<OptionReference>`:
 ```json
 [
-  { "itemCode": "A", "itemName": "Tag A", "itemColor": "" },
-  { "itemCode": "B", "itemName": "Tag B", "itemColor": "" }
+  { "itemCode": "A", "label": "Tag A", "itemTone": "", "itemIcon": "" },
+  { "itemCode": "B", "label": "Tag B", "itemTone": "", "itemIcon": "" }
 ]
 ```
 
 3. `OptionReference` Fields:
 - `itemCode`: option item code.
-- `itemName`: option item display name.
-- `itemColor`: optional color string.
+- `label`: option item display label (localized).
+- `itemTone`: optional semantic tone (`Success` / `Warning` / `Error` / `Info` / `Neutral`).
+- `itemIcon`: optional icon name.
 
 ### File / MultiFile
 Default API return (`FileInfo`):
@@ -120,7 +121,7 @@ Notes:
 | `ORIGINAL` | Raw stored item code. | Raw stored string (comma-separated). |
 | `TYPE_CAST` | Item code string. | `List<String>` of item codes. |
 | `DISPLAY` | Item display name. | Comma-joined display names (string). |
-| `REFERENCE` | `OptionReference` (`itemCode`, `itemName`, `itemColor`). | `List<OptionReference>`. |
+| `REFERENCE` | `OptionReference` (`itemCode`, `label`, `itemTone`, `itemIcon`). | `List<OptionReference>`. |
 
 ### ManyToOne / OneToOne
 1. No SubQuery:

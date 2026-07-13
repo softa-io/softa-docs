@@ -71,8 +71,8 @@ import {
 import { RecordContextProvider } from "@/components/contexts/RecordContext";
 
 <RecordContextProvider record={data} metaModel={metaModel}>
-  <Field fieldName="name" />       {/* 展示为只读值 */}
-  <Field fieldName="status" />     {/* 展示为只读值 */}
+  <Field fieldName="name" />       {/* renders as display value */}
+  <Field fieldName="status" />     {/* renders as display value */}
 </RecordContextProvider>
 ```
 
@@ -84,7 +84,7 @@ import { RecordContextProvider } from "@/components/contexts/RecordContext";
 import { FieldDisplayScope } from "@/components/fields/display";
 
 <FieldDisplayScope>
-  <Field fieldName="status" />     {/* 虽在 ModelForm 内，仍以展示模式渲染 */}
+  <Field fieldName="status" />     {/* display mode despite being inside ModelForm */}
 </FieldDisplayScope>
 ```
 
@@ -108,7 +108,7 @@ function HeaderStatusBadge() {
 
 ### `Group`
 
-用于在同一行内横向组合多个 `Field` 的行内 flex 容器。内部 Field 的标签一律隐藏——请改用 `Group` 的 `labelName`。
+用于在同一行内横向组合多个 `Field` 的行内 flex 容器。内部 Field 的标签一律隐藏——请改用 `Group` 的 `label`。
 
 **位置：** `@/components/fields/composition`
 
@@ -116,7 +116,7 @@ function HeaderStatusBadge() {
 
 | Prop | 类型 | 必填 | 默认值 | 说明 |
 | ---- | ---- | ---- | ------ | ---- |
-| `labelName` | `string` | 否 | - | 渲染在行内组合上方的标签，替代各 Field 独立标签 |
+| `label` | `string` | 否 | - | 渲染在行内组合上方的标签，替代各 Field 独立标签 |
 | `separator` | `ReactNode` | 否 | - | 子节点之间的分隔符（如 `"-"`、`"·"`、`"/"`） |
 | `className` | `string` | 否 | - | flex 容器额外类名 |
 | `children` | `ReactNode` | 是 | - | 一般为 `Field` 元素 |
@@ -124,7 +124,7 @@ function HeaderStatusBadge() {
 #### 标签行为
 
 - **展示模式**（`FormHeader`、`SideCard` 等）：Field 仅渲染为值的 `<span>`，默认无标签。
-- **表单模式**（`FormBody` 内）：`Group` 会克隆子 `Field` 并设 `hideLabel={true}`。若提供 `labelName`，则在组合上方渲染单个 `FormLabel`。
+- **表单模式**（`FormBody` 内）：`Group` 会克隆子 `Field` 并设 `hideLabel={true}`。若提供 `label`，则在组合上方渲染单个 `FormLabel`。
 
 #### 示例
 
@@ -144,8 +144,8 @@ function HeaderStatusBadge() {
 ```tsx
 import { Group } from "@/components/fields/composition";
 
-<FormSection labelName="名称">
-  <Group labelName="姓名" separator="-">
+<FormSection label="Name">
+  <Group label="Full Name" separator="-">
     <Field fieldName="firstName" />
     <Field fieldName="lastName" />
   </Group>
@@ -213,17 +213,18 @@ function UserTableView() {
 | `placeholder`  | `string`                           | 否   | 字段级输入占位文案。优先于 `widgetProps.placeholder`。 |
 | `hideLabel`    | `boolean`                          | 否   | 隐藏整个标签区域。 |
 | `fullWidth`    | `boolean`                          | 否   | 文本类字段和关联字段的布局提示。 |
-| `labelName`    | `string`                           | 否   | 元数据标签覆盖。 |
+| `label`    | `string`                           | 否   | 元数据标签覆盖。 |
 | `required`     | `FieldCondition`                   | 否   | 动态必填控制。支持 `boolean`、`FilterCondition` 或 `dependsOn(...)`。 |
 | `readonly`     | `FieldCondition`                   | 否   | 动态只读控制。支持 `boolean`、`FilterCondition` 或 `dependsOn(...)`。 |
 | `hidden`       | `FieldCondition`                   | 否   | 动态可见性控制。隐藏字段不会渲染，同时会抑制其校验。 |
 | `defaultValue` | `unknown`                          | 否   | 仅创建态使用的默认值覆盖。优先级高于 `metaField.defaultValue` 和对话框 / 页面级 `defaultValues`。 |
 | `filters`      | `string \| FilterCondition`        | 否   | 过滤条件覆盖。用于关联查询，以及 `Option` / `MultiOption` 在客户端按 `itemCode` 过滤已加载的选项（再渲染）。`Field.filters` 会覆盖 `metaField.filters`。支持 JSON 字符串形式的元数据过滤条件以及 `{{ expr }}`（如 `{{ fieldName }}`）引用。 |
-| `filterBySource` | `boolean`                        | 否   | 为 true 时，在 `searchName` 等服务端搜索调用中附带 `SourceRecord` 快照（所属模型 + recordId + 当前表单值），供后端按调用表单上下文应用业务规则。默认 `false`；按调用点开启。详见 [关联字段 — filterBySource](./relations.md)。 |
+| `filterBySource` | `boolean`                        | 否   | 为 true 时，在 `searchName` 等服务端搜索调用中附带 `SourceRecord` 快照（所属模型 + recordId + 当前表单值），供后端按调用表单上下文应用业务规则。默认 `false`；按调用点开启。详见 [关联字段 — filterBySource](./relations)。 |
 | `onChange`     | `FieldOnChangeProp`                | 否   | 远程字段联动。支持简写 `string[]` 或 `{ update?, with? }`。 |
 | `tableView`    | `RelationTableView`                | 否   | `OneToMany` / `ManyToMany` 的关联表格视图。须为零 props 的组件，且渲染 `<RelationTable />`。详见 [关联字段](./relations)。 |
 | `formView`     | `RelationFormView`                 | 否   | 关联对话框 / 详情视图配置。详见 [关联字段](./relations)。 |
 | `isPaged`      | `boolean`                          | 否   | 为 `OneToMany` / `ManyToMany` 启用分页关联表格模式。详见 [关联字段](./relations)。 |
+| `dateOptions`  | `{ min?: DateBound; max?: DateBound }` | 否   | `Date` / `DateTime` 范围边界（两端均含）。每侧可为 `Date \| string \| "today" \| { fromField }`。详见 [Widgets — Date / DateTime range bounds](./widgets#date--datetime--range-bounds-dateoptions)。 |
 
 `FieldCondition`：
 
@@ -284,7 +285,7 @@ import { dependsOn, Field } from "@/components/fields";
 />
 
 <Field
-  fieldName="itemName"
+  fieldName="label"
   required={dependsOn(["active", "itemCode"], ({ values, isEditing }) =>
     !isEditing && values.active === true && values.itemCode !== "Temp"
   )}
@@ -299,7 +300,7 @@ import { dependsOn, Field } from "@/components/fields";
 import { dependsOn, Field } from "@/components/fields";
 
 <Field
-  fieldName="itemName"
+  fieldName="label"
   required={dependsOn(["active", "itemCode"], ({ values, isEditing }) =>
     !isEditing && values.active === true && values.itemCode !== "Temp"
   )}
@@ -399,11 +400,11 @@ type FieldOnChangeProp =
 常见示例：
 
 ```tsx
-<Field fieldName="itemCode" onChange={["itemName", "itemTone"]} />
+<Field fieldName="itemCode" onChange={["label", "itemTone"]} />
 
 <Field
   fieldName="itemCode"
-  onChange={{ update: ["itemName"], with: ["active"] }}
+  onChange={{ update: ["label"], with: ["active"] }}
 />
 
 <Field
@@ -460,11 +461,11 @@ POST /<modelName>/onChange/<fieldName>
 ```json
 {
   "values": {
-    "itemName": "Open",
+    "label": "Open",
     "itemTone": "Success"
   },
   "readonly": {
-    "itemName": true
+    "label": true
   },
   "required": {
     "itemTone": true
@@ -484,22 +485,22 @@ POST /<modelName>/onChange/<fieldName>
 - 在 `ModelForm` 中，`with: "all"` 使用当前表单的提交形态；已注册的顶层关联字段会序列化为关联 patch payload，而不是原始 UI 行
 - 在 `ModelTable` / `RelationTable` 内联编辑中，`values` 和 `with: "all"` 都只针对当前行，而不是整个表格或父表单
 
-## 级联字段路径（展示） {#cascaded-field-path-display}
+## 级联字段路径（展示）
 
 在 `fieldName` 中使用点号记法，可从关联记录（经 `ManyToOne` / `OneToOne`）读取字段并以只读展示 —— 无需手写 SubQuery、无需额外展示 widget、无需自研 hook。
 
 ```tsx
-{/* 在每条 AppEnv 卡片上渲染 DesignDeployment.deployStatus */}
-<Field fieldName="lastDeploymentId.deployStatus" widgetType="StatusIcon" />
+{/* Renders DesignActivity.status on each AppEnv card */}
+<Field fieldName="lastActivityId.status" widgetType="StatusIcon" />
 
-{/* 深度 3：AppEnv → Owner → Department.name */}
+{/* Depth 3: AppEnv → Owner → Department.name */}
 <Field fieldName="ownerId.departmentId.name" />
 ```
 
 行为：
 
 - 始终只读 —— 不向 react-hook-form 注册，不会出现在 `formState.dirtyFields`，不参与校验
-- 生效的 `metaField` 是**最深层**模型上的**叶子**字段（例如 `DesignDeployment.deployStatus`）；`fieldType` / `widgetType` / `optionSetCode` / `labelName` 均来自叶子，`<Field>` 上的 props（`label` / `widgetType` / `hideLabel` / `className`）照常覆盖
+- 生效的 `metaField` 是**最深层**模型上的**叶子**字段（例如 `DesignActivity.status`）；`fieldType` / `widgetType` / `optionSetCode` / `label` 均来自叶子，`<Field>` 上的 props（`label` / `widgetType` / `hideLabel` / `className`）照常覆盖
 - 支持于 `ModelForm`、`ModelSideForm`、`ModelTable`、`ModelBoard`、`ModelCard` —— 宿主遍历器自动将匹配的 SubQuery 折叠进数据请求，`CascadedResolutionsProvider` 为每条路径注入叶子元数据
 - 中间为 `null` 时按叶子类型的空占位渲染（与普通 null 字段一致），不为「已删除引用」单独渲染墓碑
 - 路径仅穿越 `*-to-One` 关联；路径中出现 OneToMany / ManyToMany 会被后端拒绝（`TRAVERSE_TO_MANY`），字段回退为 `"-"` 占位 + 开发态 `console.error`
@@ -512,12 +513,12 @@ import { getValueAtPath } from "@/utils/object-path";
 
 function HealthDot() {
   const { record } = useRecordContext();
-  const deployStatus = getValueAtPath(record, "lastDeploymentId.deployStatus");
-  // ... 根据 deployStatus 派生 UI
+  const status = getValueAtPath(record, "lastActivityId.status");
+  // ...derive UI from status
 }
 ```
 
-在宿主视图 JSX 某处声明 `<Field fieldName="lastDeploymentId.deployStatus">` 才会向遍历器注册路径以便折叠 SubQuery —— `getValueAtPath` 只是对嵌套对象结果的类型化访问。
+在宿主视图 JSX 某处声明 `<Field fieldName="lastActivityId.status">` 才会向遍历器注册路径以便折叠 SubQuery —— `getValueAtPath` 只是对嵌套对象结果的类型化访问。
 
 限制：
 
@@ -611,7 +612,7 @@ companyId.cascadedField = "employeeId.department.companyId";
 <Field fieldName="active" />
 <Field fieldName="active" widgetType="CheckBox" />
 <Field fieldName="status" widgetType="Radio" />
-<Field fieldName="status" />            // 只读上下文 → 自动 Badge / 文本
+<Field fieldName="status" />            // read-only context → auto Badge / text
 <Field fieldName="status" widgetType="StatusIcon" />
 ```
 
@@ -631,6 +632,19 @@ companyId.cascadedField = "employeeId.department.companyId";
 <Field fieldName="period" widgetType="yyyy-MM" />
 <Field fieldName="startTime" widgetType="HH:mm" />
 ```
+
+范围边界 —— `Date` 与 `DateTime` 字段接受 `dateOptions={{ min, max }}` prop（两端均含）。每侧可为 `Date | string | "today" | { fromField: string }`，因此绝对边界、相对今天边界与跨字段边界使用同一形态：
+
+```tsx
+<Field fieldName="plannedHireDate" dateOptions={{ min: "today" }} />
+<Field fieldName="dateOfBirth" dateOptions={{ max: "today" }} />
+<Field
+  fieldName="terminationDate"
+  dateOptions={{ min: { fromField: "hireDate" } }}
+/>
+```
+
+完整的 `DateBound` 语义与 `DateTime` 粒度行为请见 [Widgets — Date / DateTime range bounds](./widgets#date--datetime--range-bounds-dateoptions)。
 
 ### 引用类型
 

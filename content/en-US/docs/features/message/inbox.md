@@ -1,57 +1,30 @@
-
 ## Inbox
 
 ### Core Logic
 
 - Inbox is used for in-app communication rather than external channel delivery
 - `InboxNotification` is read-only information sent to users
-- `InboxTodo` is an actionable work item that can be completed, rejected, or expired
-- `flow-starter` can create todos during approval or review steps
+- `flow-starter` pushes notifications during approval or review steps
 
 ### Inbox Notifications
 
-Use `InboxService` to push read-only notifications to users:
+Use `MessageService` to submit read-only notifications. Query/read operations
+remain on `InboxNotificationService` because they are not message submission:
 
 ```java
 @Autowired
-private InboxService inboxService;
-
-inboxService.notify(userId, "Order shipped", "Your order #1234 has been dispatched.");
-inboxService.notify(List.of(userId1, userId2), "System update", "Scheduled maintenance tonight.");
-
-int unread = inboxService.countUnread(userId);
-inboxService.markAsRead(notificationId);
-inboxService.markAsRead(List.of(id1, id2, id3));
-```
-
-### Inbox Todos
-
-Use todos for approvals, reviews, and pending business actions:
-
-```java
+private MessageService messageService;
 @Autowired
-private InboxService inboxService;
+private InboxNotificationService inboxNotificationService;
 
-InboxTodo todo = inboxService.createTodo(
-    approverId,
-    "Approve leave request",
-    "Employee Alice has requested 3 days of annual leave.",
-    "FLOW_INSTANCE", flowInstanceId,
-    "/flow/approval/" + flowInstanceId
-);
+SendInboxDTO notification = new SendInboxDTO();
+notification.setRecipientId(userId);
+notification.setTitle("Order shipped");
+notification.setContent("Your order #1234 has been dispatched.");
+Long notificationId = messageService.sendInbox(notification);
 
-inboxService.completeTodo(todoId);
-inboxService.rejectTodo(todoId);
-
-int pending = inboxService.countPendingTodos(assigneeId);
+int unread = inboxNotificationService.countUnread(userId);
+inboxNotificationService.markAsRead(notificationId);
+inboxNotificationService.markAllAsRead(userId);
 ```
 
-### Inbox Status Reference
-
-#### InboxTodo
-
-```text
-PENDING -> DONE
-PENDING -> REJECTED
-PENDING -> EXPIRED
-```

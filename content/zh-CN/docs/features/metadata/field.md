@@ -1,77 +1,79 @@
 # 字段元数据
 
-> **参见**：在 Java 实体类字段上通过注解声明这些属性，见 [`@Field` 注解](../../backend_dev/model_dev/annotation#field--sysfield)。
+> **另见**：若要通过 Java 实体字段上的注解声明这些属性，请参阅 [`@Field` 注解](../../backend_dev/model_dev/annotation#field--sysfield)。
 
-字段元数据是模型字段的描述信息的集合，它定义了该模型在业务场景中用到的各种字段，以及每个字段的类型、长度、默认值、必填、只读、关联关系等等。借助这些元数据，Softa 能够以一致的方式处理数据响应、处理与交互，并抽象通用需求，确保数据的一致性、准确性和完整性。
+字段元数据是关于模型字段的描述信息集合。它定义模型在业务场景中使用的字段，以及类型、长度、默认值、必填/只读约束、关联等。借助此元数据，Softa 可以一致地处理数据响应、处理与交互，并抽象通用需求以确保数据一致性、准确性与完整性。
 
-## 1、字段类型介绍
+## 1. 字段类型概览
 
-| 序号 | 类型 | 类型名称 | 默认值 | 描述 |
+| 序号 | 类型 | 类型名称 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| 1 | String | 字符串 | "" | 通过 `length` 配置字符串长度。|
-| 2 | Integer | 整数 | 0 | 通过 `length` 配置整数位数。|
-| 3 | Long | 长整数 | 0L |  |
-| 4 | Double | 小数 | 0.00 | 普通小数，用于可接受精度损失的计算场景。|
-| 5 | BigDecimal | 精确小数 | "0" | 用于金额、货币、汇率等高精度计算场景。 |
-| 6 | Boolean | 布尔字段 | false |  |
-| 7 | Date | 日期字段 |  | 格式 `yyyy-MM-dd`，如 `2026-02-01` |
-| 8 | DateTime | 日期时间 |  | 格式 `yyyy-MM-dd HH:mm:ss`，如 `2026-02-01 12:15:20` |
-| 9 | Option | 单选字段 |  |  |
-| 10 | MultiOption | 多选字段 | [] |  |
+| 1 | String | String | "" | 通过 `length` 配置最大字符串长度。 |
+| 2 | Integer | Integer | 0 | 通过 `length` 配置整数位数。 |
+| 3 | Long | Long | 0L |  |
+| 4 | Double | Double | 0.00 | 通用小数（可接受精度损失）。 |
+| 5 | BigDecimal | BigDecimal | "0" | 高精度小数（金额/货币/汇率等）。 |
+| 6 | Boolean | Boolean | false |  |
+| 7 | Date | Date |  | 格式 `yyyy-MM-dd`，如 `2026-02-01`。 |
+| 8 | DateTime | DateTime |  | 格式 `yyyy-MM-dd HH:mm:ss`，如 `2026-02-01 12:15:20`。 |
+| 9 | Option | 单选 |  |  |
+| 10 | MultiOption | 多选 | [] |  |
 | 11 | MultiString | 字符串列表 | [] |  |
-| 12 | File | 单个文件 |  | 虚拟字段，上传并绑定一个文件 |
-| 13 | MultiFile | 多个文件 |  | 虚拟字段，上传并绑定多个文件 |
-| 14 | JSON | JSON |  | JSON字符串存储 |
-| 15 | Filters | 筛选条件 |  | 存储中缀表达式筛选条件 |
-| 16 | Orders | 排序条件 |  | 存储多字段排序条件 |
-| 17 | OneToOne | 一对一 |  | 配置 `relatedModel` |
-| 18 | ManyToOne | 多对一 |  | 配置 `relatedModel` |
-| 19 | OneToMany | 一对多 |  | 虚拟字段，配置 `relatedModel` + `relatedField` |
-| 20 | ManyToMany | 多对多 |  | 虚拟字段，配置 `relatedModel` + `joinModel` + `joinLeft` + `joinRight`|
+| 12 | File | 单文件 |  | 虚拟字段：上传并绑定文件。 |
+| 13 | MultiFile | 多文件 |  | 虚拟字段：上传并绑定多个文件。 |
+| 14 | JSON | JSON |  | 以 JSON 字符串存储。 |
+| 15 | Filters | Filters |  | 存储过滤条件（中缀表达式）。 |
+| 16 | Orders | Orders |  | 存储多字段排序条件。 |
+| 17 | OneToOne | 一对一 |  | 配置 `relatedModel`。 |
+| 18 | ManyToOne | 多对一 |  | 配置 `relatedModel`。 |
+| 19 | OneToMany | 一对多 |  | 虚拟字段：配置 `relatedModel` + `relatedField`。 |
+| 20 | ManyToMany | 多对多 |  | 虚拟字段：配置 `relatedModel` + `joinModel` + `joinLeft` + `joinRight`。 |
 
-> 备注：
-	1. OneToOne、ManyToOne、OneToMany、ManyToMany 字段涉及到的外键为逻辑外键，非数据库物理外键。
-	2. 虚拟字段，在当前数据表中并不存在，操作虚拟字段时，框架自动进行相关处理。
+> 说明：
+> 1. 对于 OneToOne/ManyToOne/OneToMany/ManyToMany，外键为**逻辑**外键，非物理数据库外键。
+> 2. 虚拟字段在当前表中不存在列。操作虚拟字段时，框架自动处理相关逻辑。
 
-**需要补充说明的字段类型如下：**
+**需要额外说明的字段类型：**
 
-### 1.1 `Date` 日期
+### 1.1 `Date`
 
-代码中为 `LocalDate` 对象，展示格式为 `yyyy-MM-dd` ，如 `2026-02-01` 。
+在代码中为 `LocalDate` 对象。显示格式为 `yyyy-MM-dd`，如 `2026-02-01`。
 
-### 1.2 `DateTime` 日期时间
+### 1.2 `DateTime`
 
-适用于精确到秒的日期时间类型，代码中为 `LocalDateTime` 对象，数据库中存储为时间戳，展示格式为 `yyyy-MM-dd HH:mm:ss` ，如 `2026-02-01 12:15:20` 。
+精确到秒的日期时间类型。在代码中为 `LocalDateTime` 对象。在数据库中以 timestamp 存储。显示格式为 `yyyy-MM-dd HH:mm:ss`，如 `2026-02-01 12:15:20`。
 
-### 1.3 `Option` 单选
+### 1.3 `Option`
 
-单选字段，必须配置 `optionCode` 属性（选项集编码）。
+单选字段。必须配置 `optionSetCode` 属性（选项集编码）。注解声明的实体从枚举类型自动派生。
 
-在保存单选字段的值时，实际传递和存储的是选项条目的编码。
+保存单选字段时，传入并存储的是选项条目编码。
 
-API 获取单选字段的值时，默认返回 `[itemCode, itemName]` 格式，也即同时返回条目的编码和名称。
+通过 API 获取单选字段时，默认响应为 `OptionReference` 对象（`itemCode` + `label`，以及可选的 `itemTone` / `itemIcon`）。
 
-选项集的配置和使用，具体参考 [选项集](option) 章节
+选项集配置与用法见 [选项集](option) 章节。
 
-### 1.4 `MultiOption` 多选
+### 1.4 `MultiOption`
 
-多选字段跟单选字段的区别是，多选字段允许从同一个选项集中，选择多个选项，保存时传递选项的编码字符串列表，并在数据库中存储的多个选项条目的编码，使用 `,` 间隔。
+多选字段允许从同一选项集中选择多个选项。保存时传入选项条目编码列表，数据库以 `,` 分隔存储编码。
 
-API 读取多选字段的值时，默认返回 `[[itemCode, itemName], ... ]` 格式，也即多个选项的编码和名称。
+通过 API 读取多选字段时，默认响应为 `OptionReference` 对象列表（`[{itemCode, label, ...}, ...]`）。
 
-### 1.5 `MultiString` 字符串列表
+### 1.5 `MultiString`
 
-适用于通过单字段存储多个字符串值，程序中处理字符串列表对象，在数据库中使用 `,` 间隔存储。
+用于在单个字段中存储多个字符串值。在代码中作为字符串列表处理；在数据库中以 `,` 分隔存储。
 
-### 1.6 `File` File 字段
-该字段类型，用于上传和绑定一个文件。文件自动存储在 FileRecord 模型。
+### 1.6 `File`
 
-### 1.7 `MultiFile` MultiFile 字段
-该字段类型，用于上传和绑定多个文件。文件自动存储在 FileRecord 模型。
+用于上传并绑定单个文件。文件自动存储在 `FileRecord` 模型中。
 
-### 1.8 `JSON` JSON 字段
+### 1.7 `MultiFile`
 
-JSON 格式字段，一般仅用于 JSON 数据存储和对象转换。需要针对 JSON 数据进行索引和条件查询时，需要手工处理。
+用于上传并绑定多个文件。文件自动存储在 `FileRecord` 模型中。
+
+### 1.8 `JSON`
+
+通常仅用于 JSON 存储与对象转换。若需对 JSON 数据索引或条件查询，须手动处理。
 
 ### 1.9 `Filters`
 
@@ -81,20 +83,21 @@ JSON 格式字段，一般仅用于 JSON 数据存储和对象转换。需要针
 
 仅用于存储 `Orders` 对象的 JSON 字符串。
 
-### 1.11 `OneToOne` 一对一
+### 1.11 `OneToOne`
 
-关系型字段，需配置 `relatedModel` 和 `relatedField` 属性。选择的数据具有唯一性。
+关联字段。配置 `relatedModel` 和 `relatedField`。所选数据唯一。可选配置 `onDelete`，声明被引用行删除时的 FK 策略（见 [`onDelete`](#224-ondelete)）。
 
-### 1.12 `ManyToOne`  多对一
+### 1.12 `ManyToOne`
 
-关系型字段，需配置 `relatedModel` 和 `relatedField` 属性。
+关联字段。配置 `relatedModel` 和 `relatedField`。可选配置 `onDelete`，声明被引用行删除时的 FK 策略（见 [`onDelete`](#224-ondelete)）。
 
-### 1.13 `OneToMany` 一对多
+### 1.13 `OneToMany`
 
-大多数情况下，针对单条记录的 OneToMany 数据，由客户端通过调用 Many 端模型的 API 进行创建、更新或删除。
+多数情况下，OneToMany 数据在客户端通过对单条记录调用 Many 侧模型 API 进行创建、更新或删除。
 
-1. **全量提交**：`[{row1}, {row2}]`，当字段值为 `[]` 时，清空历史记录。
-2. **增量提交**，以 `PatchType` 为 Key：
+1. **全量提交**：`[{row1}, {row2}]`。更新 API 中字段值为 `[]` 时，清除所有关联记录。
+2. **补丁提交**，以 `PatchType` 为键：
+
 ```json
 {
   "Create": [{ "name": "new row" }],
@@ -102,234 +105,268 @@ JSON 格式字段，一般仅用于 JSON 数据存储和对象转换。需要针
   "Delete": [102, 103]
 }
 ```
-更多详情见 [API 数据提交](../../backend_dev/api/apiSubmit.md)。
 
-3. **接口响应**：OneToMany 字段的返回形态取决于 `QueryParams.fields`、`QueryParams.subQueries` 与 `ConvertType`。详见 [API 响应](../../backend_dev/api/apiResponse.md) 中的 OneToMany 小节。
+更多细节请参阅 [API 提交](../../backend_dev/api/apiSubmit.md)。
 
-备注：
-- `OneToMany` 是虚拟字段，依据关联模型的逻辑外键查询并绑定数据，字段本身没有物理数据库列。
+3. **API 响应**：OneToMany 字段的返回形态取决于 `QueryParams.fields`、`QueryParams.subQueries` 和 `ConvertType`。见 [API 响应](../../backend_dev/api/apiResponse.md) 中的 OneToMany 章节。
 
-### 1.14 `ManyToMany` 多对多
+说明：
+- `OneToMany` 为虚拟字段。根据关联模型的逻辑外键查询并绑定数据，字段本身无物理数据库列。
 
-1. **全量提交**：`[id1, id2, id3]`。框架会计算差集，并相应创建或删除连接（中间）表行。
-2. **增量提交**，以 `PatchType` 为 Key：
+
+### 1.14 `ManyToMany`
+
+1. **全量提交**：`[id1, id2, id3]`。框架计算 diff 并相应创建或删除连接（中间）表行。
+2. **补丁提交**，以 `PatchType` 为键：
+
 ```json
 {
   "Add": [1, 2, 3],
   "Remove": [4, 5]
 }
 ```
-更多详情见 [API 数据提交](../../backend_dev/api/apiSubmit.md)。
 
-3. **ManyToMany 级联搜索**：典型用法是按连接表字段上的条件筛选当前表记录（例如「在某个时间段内被分配过指定角色的用户」）。参见 [查询条件](../../backend_dev/api/apiQuery.md) 一节。
+更多细节请参阅 [API 提交](../../backend_dev/api/apiSubmit.md)。
 
-4. **接口响应**：ManyToMany 字段的返回形态（`List<ModelReference>` 或 `List<Row Map>`）由 `QueryParams.fields`、`QueryParams.subQueries` 与 `ConvertType` 决定。详见 [API 响应](../../backend_dev/api/apiResponse.md) 中的 ManyToMany 小节。
+3. **ManyToMany 级联搜索**：用例——按连接表字段条件过滤当前表记录（如「在某时间范围内被分配某角色的用户」）。见 [查询条件](../../backend_dev/api/apiQuery.md) 章节。
 
-备注：
-- `ManyToMany` 也是虚拟字段，依据 JoinModel 中的逻辑外键查询并绑定数据，字段本身没有物理数据库列。
+4. **API 响应**：ManyToMany 字段的返回形态（`List<ModelReference>` 或 `List<Row Map>`）由 `QueryParams.fields`、`QueryParams.subQueries` 和 `ConvertType` 决定。见 [API 响应](../../backend_dev/api/apiResponse.md) 中的 ManyToMany 章节。
 
-## 2、字段元数据属性
+说明：
+- `ManyToMany` 亦为虚拟字段。根据 JoinModel 中的逻辑外键查询并绑定数据，字段本身无物理数据库列。
 
-| 序号 | 字段信息 | 数据类型 | 描述 | 备注 |
+
+## 2. 字段元数据属性
+
+| 序号 | 属性 | 数据类型 | 说明 | 备注 |
 | --- | --- | --- | --- | --- |
-| 1 | labelName | String | 字段标签 |  |
+| 1 | label | String | 字段标签 |  |
 | 2 | modelName | String | 模型名 |  |
 | 3 | fieldName | String | 字段名 |  |
-| 4 | fieldType | Option | 字段类型 |  |
-| 5 | optionCode | String | 选项集编码 |  |
-| 6 | defaultValue | String | 字段默认值 |  |
-| 7 | length | Integer | 字段长度 |  |
-| 8 | scale | Integer | 小数位数 |  |
-| 9 | required | Boolean | 必填字段，默认 `false` |  |
-| 10 | readonly | Boolean | 只读字段，默认 `false` |  |
-| 11 | hidden | Boolean | 是否隐藏，默认 `false` |  |
-| 12 | copyable | Boolean | 可复制字段，默认 `true` |  |
-| 13 | searchable | Boolean | 可搜索字段，默认 `true` |  |
-| 14 | dynamic | Boolean | 动态字段，默认 `false` |  |
-| 15 | translatable | Boolean | 可翻译字段，默认 `false` |  |
-| 16 | encrypted | Boolean | 加密字段，默认 `false` |  |
-| 17 | maskingType | Option | 脱敏类型 |  |
-| 18 | computed | Boolean | 计算型字段，默认 `false` |  |
-| 19 | expression | String | 计算表达式 |  |
-| 20 | cascadedField | String | 级联字段 | 关系属性 |
-| 21 | relatedModel | String | 关联模型 | 关系属性 |
-| 22 | relatedField | String | 关联字段 | OneToMany 的 Many 端字段名 |
-| 23 | joinModel | String | ManyToMany 连接模型 | 中间模型 |
-| 24 | joinLeft | String | 连接模型左侧字段名 | 存储左侧模型外键 |
-| 25 | joinRight | String | 连接模型右侧字段名 | 存储右侧模型外键 |
-| 26 | filters | String | 关系型字段过滤条件 | 关系属性 |
-| 27 | columnName | String | 数据表列名 | 只读 |
-| 28 | description | String | 字段描述 |  |
+| 4 | renamedFrom | String | 重命名时紧邻的前一个字段名 | 单步，无链 |
+| 5 | fieldType | Option | 字段类型 |  |
+| 6 | optionSetCode | String | 选项集编码 | 注解实体从枚举类型派生 |
+| 7 | defaultValue | String | 默认值 |  |
+| 8 | length | Integer | 字段长度 |  |
+| 9 | scale | Integer | 小数位数 |  |
+| 10 | required | Boolean | 必填，默认 `false` |  |
+| 11 | readonly | Boolean | 只读，默认 `false` |  |
+| 12 | hidden | Boolean | 隐藏，默认 `false` | 仅 UI 标志，通过 Studio 设置 |
+| 13 | copyable | Boolean | 可复制，默认 `true` | `false` ⇒ `copyById` 不携带该值 |
+| 14 | unsearchable | Boolean | 排除在默认搜索外，默认 `false` |  |
+| 15 | dynamic | Boolean | 动态，默认 `false` |  |
+| 16 | translatable | Boolean | 可翻译，默认 `false` |  |
+| 17 | encrypted | Boolean | 加密，默认 `false` |  |
+| 18 | maskingType | Option | 脱敏类型 |  |
+| 19 | computed | Boolean | 计算，默认 `false` |  |
+| 20 | expression | String | 计算表达式 |  |
+| 21 | cascadedField | String | 级联字段 | 关联属性 |
+| 22 | relatedModel | String | 关联模型 | 关联属性 |
+| 23 | relatedField | String | 关联字段 | OneToMany：Many 侧字段名；TO_ONE 仅 join `id` |
+| 24 | relatedFieldType | Option | TO_ONE FK 列的物理类型 | 系统计算，从被引用模型的 `id` 镜像 |
+| 25 | onDelete | Option | TO_ONE FK 删除策略（`RESTRICT` / `CASCADE` / `SET_NULL`） | 未设置 = KEEP；见 [§2.24](#224-ondelete) |
+| 26 | joinModel | String | 连接模型（ManyToMany） | 中间模型 |
+| 27 | joinLeft | String | 连接模型左侧字段 | 存储左模型 FK |
+| 28 | joinRight | String | 连接模型右侧字段 | 存储右模型 FK |
+| 29 | filters | String | 关联字段过滤条件 | 关联属性 |
+| 30 | widgetType | Option | 首选 UI 组件 |  |
+| 31 | columnName | String | 表列名 | 只读 |
+| 32 | description | String | 字段描述 |  |
 
-### 2.1 `labelName` 字段标签
+### 2.1 `label`
 
-字段的标签名称，也即字段的语义化名称，通常作为显示在列表页表头或表单页的字段名称。如 `联系电话` 。
+字段的标签（语义）名。通常在列表页显示为列标题，或在表单显示为字段标签，如 `Contact Number`。
 
-### 2.2 `modelName` 模型名
+### 2.2 `modelName`
 
-字段所属的模型名，这里的模型名是指模型的技术名称，如 `ProductCategory` 。
+字段所属模型（技术模型名），如 `ProductCategory`。
 
-### 2.3 `fieldName` 字段名
+### 2.3 `fieldName`
 
-字段的技术名称，使用小驼峰命名，对应实体类中的属性名，如 `unitPrice`。
+字段的技术名（lower camelCase），对应实体类中的属性名，如 `unitPrice`。
 
-查询前，Softa 会按存储类型将字段名转换为下划线命名，例如 `unit_price`。
+查询前，Softa 根据存储类型将字段名转换为下划线命名，如 `unit_price`。
 
-### 2.4 `fieldType` 字段类型
+### 2.4 `fieldType`
 
-系统预置的字段类型，包括字符串文本、多种数值类型、日期类型、选项集类型、JSON 类型，以及多种关系类型等，详见 `字段类型 FieldType` 小结。
+内置类型集中的字段类型，包括字符串、数值、日期时间、选项集、JSON 和关联类型。详见上文字段类型章节。
 
-### 2.5 `optionCode` 选项集编码
+### 2.5 `optionSetCode`
 
-选项集一般应用于选项相对固定、选项数量有限，但又需要支持扩展的的业务场景。在 Softa 中，所有的选项信息存储在 `选项集模型`和 `选项集条目模型` 中。
+选项集适用于选项相对稳定、数量有限但需可扩展的业务场景。在 Softa 中，选项信息存储在 `OptionSet` 模型和 `OptionItem` 模型中。
 
-当字段类型为 `单选` 或 `多选` 时，需要配置字段的 `optionCode` 选项集编码属性。
+当字段类型为 `Option` 或 `MultiOption` 时，必须配置 `optionSetCode`。
 
-### 2.6 `defaultValue` 字段默认值
+### 2.6 `defaultValue`
 
-默认值配置。创建新记录时，若该字段未被赋值，将使用默认值。
+默认值配置。创建新记录时，若未赋值字段，将使用默认值。
 
-创建（Create）时的赋值逻辑：
+Create 中的默认值赋值逻辑：
 
-1. 若字段已有值（非 `NULL`），Softa 使用当前值，不再应用默认值。对文本字段，空字符串 `""` 视为已有值；对数值字段，`0` 也视为已有值。
-2. 若字段未被赋值，Softa 优先使用 `defaultValue`。
+1. 若字段已有值（非 `NULL`），Softa 使用当前值，不应用默认值。文本字段中空字符串 `""` 视为有值；数值字段中 `0` 亦视为有值。
+2. 若未赋值，Softa 优先使用 `defaultValue`。
 3. 若未配置 `defaultValue`，Softa 使用该字段类型的全局默认值（见上文字段类型）。
 
-### 2.7 `length` 字段长度
+### 2.7 `length`
 
-字段的长度，对应于字符串类型的字符长度，以及整数类型、高精度数值类型的数字位数。
+字段长度：字符串字符长度、整数位数，以及高精度数值类型的位数。
 
-### 2.8 `scale` 小数位数
+### 2.8 `scale`
 
-浮点数类型、高精度数值类型的小数位数，默认小数位数为 2 位。
+浮点和高精度数值类型的小数位数。默认为 2。
 
-### 2.9 `required` 必填字段
+### 2.9 `required`
 
-必填校验。Softa 在应用层校验必填字段，不依赖数据库。
+必填字段校验。Softa 在应用层校验必填字段，不依赖数据库。
 
-创建或更新数据时会检查 `required` 属性。这与数据库 `NOT NULL` 不同：数据库列可有默认值，从应用视角未必「必填」。Softa 的 `required` 更严格：
+创建或更新数据时，Softa 检查 `required` 属性。这与数据库 `NOT NULL` 约束不同：数据库 `NOT NULL` 列可能有默认值，因此从应用视角可能并非「必填」。Softa 的 `required` 更严格：
 
-- `required=true` 时，创建必须提供值，且不得为空（含不允许空字符串）。
-- 更新该字段时，不能设为 null/空。
+- 当 `required=true` 时，创建时必须提供值，且值不能为空（包括不允许空字符串）。
+- 更新字段时，不能设为 null/空。
 
-### 2.10 `readonly` 只读字段
+### 2.10 `readonly`
 
-是否允许客户端更新该字段。`readonly=true` 时，客户端/API 不能赋值或更新该字段，仅允许服务端更新（例如计算字段或自动填充字段）。客户端创建/更新会校验该属性；尝试赋值将报错。
+客户端是否允许更新此字段。若 `readonly=true`，客户端/API 不能赋值或更新该字段；仅允许服务端更新（如计算字段或自动填充字段）。客户端创建/更新会校验此属性；尝试赋值将报错。
 
-审计字段 `createdId`、`createdTime`、`updatedId`、`updatedTime` 由系统自动维护，默认 `readonly=true`。
+审计字段 `createdId`、`createdTime`、`updatedId`、`updatedTime` 自动维护，默认 `readonly=true`。
 
-### 2.11 `hidden` 是否隐藏
+### 2.11 `hidden`
 
-是否在客户端默认隐藏该字段，默认为 `false` ，即不隐藏。
+字段在客户端是否默认隐藏。默认为 `false`。
 
-### 2.12 `copyable` 可复制字段
+### 2.12 `copyable`
 
-在客户端对数据进行复制时，是否复制当前字段的数据，默认为 `true` ，即所有字段都是可复制的，主键 `id` 字段除外。
+客户端复制数据时是否复制该字段。默认为 `true`。除主键 `id` 外所有字段可复制。
 
-### 2.13 `searchable` 可搜索字段
+### 2.13 `searchable`
 
-在通用搜索场景中，该字段是否可以作为查询条件。默认为  `true` ，即所有字段都是可搜索的。
+字段是否可作为一般搜索的查询条件。默认为 `true`。
 
-### 2.14 `dynamic` 动态字段
+### 2.14 `dynamic`
 
-是否为动态字段，默认 `false`。
+字段是否动态。默认为 `false`。
 
-`dynamic=true` 时，字段值在运行时动态计算，典型包括动态计算字段与动态级联字段。
+当 `dynamic=true` 时，字段值动态计算。典型情况包括动态计算字段和动态级联字段。
 
-运行时系统会自动计算动态字段的值，该字段在数据库中没有物理列。
+运行时，系统自动计算动态字段值，该字段在数据库中无物理列。
 
-动态字段的值通常表示最新计算结果。使用动态计算字段时，需审慎评估场景及对客户端性能的影响。
+动态字段的值通常表示最新计算结果。使用动态计算字段时，应仔细考虑场景是否合适及对客户端性能的潜在影响。
 
-### 2.15 `translatable` 可翻译字段
+### 2.15 `translatable`
 
-在数据多语言场景中，表示当前字段的值是否可翻译，`translatable=true` 表示当前字段是多语言字段。默认为 `false` 。
+在多语言数据场景中，`translatable=true` 表示字段值可翻译（多语言字段）。默认为 `false`。
 
-### 2.16 `encrypted` 加密字段
+### 2.16 `encrypted`
 
-该字段是否为加密字段，默认使用 AES256 加密。
+字段是否加密。Softa 默认使用 AES256。
 
-### 2.17 `maskingType` 脱敏类型
+### 2.17 `maskingType`
 
-字段含敏感数据时，配置脱敏类型（手机号、姓名、证件号、银行卡号等）。
+当字段含敏感数据时，配置脱敏类型（电话号码、姓名、身份证号、银行卡号等）。
 
-客户端经 API 取数时，Softa 会自动对字段脱敏；可将全部或部分值替换为 `****`。
+客户端通过 API 获取数据时，Softa 自动脱敏字段值。脱敏可将全部或部分值替换为 `****`。
 
-脱敏不影响服务端计算字段或级联字段：计算字段可依赖脱敏字段，计算字段本身也可被脱敏。
+脱敏字段不影响服务端计算字段或级联字段。计算字段可依赖脱敏字段，计算字段本身也可脱敏。
 
-客户端可调用 `getUnmaskedField` API 获取指定字段的明文；服务端会记录访问日志。
+客户端可使用 `getUnmaskedField` API 获取特定字段的敏感值；服务端在此过程中记录访问日志。
 
-- `All` : 全部脱敏，全部替换为  `****` 。
-- `Name`：名称脱敏，保留首尾各 1 个字符，当名称只有 2 个字符时，保留最后 1 个字符。
-- `Email` ：邮箱脱敏，保留前 4 位字符。
-- `PhoneNumber` ：电话号码脱敏，对后 4 位字符进行脱敏。
-- `IdNumber`：证件号脱敏，保留首尾各 4 位字符。
-- `CardNumber`：卡号码脱敏，保留末尾 4 位字符。
+- `All`：脱敏所有字符（替换为 `****`）。
+- `Name`：保留首尾字符；姓名仅 2 字时保留末字。
+- `Email`：保留前 4 个字符。
+- `PhoneNumber`：脱敏末 4 位。
+- `IdNumber`：保留首尾各 4 位。
+- `CardNumber`：保留末 4 位。
 
-### 2.18 `computed` 计算型字段
+### 2.18 `computed`
 
-是否为计算字段。计算字段可配置表达式，并依赖当前模型的其他字段。
+字段是否计算。计算字段可配置表达式，并可依赖当前模型的其他字段。
 
-目前出于性能考虑，单个表达式不支持跨模型引用字段；若需要，可在 Flow 编排中读取其他模型的字段并参与计算。
+目前出于性能考虑，单个表达式不支持跨模型字段引用。若需要，可在 Flow 编排中读取跨模型字段值并纳入计算。
 
-- `dynamic=false` 的计算字段：依赖字段变化时，Softa 会自动触发重算。
-- `dynamic=true` 的计算字段：结果不落库，读取时再求值表达式。
+- 对于 `dynamic=false` 的计算字段，依赖字段变更时 Softa 自动触发重算。
+- 对于 `dynamic=true` 的计算字段，计算结果不存储。Softa 在读取时求值表达式。
 
-### 2.19 `expression` 计算表达式
+### 2.19 `expression`
 
-计算表达式。可引用当前模型的其他字段，并进行算术、字符串函数、日期函数等常用运算。
+计算表达式。可引用当前模型的其他字段，并使用算术运算、字符串函数、日期函数及其他常用工具函数。
 
-数值类型采用高精度计算以避免精度损失：计算过程保留 16 位小数，最后使用**银行家舍入**。由于数值字段的 `scale` 通常 \(\le 16\)，不会影响字段自身的精度控制。
+对于数值类型，Softa 使用高精度计算以避免精度损失：计算期间保留 16 位小数，最后应用**银行家舍入**。由于数值字段的 `scale` 通常 \(\le 16\)，这不影响字段自身的精度控制。
 
 Softa 使用 **[AviatorScript](https://github.com/killme2008/aviatorscript)** 作为表达式引擎，并在安全沙箱模式下运行。
 
-### 2.20 `cascadedField` 级联字段
+### 2.20 `cascadedField`
 
-级联字段通过 OneToOne/ManyToOne 从关联模型读取字段值。格式为点号分隔：左侧为当前模型上 OneToOne/ManyToOne 字段名，右侧为关联模型上的字段名，例如 `productId.productName`。
+级联字段通过 OneToOne/ManyToOne 关联引用关联模型的字段值。格式为点分：左侧为当前模型上的 OneToOne/ManyToOne 字段名，右侧为关联模型上的字段名，如 `productId.productName`。
 
-- `dynamic=false` 的级联字段：依赖的 OneToOne/ManyToOne 变化时，Softa 自动触发重算。
-- `dynamic=true` 的级联字段：级联值不落库；读取时 Softa 动态取关联侧最新值。
+- 对于 `dynamic=false` 的级联字段，依赖的 OneToOne/ManyToOne 字段变更时 Softa 自动触发重算。
+- 对于 `dynamic=true` 的级联字段，级联值不存储。读取时 Softa 动态获取最新关联值。
 
-此为逻辑级联，非数据库级联。仅 OneToOne/ManyToOne 支持级联取值。
+这是逻辑级联，非数据库级联。仅 OneToOne/ManyToOne 支持级联值访问。
 
-### 2.21 `relatedModel` 关联模型
+### 2.21 `relatedModel`
 
-关系型字段的关联模型，即 OneToOne、ManyToOne、OneToMany、ManyToMany 字段类型的关联模型名。
+关联字段（OneToOne、ManyToOne、OneToMany、ManyToMany）的关联模型。
 
-### 2.22 `relatedField` 关联字段
+### 2.22 `relatedField`
 
-- OneToMany：关联模型（Many 端）上指向当前模型外键的字段名，不得为空。
-- OneToOne/ManyToOne：默认取关联模型的 `id`。
+- 对于 OneToMany，为关联模型（Many 侧）中存储当前模型外键的字段名；不得为空。
+- 对于 OneToOne/ManyToOne，默认为关联模型的 `id`。
 
-### 2.23 `joinModel` ManyToMany 连接模型
+### 2.23 `relatedFieldType`
 
-ManyToMany 中 `joinModel` 不得为空。它是连接（中间）模型，保存两侧模型之间的映射。
+系统计算的 TO_ONE FK 列物理类型（`STRING` / `LONG` / …），在协调时从被引用模型的 `id`（以及镜像的 `length` / `scale`）写入。从不通过 `@Field` 声明；用于在 `fieldType` 保持逻辑 `MANY_TO_ONE` / `ONE_TO_ONE` 的同时让 DDL 渲染正确列类型。非 FK 字段为 null。
 
-查询时，Softa 先从 `joinModel` 取映射关系，再从 `relatedModel` 读取关联数据以完成多对多查询。
+### 2.24 `onDelete`
 
-默认命名：左侧模型名 + 右侧模型名 + `Rel`，例如 `User` + `Role` + `Rel` → `UserRoleRel`。
+**TO_ONE** 外键（`ManyToOne` / `OneToOne`）的删除策略：当被引用（"One"）行被删除时，**引用方**行如何处理。
 
-### 2.24 `joinLeft` 连接模型左侧字段名
+这是在 `ModelServiceImpl.deleteByIds` 中执行的**应用层**策略。Softa **不会**生成物理数据库 `FOREIGN KEY ... ON DELETE` 约束——关联保持应用层。
 
-ManyToMany 中，连接模型里保存**左侧**模型外键的字段名。
+| 取值 | 行为 |
+| --- | --- |
+| `RESTRICT` | 若存在存活（`deleted=false`）引用方，阻止删除。 |
+| `CASCADE` | 在同一事务中删除引用方；每个子行遵循其自身的软删/硬删模式。 |
+| `SET_NULL` | 将引用方 FK 置空；仅在 One 侧**硬删**时生效（软删为 no-op，以便恢复后仍能解析链接）。要求 FK 可空（`required=false`）。 |
+| 未设置（`null`） | **KEEP**（默认）——框架不处理引用方。 |
 
-默认命名：左侧模型名首字母小写 + `Id`，例如 `User` → `userId`。
+要点：
 
-### 2.25 `joinRight` 连接模型右侧字段名
+- 仅在 **TO_ONE 反向 FK**（子侧）上声明 `onDelete`。**不要**设在 `OneToMany` / `ManyToMany` 虚拟字段上——若要「删父级联删子」，把 `CASCADE` 放在子侧 FK。
+- 与前端 `cascadedField`（值自动填充）或 UI 删行回调（关联表上的 `onDeleteRow`）不是同一概念。
+- 前端 `<Field>` 没有 `onDelete` prop；运行时从元数据读取，在删除模型时生效。
 
-ManyToMany 中，连接模型里保存**右侧**模型外键的字段名。
+启动期校验会拒绝不安全组合（例如软删父级联硬删子、循环 `CASCADE`、共享父指向多租户子等）。完整矩阵、批量上限与注解映射见 [删除策略（`onDelete`）](../../backend_dev/model_dev/annotation#delete-strategy-ondelete) 与 ADR-0022。
 
-默认命名：右侧模型名首字母小写 + `Id`，例如 `Role` → `roleId`。
+### 2.25 `joinModel`
 
-### 2.26 `filters` 关系型字段过滤条件
+对于 ManyToMany，`joinModel` 不得为空。为存储两模型映射关系的连接（中间）模型。
 
-OneToOne/ManyToOne 关系字段的基础过滤条件；按业务场景固定，与用户搜索条件以 `AND` 合并。
+查询时，Softa 先从 `joinModel` 查询映射关系，再从 `relatedModel` 读取关联模型数据以完成多对多查询。
 
-### 2.27 `columnName` 数据表列名
+默认命名规则：Softa 自动拼接左模型名 + 右模型名 + `Rel`，如 `User` + `Role` + `Rel` → `UserRoleRel`。
 
-只读：由字段名推导的物理列名（例如 `unitPrice` → `unit_price`）。
+### 2.26 `joinLeft`
 
-`fieldName` 变更时，Softa 默认同步列名。可通过全局 DDL 开关关闭自动改表列名，以配合由其他方式执行 DDL 的流程。
+对于 ManyToMany，连接模型中存储左模型外键的字段名。
 
-### 2.28 `description` 字段描述
+默认命名规则：左模型名首字母小写后追加 `Id`，如 `User` → `userId`。
+
+### 2.27 `joinRight`
+
+对于 ManyToMany，连接模型中存储右模型外键的字段名。
+
+默认命名规则：右模型名首字母小写后追加 `Id`，如 `Role` → `roleId`。
+
+### 2.28 `filters`
+
+OneToOne/ManyToOne 关联字段的基本过滤条件。这是基于业务场景的固定过滤，与用户搜索条件以 `AND` 组合。
+
+### 2.29 `columnName`
+
+只读属性：从字段名派生的物理表列名（如 `unitPrice` → `unit_price`）。
+
+`fieldName` 变更时，Softa 默认同步列名。可通过全局 DDL 开关禁用自动表列重命名，以支持通过其他方式提交 DDL 的工作流。
+
+### 2.30 `description`
 
 字段的业务描述。

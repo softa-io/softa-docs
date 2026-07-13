@@ -21,40 +21,40 @@ The only required `groupBy` field is `field` — the record field the board grou
 import { Field } from "@/components/fields";
 import { ModelBoard } from "@/components/views/board";
 
-export default function VersionsPage() {
+export default function EnvironmentsPage() {
   return (
     <ModelBoard
-      modelName="DesignAppVersion"
-      orders={["updatedTime", "DESC"]}
-      groupBy={{ field: "status" }}
+      modelName="DesignAppEnv"
+      orders={["sequence", "ASC"]}
+      groupBy={{ field: "envType" }}
     >
       <ModelBoard.Header>
         <Field fieldName="name" />
-        <Field fieldName="versionType" />
+        <Field fieldName="envStatus" />
       </ModelBoard.Header>
-      <Field fieldName="sealedTime" />
+      <Field fieldName="connectorType" />
     </ModelBoard>
   );
 }
 ```
 
-`status` is an `Option` field, so the board fetches its option-set and renders one column per item, in the option-set's own order.
+`envType` is an `Option` field, so the board fetches its option-set and renders one column per item, in the option-set's own order.
 
 ## Field metadata drives column source
 
 | `metaField.fieldType`       | Column source                                     | Column id          | Column label                                  | Match predicate                                |
 | --------------------------- | ------------------------------------------------- | ------------------ | --------------------------------------------- | ---------------------------------------------- |
-| `Option`                    | `useOptionSet(metaField.optionSetCode)`           | `item.itemCode`    | `item.itemName`                               | `getOptionCode(record[field]) === itemCode`    |
+| `Option`                    | `useOptionSet(metaField.optionSetCode)`           | `item.itemCode`    | `item.label`                               | `getOptionCode(record[field]) === itemCode`    |
 | `ManyToOne` / `OneToOne`    | `searchList(metaField.relatedModel)`              | `record.id`        | `record[metaField.relatedField ?? "name"]`    | `getModelRefId(record[field]) === id`          |
 | Anything else               | Throws at render. Pass `groupBy.columns` to opt out. | —              | —                                             | —                                              |
 
-`groupBy.sourceFilters` overrides `metaField.filters` for lookup mode. The active workspace filter is always AND-merged on top so the source is scoped to the current app/portfolio.
+`groupBy.sourceFilters` overrides `metaField.filters` for lookup mode. The active workspace filter is always AND-merged on top so the source is scoped to the current app.
 
 ## Lookup-mode example with custom column header
 
 ```tsx
 <ModelBoard
-  modelName="DesignDeployment"
+  modelName="DesignActivity"
   orders={["createdTime", "DESC"]}
   groupBy={{
     field: "envId",
@@ -64,8 +64,8 @@ export default function VersionsPage() {
   }}
 >
   <ModelBoard.Header>
-    <Field fieldName="targetVersionId" />
-    <Field fieldName="deployStatus" />
+    <Field fieldName="kind" />
+    <Field fieldName="status" />
   </ModelBoard.Header>
   <Field fieldName="startedTime" />
 </ModelBoard>
@@ -91,8 +91,8 @@ Body slots accept dot-notation `<Field>` declarations to pull related-record fie
 ```tsx
 <ModelBoard modelName="AppEnv" groupBy={{ field: "envType" }}>
   <Field fieldName="name" />
-  <Field fieldName="lastDeploymentId.deployStatus" widgetType="StatusIcon" />
-  <Field fieldName="lastDeploymentId.finishedTime" widgetType="Relative" />
+  <Field fieldName="lastActivityId.status" widgetType="StatusIcon" />
+  <Field fieldName="lastActivityId.finishedTime" widgetType="Relative" />
 </ModelBoard>
 ```
 
@@ -100,7 +100,7 @@ The board walker collects every cascaded path declared at the top level, calls `
 
 ## Slot system
 
-`ModelBoard.Header`, top-level body children, `ModelBoard.Footer`, and `Action` elements follow the same rules as `ModelCard`. See the [ModelCard README](./card#card-slot-declaration) for full details. In short:
+`ModelBoard.Header`, top-level body children, `ModelBoard.Footer`, and `Action` elements follow the same rules as `ModelCard`. See the [ModelCard](./card#card-slot-declaration) for full details. In short:
 
 | Where defined                | Renders at                                | Effective placement |
 | ---------------------------- | ----------------------------------------- | ------------------- |
@@ -144,7 +144,7 @@ Free-form click handlers and cross-route URLs are intentionally not supported. T
 | ------------------ | ------------------------------------------------------------ | -------- | ------- | -------------------------------------------------------------------------------------------------- |
 | `modelName`        | `string`                                                     | Yes      | -       | Model name for metadata and data API.                                                              |
 | `groupBy`          | `ModelBoardGroupBy`                                          | Yes      | -       | At minimum `{ field }`. See [Field metadata drives column source](#field-metadata-drives-column-source). |
-| `labelName`        | `string`                                                     | No       | -       | Page title; defaults to `metaModel.labelName`.                                                     |
+| `label`        | `string`                                                     | No       | -       | Page title; defaults to `metaModel.label`.                                                     |
 | `description`      | `string`                                                     | No       | -       | Subtitle; defaults to `metaModel.description`.                                                     |
 | `orders`           | `OrderCondition`                                             | No       | -       | Recommended default sort. Wins over `initialParams.orders` and `MultiView.Tab.orders` (context).   |
 | `filters`          | `FilterCondition`                                            | No       | -       | Recommended base filter. Wins over `initialParams.filters` and `MultiView.Tab.filters` (context). AND-merged with workspace/runtime filters. See [precedence](./multi-view#filter--order-precedence). |
@@ -185,7 +185,7 @@ Set `enableColumnCreate` to surface a "+" button in each column header. Clicking
 
 URL params win over `defaultValues` and workspace defaults so an explicit "+ Dev" click reflects the user's intent. Editing routes ignore search-param defaults — they only apply in new mode.
 
-This is opt-in for now: state-machine boards (Draft → Sealed → Frozen) usually don't want a per-column "+", so leave `enableColumnCreate` at its `false` default unless the columns model genuinely creatable categories (env type, owner, etc.).
+This is opt-in for now: state-machine boards that reject free moves usually don't want a per-column "+", so leave `enableColumnCreate` at its `false` default unless the columns model genuinely creatable categories (env type, owner, etc.).
 
 ## When to use Board vs Card vs Table
 
@@ -205,21 +205,21 @@ modelService.updateOne(modelName, { id, [groupBy.field]: column.id })
 
 `column.id` is the option `itemCode` (Option mode) or the related record's primary key (lookup mode).
 
-For business actions that need server-side validation (e.g. version state machine `Draft → Sealed`), supply a custom `onCardMove` handler instead:
+For business actions that need server-side validation (e.g. env mutex transitions (e.g. Stable → Deploying)), supply a custom `onCardMove` handler instead:
 
 ```tsx
 <ModelBoard
-  modelName="DesignAppVersion"
+  modelName="DesignAppEnv"
   enableDragDrop
   onCardMove={async ({ recordId, toColumnId, fromColumnId }) => {
-    // Translate Draft→Sealed into the sealVersion operation
-    if (fromColumnId === "Draft" && toColumnId === "Sealed") {
-      await actionDispatcher.run("sealVersion", recordId);
+    // Publish only from Stable; refuse other moves
+    if (fromColumnId === "Stable" && toColumnId === "Deploying") {
+      await actionDispatcher.run("publish", recordId);
       return;
     }
     throw new Error(`Move from ${fromColumnId} to ${toColumnId} is not allowed`);
   }}
-  groupBy={{ field: "status" }}
+  groupBy={{ field: "envStatus" }}
 >
   ...
 </ModelBoard>

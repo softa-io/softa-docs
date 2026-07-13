@@ -1,89 +1,76 @@
 # Studio Module User Guide
 
-This guide is for developers who use Studio to configure business applications. It explains how to create apps, design metadata, manage changes, preview code and DDL, release versions, and handle runtime environment drift from the Studio frontend.
+This guide is for developers who use Studio to configure business applications. It explains how to create apps, design per-environment metadata, preview DDL, publish to runtimes, compare drift, merge designs between environments, and audit operations from the Studio frontend.
 
 ## 1. What Studio Is
 
-Studio is the design-time workbench for metadata-driven applications. It turns business objects, fields, views, navigations, option sets, and related configuration into publishable application metadata, then releases that metadata to target runtime systems through version and environment workflows.
+Studio is the design-time IDE for metadata-driven applications. Each **environment** owns a full design workspace (models, fields, indexes, option sets, views, navigations). Publishing converges that design to the env's runtime. There is no separate version or deployment pipeline — the env's live design **is** the content you publish.
 
 Core Studio work includes:
 
-- Managing Portfolios and Apps.
-- Designing models, fields, indexes, option sets, views, and navigations under an App.
-- Configuring field type defaults, database type mappings, code type mappings, code templates, and SQL templates.
-- Tracking a publishable set of design changes through a WorkItem.
-- Adding completed WorkItems to a Version, sealing the Version, and deploying it to Dev, Test, UAT, Prod, or other environments.
-- Previewing changes, generated code, and DDL at the Model, WorkItem, Version, and Deployment levels.
-- Comparing design-time metadata with runtime metadata, then importing runtime state or accepting runtime drift when needed.
+- Managing Apps.
+- Designing models, fields, indexes, option sets, views, and navigations under an App (scoped by env on the backend).
+- Configuring field domains, database type mappings, and SQL templates.
+- Binding environments to Softa runtimes or raw JDBC targets, issuing signing keys, and publishing design to runtime.
+- Comparing design-time metadata with runtime metadata, applying drift, seeding empty envs, and merging designs between envs.
+- Reviewing the immutable audit trail (`DesignActivity`) and restoring from snapshots when needed.
 
 ## 2. Key Concepts
 
 | Concept | Description |
 | --- | --- |
-| Portfolio | A project or product-line grouping used to organize multiple Apps. |
-| App | A metadata application. After entering an App, the left navigation is scoped to that App and shows its Workbench, models, versions, environments, and deployments. |
-| WorkItem | A unit of business change. Model, option set, view, and navigation changes that need to be released should be made under an in-progress WorkItem. |
-| Version | An application version that aggregates completed WorkItems. Draft versions can still be adjusted. Sealed or Frozen versions can be deployed. |
-| Env | A runtime environment such as DEV, TEST, UAT, or PROD. Deployment only shows enabled environments under the current App. |
-| Deployment | One actual deployment record, including merged change content, table DDL, index DDL, execution status, and errors. |
-| Drift | The difference between design-time and runtime metadata. It is used to detect manual runtime changes or to onboard an existing runtime system for the first time. |
+| App | A metadata application. After entering an App, the left navigation is scoped to that App and shows its models, environments, activities, and related design pages. |
+| Env | A deployment environment (DEV, TEST, UAT, PROD, …). Each env owns its own design workspace and connects to one runtime (Softa or JDBC). |
+| Design workspace | The per-env set of `DesignModel`, `DesignField`, `DesignOptionSet`, etc. rows keyed by `envId`. |
+| Publish | Converge the env's current design to its runtime (`POST /DesignAppEnv/publish`). Recorded as a `DesignActivity` of kind `Publish`. |
+| Snapshot | A post-operation capture of the env's design. Linked from `DesignActivity.snapshotId` and used by `restore`. |
+| Activity | Immutable audit record for Publish / Import / Reverse / Merge operations against an env. |
+| Drift | Difference between design-time metadata and runtime metadata. Computed on demand — there is no cached drift row. |
+| Field domain | Reusable field attribute template (`DesignFieldDomain`) applied once to a field via `applyDomain`. |
 
 ## 3. Menu Structure
 
 Studio is available from the `Studio` module in the left navigation.
 
-### Portfolio & Apps
+### Apps
 
-- `Apps`: Manage application definitions. The App detail page lets you maintain the app name, code, type, Portfolio, owner, status, database type, and package name.
-- `Portfolios`: Manage Portfolios. A Portfolio can be set to Active or Archived.
-
-### App Design
-
-These pages depend on the currently selected App:
-
-- `Workbench`: The change workbench for the current App. Use it to create and manage WorkItems, then enter metadata design pages from a WorkItem.
-- `Environments`: Configure runtime environments, deployment endpoints, keys, and runtime drift checks for the current App.
-- `Versions`: Create versions, seal, unseal, freeze, and start deployments.
-- `Deployments`: View deployment records, deployment DDL, deployment status, errors, retry failed deployments, and cancel stuck deployments.
+- `Apps`: Manage application definitions (name, code, type, owner, status, package name).
 
 ### App Metadata
 
-These pages also depend on the current App:
+These pages depend on the currently selected App:
 
-- `Models`: Design business models, fields, indexes, table names, storage strategy, and runtime features.
+- `Models`: Design business models, fields, and indexes.
 - `Option Sets`: Maintain option sets and option items.
-- `Views`: Configure model views, structure, default filters, and default ordering.
+- `Views`: Configure model views, structure, filters, and ordering.
 - `Navigations`: Configure runtime navigation structure and page entry points.
+
+### Release
+
+- `Environments`: Configure runtime connectors, signing keys, drift, publish, seed, and merge for each env.
+- `Activities`: Audit trail of publish / import / reverse / merge runs with change sets and snapshots.
 
 ### Generation
 
-These generation rule pages are usually maintained by platform developers or senior business developers:
+Platform-level generation rules (not scoped to a single App):
 
-- `Field DB Mapping`: Map field types to database column types.
-- `Field Code Mapping`: Map field types to code property types.
-- `Field Type Defaults`: Configure default values, lengths, and scales for field types.
-- `Code Templates`: Configure code generation templates.
-- `SQL Templates`: Configure SQL DDL generation templates.
+- `Field Domains`: Reusable field type + widget + default templates.
+- `Field DB Mapping`: Map field types to database column types per database.
+- `SQL Templates`: SQL DDL generation templates per database type.
 
 ## 4. Recommended Workflow
 
-### 4.1 Create a Portfolio and App
+### 4.1 Create an App
 
-1. Go to `Studio / Portfolios` and create a Portfolio.
-2. Go to `Studio / Apps` and create an App.
-3. Maintain the following fields on the App detail page:
-   - `appName`: Application name.
-   - `appCode`: Application code.
-   - `portfolioId`: The owning Portfolio.
-   - `databaseType`: Target database type.
-   - `packageName`: Base package name used for code generation.
-4. Click `Design App` on the App card to enter that App's Workbench.
+1. Go to `Studio / Apps` and create an App.
+2. Maintain `appName`, `appCode`, `appType`, `ownerId`, and `status`.
+3. Select the App in the workspace picker to enter App-scoped design pages.
 
 App status:
 
 - `Active`: The App is actively maintained.
-- `Maintenance`: The App is under maintenance and can be activated again from the detail page.
-- `Deprecated`: The App is deprecated.
+- `Maintenance`: Under maintenance; can be re-activated from the detail page.
+- `Deprecated`: No longer maintained.
 
 ### 4.2 Configure Environments
 
@@ -91,219 +78,138 @@ Open the current App's `Environments` page and create DEV, TEST, UAT, PROD, or o
 
 Important fields:
 
-- `envType`: Environment type.
-- `sequence`: Environment ordering.
-- `active`: Whether the environment is enabled. The deployment dialog only shows enabled environments.
-- `upgradeEndpoint`: Base URL of the target runtime system. The backend automatically appends the runtime metadata upgrade and export endpoints.
-- `publicKey`: Generated by `Issue Key` and configured in the target runtime system.
-- `currentVersionId`: The version currently deployed to this environment. It is maintained by the deployment workflow.
+- `envType`: Environment type (DEV / TEST / UAT / PROD).
+- `envStatus`: Mutex status (`Stable`, `Deploying`, `Importing`, `Merging`). Read-only in the UI — publish / import / merge acquire it.
+- `sequence`: Display ordering on the board and table views.
+- `active`: Whether the environment is enabled.
+- `protectedEnv`: When true, the env refuses deletion.
+- `databaseType`: Target database flavor for DDL rendering.
+- `connectorType`: `Softa` (signed upgrade API) or `JDBC` (raw connection).
+- `upgradeEndpoint`: Base URL of the Softa runtime (required when `connectorType = Softa`).
+- `jdbcUrl` / `jdbcUsername` / `jdbcPassword`: JDBC connection (when `connectorType = JDBC`).
+- `publicKey`: Issued by `Issue Key` and configured in the target runtime as `system.metadata.public-key`.
+- `autoExecuteDDL`: Whether publish should execute rendered DDL automatically (connector-dependent).
 
-Recommended flow before the first remote deployment:
+Recommended flow before the first publish to a Softa runtime:
 
 1. Click `Issue Key` on the environment detail page.
-2. Configure the returned or stored public key in the corresponding runtime system as `system.runtime-public-key`.
-3. Confirm that the runtime system can reach the Studio backend deployment callback URL.
-4. Start deployment from a Version.
+2. Configure the returned public key in the runtime.
+3. Confirm network reachability between Studio and the runtime upgrade endpoint.
+4. Design metadata under the env's workspace, then click `Publish`.
 
-Note: `protectedEnv` and `autoUpgrade` are currently configuration fields, but the current deployment workflow does not enforce environment protection or automatic upgrade behavior. For production environments, follow your team's release governance.
+To bootstrap an empty env from an existing one: use `Seed from Environment` (idempotent — skipped when the target already owns design rows).
 
-### 4.3 Create a WorkItem and Start Designing
+### 4.3 Design Models
 
-Open the current App's `Workbench`:
-
-1. Create a WorkItem and fill in its name and description.
-2. Keep the WorkItem in `InProgress` status.
-3. From the WorkItem detail page, use the `Related Metadata` area to enter:
-   - `Models`
-   - `Option Sets`
-   - `Views`
-   - `Navigations`
-4. Make the design changes that need to be released from those entry points.
-
-All metadata changes that need to enter the release workflow should be made from the WorkItem detail page. This route carries the `workItemId`, and the frontend uses it as the change-tracking context so the backend can aggregate changes by WorkItem.
-
-Common Workbench actions:
-
-- `Done`: Complete the WorkItem and stop accumulating changes.
-- `Add to Version`: Add the WorkItem to a Draft version.
-- `Remove from Version`: Remove the WorkItem from its current Draft version.
-- `Cancel`: Cancel the WorkItem.
-- `Defer`: Defer the WorkItem.
-- `Reopen`: Reopen a cancelled or deferred WorkItem.
-- `Preview Changes`: View created, updated, and deleted records in this WorkItem, grouped by model.
-- `Preview DDL`: Preview the DDL generated by this WorkItem.
-
-### 4.4 Design Models
-
-Open `Models` under a WorkItem to create or edit business models.
+Open `Models` under the current App to create or edit business models.
 
 The model detail page has three tabs:
 
-- `Model Info`: Maintain model name, label, table name, App, description, display field, search field, default order, ID strategy, storage type, data source, service name, soft delete, multi-tenancy, timeline, version lock, and related settings.
-- `Fields`: Maintain model fields.
-- `Indexes`: Maintain model indexes.
+- `Model Info`: Model name, label, table name, app/env scope, display/search fields, default order, ID strategy, storage, soft delete, multi-tenancy, timeline, version lock, and related settings.
+- `Fields`: Model fields (including relations, domains, on-delete strategy, data protection).
+- `Indexes`: Model indexes.
 
 Important field configuration:
 
-- `fieldName`: Field name used by code and metadata.
-- `columnName`: Database column name.
-- `fieldType`: Field type.
-- `optionSetCode`: Option set code for option fields.
-- `length` / `scale` / `defaultValue`: Length, scale, and default value.
-- `relatedModel` / `relatedField` / `joinModel` / `joinLeft` / `joinRight`: Relation field configuration.
-- `filters`: Filter conditions for relation fields.
-- `widgetType`: Frontend widget type.
-- `required` / `readonly` / `hidden`: Validation and display behavior.
-- `translatable` / `encrypted` / `maskingType`: Translation, encryption, and masking behavior.
+- `fieldName` / `columnName`: Logical and physical names.
+- `fieldType` / `optionSetCode` / `length` / `scale` / `defaultValue`: Type and constraints.
+- `domainId`: Provenance of a one-time domain template apply (not a live binding).
+- `relatedModel` / `relatedField` / `onDelete` / `relatedFieldType`: Relation configuration (`relatedFieldType` is system-computed, read-only).
+- `renamedFrom`: Immediately prior name after a declared rename (read-only).
+- `widgetType`, validation, encryption, and masking fields: Display and access behavior.
 
-The model detail page provides:
+The model detail toolbar provides `Preview DDL` for table and index SQL of this model.
 
-- `Preview DDL`: Preview the table and index DDL for this model.
-- `Preview Code`: Preview generated code for this model. In the dialog, you can switch languages, browse the file tree, copy code, download the current file, download a ZIP for the selected language, or download one ZIP containing all languages.
+### 4.4 Configure Option Sets, Views, and Navigations
 
-### 4.5 Configure Option Sets, Views, and Navigations
+Option sets for enum-like values, views for model presentation, navigations for runtime menu structure. These are design-time only until the publish sweep model expands to include them.
 
-`Option Sets` are used for enum-like business values:
+### 4.5 Publish Design to Runtime
 
-- The option set maintains `name`, `optionSetCode`, `appId`, and description.
-- Option items maintain `itemCode`, `itemName`, `sequence`, `parentItemCode`, `itemTone`, `itemIcon`, `active`, and description.
+On the environment detail page:
 
-`Views` configure model views:
+1. Review drift via the `Runtime Drift` panel or `View Drift Report`.
+2. Click `Publish` to converge the env's design to its runtime.
+3. Track the operation on `Activities` (kind `Publish`, status `Running` → `Success` / `Failure`).
 
-- Maintain the view name, code, model, type, and sequence.
-- Maintain `structure`, `defaultFilter`, and `defaultOrder` in the configuration area.
-- Optionally set `navId`, `publicView`, and `defaultView`.
+The env mutex must be `Stable` before publish starts. Concurrent operations against the same env are refused.
 
-`Navigations` configure runtime navigation:
+### 4.6 Handle Design-Time and Runtime Drift
 
-- Maintain the navigation name, code, type, related model, parent navigation, description, and filter conditions.
+The environment detail page shows a `Runtime Drift` panel at the top. Drift is computed on demand by `GET /DesignAppEnv/compareDesignWithRuntime` — click **Check now** to refresh.
 
-### 4.6 Preview Changes and DDL
+Toolbar actions:
 
-Studio supports preview at multiple stages:
-
-- Model detail page: Preview DDL and generated code for a single model.
-- WorkItem detail page: Preview accumulated metadata changes and DDL for the WorkItem.
-- Version detail page: Preview aggregated metadata changes and DDL for the Version.
-- Deployment detail page: View the actual `mergedDdlTable` and `mergedDdlIndex` saved by this deployment.
-
-Before go-live checks, prefer the Version and Deployment levels. The Model level is useful for quick checks while developing a single model, and the WorkItem level is useful for checking whether a specific requirement's changes are complete.
-
-### 4.7 Create Versions, Seal, and Deploy
-
-Open the current App's `Versions` page:
-
-1. Create a Version and select `versionType`:
-   - `Normal`: Regular release version.
-   - `Hotfix`: Emergency patch version.
-2. Return to Workbench and add completed WorkItems to the Draft version by using `Add to Version`.
-3. On the Version detail page, click `Preview Changes` and `Preview DDL` for pre-release review.
-4. Click `Seal Version`. After sealing, the backend aggregates WorkItem changes and computes `diffHash`.
-5. If an issue is found after sealing and the Version has not been deployed, click `Unseal Version` to return it to Draft.
-6. For a sealed or frozen Version, click `Deploy to Env`, select an enabled target environment, and confirm deployment.
-
-Version status:
-
-- `Draft`: Draft. WorkItems can be added or removed.
-- `Sealed`: Sealed. It can be deployed and can be unsealed before deployment.
-- `Frozen`: Frozen. It should no longer be modified.
-
-Deployment is asynchronous. After deployment is initiated, the frontend creates a Deployment record. The final completion status is updated later when the target runtime system calls back to Studio.
-
-### 4.8 View Deployment Records
-
-Open the current App's `Deployments` page:
-
-- The list shows deployment records in descending creation time.
-- The `General` tab on the detail page shows source version, target version, target environment, deployment status, operator, and duration.
-- The `Content` tab shows merged metadata content, table DDL, and index DDL.
-- The `Version List` tab shows the versions merged into this deployment.
-- The `Error` tab shows the failure reason.
-
-When deployment status is `Failure`, click `Retry` to dispatch it again. When status is `Pending` or `Deploying` and the deployment is confirmed to be stuck, click `Cancel` to release the environment deployment lock.
-
-Important limitation: `Cancel` does not automatically roll back DDL or data changes that have already been executed in the target runtime database. It only marks the deployment record as cancelled and releases the environment lock.
-
-### 4.9 Handle Design-Time and Runtime Drift
-
-Open the environment detail page to view the `Runtime Drift` panel.
-
-Common actions:
-
-- `Compare (cached)`: View the currently cached drift between design-time and runtime metadata.
-- `Refresh Drift`: Asynchronously fetch runtime metadata again and recompute drift. The panel polls for status updates.
-- `Apply Drift`: Accept the currently cached drift and overwrite design-time metadata with runtime content.
-- `Import from Runtime`: Fetch runtime metadata again and overwrite design-time metadata with the current runtime content.
+- `View Drift Report`: Open the detailed model / field / index level diff dialog.
+- `Apply Drift`: Overwrite the design workspace with the current runtime state (drift repair or first-time import from an existing runtime).
+- `Seed from Environment`: Clone a source env's full design into an empty target env.
+- `Merge from Environment`: Overwrite-style converge of the target env's design from a source env (runtime unaffected until the next publish).
+- `Issue Key`: Generate or rotate the Ed25519 keypair for Softa connector signing.
 
 Usage guidance:
 
-- When onboarding a system that already has runtime metadata, use `Import from Runtime`.
-- If the runtime environment was manually fixed and you decide that runtime state should become the new design baseline, run `Refresh Drift`, review the drift, then run `Apply Drift`.
-- Both `Apply Drift` and `Import from Runtime` rewrite design-time metadata. Before running either action, confirm that the target environment is the intended source of truth.
+- When onboarding a system that already has runtime metadata, open the drift report, review, then run `Apply Drift`.
+- When standing up a new env that should match an existing env's design, use `Seed from Environment`.
+- When promoting design between envs without touching runtimes yet, use `Merge from Environment`, then publish each env separately when ready.
+- Both `Apply Drift` and merge/seed rewrite design-time metadata. Confirm the source of truth before running destructive actions.
+
+### 4.7 Review and Restore Activities
+
+Open `Activities` under the current App:
+
+- The list shows operations in descending id order (kind, status, env, source env, timestamps).
+- The detail page shows the change set JSON, rendered DDL detail (publish only), error message, and linked snapshot id.
+- `Retry Publish`: Re-publish the env for a failed publish activity.
+- `Cancel`: Release a stuck `Running` publish and the env mutex (no automatic runtime rollback).
+- `Restore`: Roll forward — restore design from the activity's snapshot, then publish to converge the runtime.
 
 ## 5. Generation Configuration
 
-Code and DDL generation is based on Pebble templates. Template variables use the `{{ var }}` syntax.
+DDL generation is based on Pebble SQL templates and field DB mappings.
 
-### Code Templates
+### Field Domains
 
-Code templates are loaded by `codeLang` and `sequence`. Each template can configure:
-
-- `subDirectory`: Output subdirectory. Pebble expressions are supported.
-- `fileName`: Output file name. Pebble expressions are supported, and the file name must include the expected suffix, such as `{{modelName}}Service.java`.
-- `templateContent`: Template content.
-
-If no code templates are configured in the database, the backend uses built-in classpath templates as a fallback.
+Named, reusable templates (`fieldType`, `widgetType`, `length`, `scale`, `defaultValue`). Apply to a field through the backend `POST /DesignField/applyDomain` API (one-time copy — not a live binding).
 
 ### SQL Templates
 
-SQL templates are loaded by `databaseType` and are used to generate CREATE TABLE, ALTER TABLE, index, and DROP TABLE SQL. Template authors mainly work with the model, field, and index diff context, so they do not need to read raw entities or calculate diffs manually.
+Loaded by `databaseType` and used to generate CREATE TABLE, ALTER TABLE, index, and DROP TABLE SQL.
 
-### Mapping and Defaults
+### Field DB Mapping
 
-- `Field DB Mapping` determines which database column type is generated for each field type.
-- `Field Code Mapping` determines which code property type is generated for each field type.
-- `Field Type Defaults` determines the default length, scale, and default value for each field type.
+Determines which database column type is generated for each field type.
 
-After these configurations are adjusted, model code preview and DDL preview will reflect the new generation rules.
+After these configurations are adjusted, model DDL preview will reflect the new generation rules.
 
 ## 6. Pre-Release Checklist
 
-Before release, confirm the following:
+Before publishing to production, confirm:
 
-- All changes were made under the correct App.
-- Model, option set, view, and navigation changes that need to be released all come from the correct WorkItem.
-- The WorkItem's `Preview Changes` contains only changes for this requirement.
-- The WorkItem's `Preview DDL` matches expectations.
-- The Version contains all required WorkItems and does not include unrelated WorkItems.
-- The Version's `Preview Changes` and `Preview DDL` have passed review.
-- The target Env is enabled, and `upgradeEndpoint` is correct.
-- After first deployment or key rotation, the target runtime system is configured with the latest public key.
-- Before production deployment, the table DDL and index DDL in the Deployment have been reviewed.
-- Before retrying or cancelling a failed deployment, the actual execution state of the target runtime system has been confirmed.
+- All changes belong to the correct App and env workspace.
+- Model / option set changes have been reviewed via drift report or peer review.
+- Target env `connectorType`, endpoints, and credentials are correct.
+- After first publish or key rotation, the runtime carries the latest public key.
+- Rendered DDL from publish activities has been reviewed when `autoExecuteDDL` is enabled.
+- You know how to `Restore` from a snapshot if a merge or apply drift went wrong.
 
 ## 7. FAQ
 
-### Why can't I see the metadata I just changed in the WorkItem?
+### Why don't I see Workbench, Versions, or Deployments?
 
-Confirm that the change was made from the `Related Metadata` entry point on the WorkItem detail page. Only when the current route carries `workItemId` can the frontend send the WorkItem as the change-tracking context to the backend.
+Studio 2.0 removed the WorkItem → Version → Deployment pipeline. Design is env-scoped; publish + activities + snapshots replace versioned deployments.
 
-### Why does the Deploy to Env dialog show no target environments?
+### Why was Refresh Drift removed?
 
-The deployment dialog only shows environments under the current App where `active = true`. Check whether the environment belongs to the current App and whether it is enabled.
+Drift is computed on demand. Use **Check now** on the drift panel or **Refresh** inside the drift report dialog instead of a separate cache refresh RPC.
 
-### What is the difference between Compare (cached) and Refresh Drift?
+### What is the difference between Apply Drift and Seed from Environment?
 
-`Compare (cached)` only reads the last computed drift. `Refresh Drift` asks the backend to asynchronously compare the design-time snapshot with runtime metadata again.
+`Apply Drift` reads the env's live runtime and inverts differences onto the design workspace. `Seed from Environment` clones another env's design rows into an empty target env (no runtime contact).
 
-### How should I choose between Apply Drift and Import from Runtime?
+### Is Cancel on an activity a database rollback?
 
-Use `Apply Drift` when drift has already been refreshed and reviewed, and you decide to accept the cached runtime drift. Use `Import from Runtime` when initializing design-time metadata from an existing runtime system for the first time, or when you want to fetch runtime metadata again before overwriting design-time metadata.
+No. Cancel releases a stuck env mutex and marks the activity canceled. Runtime changes already applied stay applied.
 
-### Is Cancel Deployment a rollback?
+### When should I use Merge vs Publish?
 
-No. Cancel only releases a stuck environment deployment lock and marks the deployment record. It does not automatically undo DDL or data changes that have already been executed in the target runtime system.
-
-### When should I view Model DDL versus Version or Deployment DDL?
-
-Use Model DDL during development to inspect a single model. Before release, review Version DDL. After deployment, review `mergedDdlTable` and `mergedDdlIndex` on the Deployment detail page, because those are the final deployment artifacts saved for that deployment.
+`Merge` only changes design metadata between envs. `Publish` pushes an env's design to its runtime. Typical promotion: merge DEV → TEST design, review, then publish TEST.

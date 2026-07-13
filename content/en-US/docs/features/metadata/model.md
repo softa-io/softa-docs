@@ -26,25 +26,27 @@ Model metadata describes and defines the data model, including the storage, stru
 
 | Number | Model Attribute | Data Type | Description | Default Value | Remarks |
 | --- | --- | --- | --- | --- | --- |
-| 1 | labelName | String | Model label name |  | Required |
+| 1 | label | String | Model label |  | Required |
 | 2 | modelName | String | Model technical name |  | Required |
-| 3 | softDelete | Boolean | Enable soft delete | false |  |
-| 4 | defaultOrder | String | Default sorting rule |  |  |
-| 5 | displayName | MultiString | Display name (field list) |  |  |
-| 6 | searchName | MultiString | Quick search (field list) |  |  |
-| 7 | tableName | String | Database table |  | Read-only |
-| 8 | timeline | Boolean | Is a timeline model | false |  |
-| 9 | idStrategy | Option | Primary key generation strategy | DbAutoID |  |
-| 10 | storageType | Option | Storage type | RDBMS |  |
-| 11 | versionLock | Boolean | Enable optimistic locking | false |  |
-| 12 | multiTenant | Boolean | Enable multi-tenant control | false |  |
-| 13 | dataSource | String | Data source key |  | Model-level multi-data-source |
-| 14 | businessKey | MultiString | Business Key (Field List) |  |  |
-| 15 | partitionField | String | Partition field technical name |  |  |
-| 16 | description | String | Model description |  |  |
-| 17 | modelFields | OneToMany | Model fields |  |  |
+| 3 | renamedFrom | String | Immediately-prior model name for a rename |  | Single-step, no chain |
+| 4 | copyable | Boolean | Whether copy APIs accept this model | true | `false` ⇒ copy APIs reject + UI hides Duplicate |
+| 5 | softDelete | Boolean | Enable soft delete | false |  |
+| 6 | defaultOrder | String | Default sorting rule |  |  |
+| 7 | displayName | MultiString | Display name (field list) |  |  |
+| 8 | searchName | MultiString | Quick search (field list) |  |  |
+| 9 | tableName | String | Database table |  | Read-only |
+| 10 | timeline | Boolean | Is a timeline model | false |  |
+| 11 | idStrategy | Option | Primary key generation strategy | DbAutoID |  |
+| 12 | storageType | Option | Storage type | RDBMS |  |
+| 13 | versionLock | Boolean | Enable optimistic locking | false |  |
+| 14 | multiTenant | Boolean | Enable multi-tenant control | false |  |
+| 15 | dataSource | String | Data source key |  | Model-level multi-data-source |
+| 16 | businessKey | MultiString | Business Key (Field List) |  |  |
+| 17 | partitionField | String | Partition field technical name |  |  |
+| 18 | description | String | Model description |  |  |
+| 19 | modelFields | OneToMany | Model fields |  |  |
 
-### 2.1 `labelName` Model Label Name
+### 2.1 `label` Model Label
 
 The business name of the model, such as `Product Category`.
 
@@ -56,10 +58,7 @@ The technical name of the model, using upper camel case. For example, `ProductCa
 
 Whether to enable the soft delete function for this model. In business systems, it is necessary to set referenced data models to soft delete to avoid affecting the display of historical data associations.
 
-When the `softDelete` attribute of the model is configured to `true`, the system automatically adds a `disabled` field to the model to express that the deletion behavior is actually disabling the data.
-When the model data is deleted, it is disabled by updating `disabled=true`. The disabled data, by default, will not appear in the search results of relational field references unless related query conditions are actively added in the query.
-
-Note: Here, the scenarios of data soft deletion and data disabling are actually simplified. Since all physically deleted data will be recorded in `ChangeLog`, the behavior of soft deletion is equated to setting the data as disabled.
+When the `softDelete` attribute of the model is configured to `true`, the system automatically adds a `deleted` field (configurable via `softDeleteField`, default `"deleted"`). Soft delete sets `deleted=true` instead of removing the row. Soft-deleted rows are excluded from default searches and relational field lookups unless the query explicitly filters on the soft-delete field.
 
 ### 2.4 `defaultOrder` Default Sorting Rule
 
