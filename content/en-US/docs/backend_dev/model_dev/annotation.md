@@ -1,28 +1,16 @@
 ## Metadata Annotations
 
-Softa maintains its `sys_*` catalog tables through **two coexisting paths**:
-
-1. **Annotations (this page)** — code-first. Declare metadata on Java entity
-   classes; a boot-time scanner reads the annotations, reconciles them with
-   the `sys_*` tables, and applies matching DDL in dev mode. Best for the
-   baseline shipped with your codebase — platform / framework models
-   versioned alongside the source, gated by code review and CI/CD.
-2. **Studio (visual designer)** — config-first. A visual workbench writes
-   the same `sys_*` rows through a `WorkItem → Version → Deployment`
-   workflow. Best for tenant customizations and business-team-owned
-   configuration that need to change without a redeploy. See the
-   [Studio User Guide](../../features/studio).
-
-The two paths never clobber each other: every `sys_*` row carries an
-[`Ownership`](#row-ownership-ownership-enum) tag, and the annotation
-scanner only reads / writes `PLATFORM_MAINTAINED` rows.
-
 > **Requires `metadata-starter`** as a dependency of your app for these
 > annotations to take effect. `softa-orm` defines the annotations;
 > `metadata-starter` contains the scanner and checker that read them and
 > reconcile with `sys_*`. Without `metadata-starter` the annotations exist
 > on your classes but no scanner consumes them — `sys_*` rows are never
 > written and no DDL is generated.
+
+Softa describes models, fields, option sets, option items, and indexes
+through Java annotations on the entity classes. A boot-time scanner reads
+these annotations, reconciles them with the `sys_*` catalog tables managed
+by `metadata-starter`, and (for packages in `scanner-scope`) applies the matching DDL.
 
 **Five annotations**, all in `io.softa.framework.orm.annotation`:
 
@@ -38,27 +26,28 @@ scanner only reads / writes `PLATFORM_MAINTAINED` rows.
 @Data
 @EqualsAndHashCode(callSuper = true)
 @Model(
-    labelName = "Customer",
+    label = "Customer",
     businessKey = {"code"},
     description = "Customer master"
 )
-@Index(name = "uk_customer_code", fields = {"code"}, unique = true)
+@Index(indexName = "uk_customer_code", fields = {"code"}, unique = true)
 @Index(fields = {"status", "createdTime"})
 public class Customer extends AuditableModel {
 
+    @Field(label = "ID")
     private Long id;
 
-    @Field(labelName = "Customer Code", required = true, length = 32)
+    @Field(label = "Customer Code", required = true, length = 32)
     private String code;
 
-    @Field(labelName = "Customer Tier")
+    @Field(label = "Customer Tier")
     private CustomerTier tier;   // enum → FieldType.OPTION (inferred)
 }
 
-@OptionSet(name = "Customer Tier")
+@OptionSet(label = "Customer Tier")
 public enum CustomerTier {
-    @OptionItem(itemName = "VIP Gold") GOLD("g"),
-    @OptionItem(itemName = "Silver")   SILVER("s");
+    @OptionItem(label = "VIP Gold") GOLD("g"),   // explicit: "VIP Gold" ≠ humanize("GOLD")
+    SILVER("s");                                 // bare: label defaults to humanize("SILVER") = "Silver"
 
     @JsonValue private final String code;       // itemCode = @JsonValue
     CustomerTier(String code) { this.code = code; }
@@ -75,17 +64,15 @@ public enum CustomerTier {
 | `itemCode` | `@JsonValue` field value (fallback `enum.name()`) | — (no override) |
 | `tableName` | `snake_case(modelName)` | `@Model.tableName` |
 | `columnName` | `snake_case(fieldName)` | `@Field.columnName` |
-| `fieldType` | Java type via `TypeInference` (e.g. `String`→`STRING`, enum→`OPTION`, `List<enum>`→`MULTI_OPTION`, `@Model` POJO→`MANY_TO_ONE`) | `@Field.fieldType = { ... }` (single element); **`OPTION` / `MULTI_OPTION` cannot be written explicitly** |
+| `fieldType` | Java type via `TypeInference` (e.g. `String`→`STRING`, enum→`OPTION`, `List<enum>`→`MULTI_OPTION`, `@Model` POJO→`MANY_TO_ONE`) | `@Field.fieldType = FieldType.X` (single value, no braces); **`OPTION` / `MULTI_OPTION` cannot be written explicitly** |
 | index `indexName` | `idx_<table>_<col>...` / `uk_<table>_<col>...` for unique | `@Index.name` |
 
 ### `@Model` ↔ `SysModel`
 
-> Business semantics of each attribute: see [Model Metadata](../../features/metadata/model).
-
 | `@Model` attribute | Type | Default | `SysModel` column | Notes |
 |---|---|---|---|---|
 | (class simple name) | — | — | `modelName` | inferred, no override |
-| `labelName` | String | `""` | `labelName` | empty → i18n key `model.{modelName}.label` |
+| `label` | String | `""` | `label` | empty → humanized class name (`DeptInfo`→"Dept Info"); i18n translations override by id |
 | `tableName` | String | `""` | `tableName` | empty → `snake_case(modelName)` |
 | `description` | String | `""` | `description` | |
 | `displayName` | String[] | `{}` | `displayName` | list-display defaults |
@@ -99,11 +86,11 @@ public enum CustomerTier {
 | `storageType` | `StorageType` | `RDBMS` | `storageType` | |
 | `versionLock` | boolean | `false` | `versionLock` | optimistic-lock column |
 | `multiTenant` | boolean | `false` | `multiTenant` | requires a `tenantId` field on the class |
+| `copyable` | boolean | `true` | `copyable` | `false` ⇒ copy APIs reject the model; UI hides Duplicate |
 | `dataSource` | String | `""` | `dataSource` | empty → primary datasource |
 | `businessKey` | String[] | `{}` | `businessKey` | composite supported |
 | `partitionField` | String | `""` | `partitionField` | |
-| `serviceName` | String | `""` | `serviceName` | microservice routing key — see [softa-web/README](../softa-web/README.md#service-to-service-rpc) |
-| (scanner sets) | — | — | `appId` | always set by scanner / Studio |
+| (scanner sets) | — | — | `appCode` | always set by scanner / Studio |
 | (DB auto) | — | — | `id` | primary key |
 | (scanner sets) | — | — | `ownership` | `PLATFORM_MAINTAINED` for scanner writes |
 
@@ -114,22 +101,20 @@ extends `AuditableModel`.
 
 ### `@Field` ↔ `SysField`
 
-> Business semantics of each attribute and the full field-type catalog: see [Field Metadata](../../features/metadata/field).
-
 | `@Field` attribute | Type | Default | `SysField` column | Notes |
 |---|---|---|---|---|
 | (Java field name) | — | — | `fieldName` | inferred, no override |
 | (Java type) | — | — | `fieldType` | inferred via `TypeInference` |
-| `labelName` | String | `""` | `labelName` | empty → i18n key |
+| `label` | String | `""` | `label` | empty → humanized field name (`deptId`→"Dept Id"); i18n translations override by id |
 | `description` | String | `""` | `description` | |
-| `fieldType` | `FieldType[]` | `{}` | `fieldType` | single-element override; `OPTION`/`MULTI_OPTION` **cannot** be written explicitly |
+| `fieldType` | `FieldType[]` | `{}` | `fieldType` | single value, no braces (e.g. `fieldType = FieldType.MULTI_FILE`); `OPTION`/`MULTI_OPTION` **cannot** be written explicitly |
 | `columnName` | String | `""` | `columnName` | empty → `snake_case(fieldName)` |
-| `length` | int | `0` | `length` | `0` → type-specific default; STRING / DECIMAL precision |
-| `scale` | int | `0` | `scale` | DECIMAL scale |
+| `length` | int | `0` | `length` | `0` → type default: STRING/OPTION 64, MULTI_STRING/ORDERS 256, DOUBLE 24 (measurements), BIG_DECIMAL 32 (money); declare explicitly for anything else. MySQL renders `length > 16383` as TEXT |
+| `scale` | int | `0` | `scale` | `0` → type default: DOUBLE 2, BIG_DECIMAL 8 (DECIMAL scale) |
 | `required` | boolean | `false` | `required` | NOT NULL constraint |
 | `readonly` | boolean | `false` | `readonly` | UI hint |
 | `translatable` | boolean | `false` | `translatable` | i18n-aware column |
-| `nonCopyable` | boolean | `false` | `nonCopyable` | excluded from `copy()` |
+| `copyable` | boolean | `true` | `copyable` | `false` ⇒ value not carried over by `copyById` (business keys, credentials, runtime state) |
 | `unsearchable` | boolean | `false` | `unsearchable` | excluded from default search |
 | `computed` | boolean | `false` | `computed` | requires `expression` |
 | `expression` | String | `""` | `expression` | AviatorScript |
@@ -137,9 +122,11 @@ extends `AuditableModel`.
 | `encrypted` | boolean | `false` | `encrypted` | at-rest encryption |
 | `maskingType` | `MaskingType[]` | `{}` | `maskingType` | single element |
 | `defaultValue` | String | `""` | `defaultValue` | |
-| `relatedModel` | String | `""` | `relatedModel` | empty → inferred from POJO type; **required** when Java type is `Long` storing an FK id |
-| `relatedField` | String | `""` | `relatedField` | empty → `"id"` |
-| `joinModel` | String | `""` | `joinModel` | M2M join table |
+| `relatedModel` | `Class<?>` | `Void.class` | `relatedModel` | Class ref (compile-checked), e.g. `Foo.class`; `Void.class` → inferred from POJO type; **required** for `Long` FK. Use `relatedModelName` (String) for cross-module/dynamic models |
+| `relatedModelName` | String | `""` | `relatedModel` | String fallback to `relatedModel` (cross-module/dynamic) |
+| `relatedField` | String | `""` | `relatedField` | TO_ONE: always `id` — leave empty (a non-id value is rejected at boot, ADR-0024; to store a business code make the related model code-as-id). ONE_TO_MANY: names the child FK column |
+| `onDelete` | `OnDelete[]` | `{}` | `on_delete` | TO_ONE FK delete strategy: `RESTRICT` / `CASCADE` / `SET_NULL`; `{}`/unset = KEEP (default — do nothing). App-level (no DB FK). See "Delete strategy" below + ADR-0022 |
+| `joinModel` | `Class<?>` | `Void.class` | `joinModel` | M2M join model class; `joinModelName` (String) fallback |
 | `joinLeft` | String | `""` | `joinLeft` | |
 | `joinRight` | String | `""` | `joinRight` | |
 | `cascadedField` | String | `""` | `cascadedField` | dotted path, e.g. `"owner.name"` |
@@ -147,37 +134,76 @@ extends `AuditableModel`.
 | `widgetType` | `WidgetType[]` | `{}` | `widgetType` | single-element override |
 | (scanner sets) | — | — | `modelName` | from enclosing `@Model` class |
 | (scanner sets) | — | — | `optionSetCode` | derived from enum type when fieldType is `OPTION`/`MULTI_OPTION` |
-| (scanner sets) | — | — | `appId` / `id` / `ownership` | |
+| (scanner sets) | — | — | `appCode` / `id` / `ownership` | |
 | (FK fixup post-init) | — | — | `modelId` | |
 | (not exposed via `@Field`) | — | — | `hidden` | UI-only flag set via Studio |
 
-### `@OptionSet` ↔ `SysOptionSet`
+#### Delete strategy (`onDelete`)
 
-> Runtime behavior, caching, and API shape: see [Option Sets](../../features/metadata/option).
+On a `MANY_TO_ONE` / `ONE_TO_ONE` FK, `onDelete` declares what happens to the **referencing** rows when
+the referenced ("One") row is deleted. Enforced application-level in `ModelServiceImpl.deleteByIds` — no
+physical DB `FOREIGN KEY ... ON DELETE` is ever emitted (relations are app-level):
+
+- `RESTRICT` — block the delete if any live (`deleted=false`) referrer exists.
+- `CASCADE` — delete the referrers in the same transaction (each follows its own soft/hard delete).
+  **Rejected at boot** if a soft-delete One would cascade to a hard-delete Many (a recoverable parent
+  must not irreversibly delete children — make the Many soft-delete too, or use RESTRICT/SET_NULL).
+- `SET_NULL` — null the referrer FK; **only on a hard delete** of the One (no-op on soft delete, so a
+  restore still resolves the link). Requires a nullable FK (`required = false`).
+- unset (`{}` / `on_delete` NULL) = **KEEP** (default) — the framework does nothing.
+
+**CASCADE soft/hard-delete matrix** — the cascade on each Many follows the *Many's* own delete mode
+(not the One's); the one unsafe combination is rejected at boot:
+
+| One (referenced / parent) | Many (referrer / child) | CASCADE result |
+|---|---|---|
+| soft-delete | soft-delete | Many **soft-deleted** (both recoverable) |
+| soft-delete | hard-delete | **rejected at boot** — a recoverable parent must not irreversibly delete children |
+| hard-delete | soft-delete | Many **soft-deleted** |
+| hard-delete | hard-delete | Many **hard-deleted** |
+
+A `CASCADE` from a **shared (non-multi-tenant) parent to a multi-tenant child** is likewise rejected at
+boot — one delete would cascade across all tenants (use RESTRICT).
+
+**Runtime safety** — a `CASCADE` / `SET_NULL` affecting more than `MAX_BATCH_SIZE` referrers *per cascade
+level* is rejected: `referrerIds` fetches at most `MAX_BATCH_SIZE + 1` ids in one `LIMIT`-ed query, so an
+over-limit delete fails fast **without loading the full set** (bounded memory, no extra `count`). Large
+deletes are chunked to `DEFAULT_BATCH_SIZE` to bound the SELECT/DELETE statement + IN-clause size (same
+transaction — chunking bounds statement size, not lock duration).
+
+For a OneToMany "delete parent → delete children", put `CASCADE` on the **child's back-reference FK**
+(the FK is the single source of truth; `onDelete` is not declared on `ONE_TO_MANY`).
+
+Boot-time guards (fail-fast): `onDelete` is valid only on TO_ONE; `SET_NULL` requires a nullable FK; the
+target may not be a timeline model; a **cyclic / self-referential `CASCADE`** is rejected (delete such
+hierarchies — org trees, BOM, category trees — in application code); a **`CASCADE` chain deeper than
+`MAX_CASCADE_DEPTH` models** is rejected (bounds recursion; the error names the full chain); and a
+`CASCADE` from a **soft-delete parent to a hard-delete child**, or from a **shared parent to a
+multi-tenant child**, is rejected (see the matrix above).
+
+### `@OptionSet` ↔ `SysOptionSet`
 
 | `@OptionSet` attribute | Type | Default | `SysOptionSet` column | Notes |
 |---|---|---|---|---|
 | (enum simple name) | — | — | `optionSetCode` | inferred, no override |
-| `name` | String | `""` | `name` | display label; empty → i18n key |
+| `name` | String | `""` | `name` | display label; empty → humanized enum name (`TenantStatus`→"Tenant Status") |
 | `description` | String | `""` | `description` | |
-| (scanner sets) | — | — | `appId` / `id` / `ownership` | |
+| (scanner sets) | — | — | `appCode` / `id` / `ownership` | |
 | (Studio toggle) | — | — | `deleted` / `optionItems` | runtime aggregation |
 
 ### `@OptionItem` ↔ `SysOptionItem`
-
-> Display attributes (`itemTone`, `itemIcon`) and API response shape: see [Option Sets](../../features/metadata/option).
 
 | `@OptionItem` attribute | Type | Default | `SysOptionItem` column | Notes |
 |---|---|---|---|---|
 | (`@JsonValue` field value on enum) | — | — | `itemCode` | fallback to `enum.name()` when no `@JsonValue` |
 | (enclosing enum simple name) | — | — | `optionSetCode` | inferred |
-| `itemName` | String | `""` | `itemName` | empty → use `itemCode` as fallback |
+| `label` | String | `""` | `label` | defaults to humanized constant name (`MULTI_FILE`→"Multi File"); declare explicitly to customize. Omit when it equals the humanized name (and omit the whole `@OptionItem` if nothing else remains) |
 | `description` | String | `""` | `description` | |
 | `sequence` | int | `-1` | `sequence` | `-1` → use `ordinal() + 1` |
 | `parentItemCode` | String | `""` | `parentItemCode` | hierarchy |
 | `itemTone` | `OptionItemTone[]` | `{}` | `itemTone` | single element |
 | `itemIcon` | `OptionItemIcon[]` | `{}` | `itemIcon` | single element |
-| (scanner sets) | — | — | `appId` / `id` / `ownership` / `optionSetId` | |
+| (scanner sets) | — | — | `appCode` / `id` / `ownership` / `optionSetId` | |
 | (Studio toggle) | — | — | `active` | |
 
 ### `@Index` ↔ `SysModelIndex`
@@ -191,7 +217,7 @@ extends `AuditableModel`.
 | `name` (or auto-derived) | — | — | `indexName` | `idx_<table>_<col>...` / `uk_<table>_<col>...` for unique |
 | `fields` | String[] | required | `indexFields` | **camelCase Java field names**, not column names |
 | `unique` | boolean | `false` | `uniqueIndex` | |
-| (scanner sets) | — | — | `appId` / `id` / `ownership` | |
+| (scanner sets) | — | — | `appCode` / `id` / `ownership` | |
 | (FK fixup post-init) | — | — | `modelId` | |
 
 **Note**: `@Model.businessKey` does **not** auto-create a UNIQUE index.
@@ -211,7 +237,7 @@ Every row in `sys_model` / `sys_field` / `sys_option_set` / `sys_option_item`
 | Value | Writer | Tenants may modify? |
 |---|---|---|
 | `PLATFORM_MAINTAINED` | Scanner (from `@Model` / `@Field` / `@OptionSet` / `@OptionItem` / `@Index`) | ❌ |
-| `PLATFORM_DEFAULT` | Studio Open API / DML seed (for framework enums like `Language` that cannot carry `@OptionSet`) | ✅ per-row override |
+| `PLATFORM_DEFAULT` | DML seed (currently narrow: framework enums like `Language` that can't carry `@OptionSet`). Reserved for future business-data scenarios (roles, templates, default categories). | ✅ in principle, but on `sys_*` rarely exercised |
 | `TENANT` (default) | Studio UI / Open API | ✅ |
 
 The scanner reads / writes are filtered with
