@@ -152,7 +152,7 @@ Note:
 | 10 | required | Boolean | Required, default `false` |  |
 | 11 | readonly | Boolean | Readonly, default `false` |  |
 | 12 | hidden | Boolean | Hidden, default `false` | UI-only flag set via Studio |
-| 13 | copyable | Boolean | Copyable, default `true` | `false` ⇒ value not carried by `copyById` |
+| 13 | copyable | Boolean | Copyable, default `true` | `false` ⇒ value not carried by `copyById`; see [§2.12](#212-copyable) for field-selection contract |
 | 14 | unsearchable | Boolean | Excluded from default search, default `false` |  |
 | 15 | dynamic | Boolean | Dynamic, default `false` |  |
 | 16 | translatable | Boolean | Translatable, default `false` |  |
@@ -236,7 +236,9 @@ Whether the field is hidden by default on the client. Default is `false`.
 
 ### 2.12 `copyable`
 
-Whether the field is copied when duplicating data on the client. Default is `true`. All fields are copyable except the primary key `id`.
+Whether the field value is carried over by `copyById` (and client Duplicate). Default is `true`. Set `false` for business keys, credentials, and runtime state that must not be duplicated.
+
+**Copy field-selection contract** (applies regardless of the flag): `ONE_TO_ONE` FKs are **always excluded** — copying one would make two rows share an exclusively-owned related row, corrupting the 1:1 (or hard-failing on its unique index); dynamic fields (`ONE_TO_MANY` / `MANY_TO_MANY` / computed / cascaded) are excluded because they are not stored columns; `MANY_TO_ONE` **stays copyable** — a shared reference is exactly its semantics. Historical trap: the `nonCopyable` → `copyable` rename was done as a migration (V6), NOT via `renamedFrom`, because the rename inverts the value's meaning — a value-preserving rename would have carried wrong values.
 
 ### 2.13 `searchable`
 
@@ -320,7 +322,7 @@ System-computed physical type of a TO_ONE FK column (`STRING` / `LONG` / …), m
 
 Delete strategy for a **TO_ONE** foreign key (`ManyToOne` / `OneToOne`): what happens to **referencing** rows when the referenced ("One") row is deleted.
 
-This is an **application-level** policy enforced in `ModelServiceImpl.deleteByIds`. Softa does **not** emit physical database `FOREIGN KEY ... ON DELETE` constraints — relations stay app-level.
+This is an **application-level** policy enforced in `ModelServiceImpl.deleteByIds`. Softa does **not** emit physical database `FOREIGN KEY ... ON DELETE` constraints. Why app-level and never a real DB FK: soft delete is an `UPDATE`, invisible to a DB `ON DELETE` (the FK would simply never fire); a DB cascade bypasses permissions, change logs, audit stamping, soft-delete conversion and tenant scoping; a DB FK cannot express soft-delete-aware RESTRICT / hard-delete-only SET_NULL; and physical FKs clash with never-auto-DROP DDL governance.
 
 | Value | Behavior |
 | --- | --- |
@@ -332,10 +334,11 @@ This is an **application-level** policy enforced in `ModelServiceImpl.deleteById
 Key rules:
 
 - Declare `onDelete` only on the **TO_ONE back-reference FK** (the child side). It is **not** set on `OneToMany` / `ManyToMany` virtual fields — for "delete parent → delete children", put `CASCADE` on the child's FK.
+- A **timeline** target is allowed: the strategy fires on **entity deletion** (`deleteByIds`, which removes all slices of the logical id). Slice-level `deleteBySliceId` keeps the entity alive and deliberately does **not** trigger `onDelete`.
 - This is **not** the same as frontend `cascadedField` (value auto-fill) or UI row-delete callbacks (`onDeleteRow` on relation tables).
 - Frontend `<Field>` has no `onDelete` prop; runtimes consume it from metadata when deleting models.
 
-Boot-time guards reject unsafe combinations (for example soft-delete parent cascading to hard-delete children, cyclic `CASCADE`, shared parent to multi-tenant child). Full matrix, batch limits, and annotation mapping: [Delete strategy (`onDelete`)](../../backend_dev/model_dev/annotation#delete-strategy-ondelete) and ADR-0022.
+Boot-time guards reject unsafe combinations (for example soft-delete parent cascading to hard-delete children, cyclic `CASCADE`, shared parent to multi-tenant child). Full matrix, batch limits, and annotation mapping: [Delete strategy (`onDelete`)](../../backend_dev/model_dev/annotation#delete-strategy-ondelete).
 
 ### 2.25 `joinModel`
 

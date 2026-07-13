@@ -114,8 +114,8 @@ public enum CustomerTier {
 | `defaultValue` | String | `""` | `defaultValue` | |
 | `relatedModel` | `Class<?>` | `Void.class` | `relatedModel` | 类引用（编译期检查），如 `Foo.class`；`Void.class` → 从 POJO 类型推断；`Long` FK **必填**。跨模块/动态模型使用 `relatedModelName`（String） |
 | `relatedModelName` | String | `""` | `relatedModel` | 字符串回退到 `relatedModel`（跨模块/动态） |
-| `relatedField` | String | `""` | `relatedField` | TO_ONE：始终为 `id`——留空（非 id 值在启动时被拒绝，ADR-0024；若要存储业务编码，使关联模型以 code-as-id）。ONE_TO_MANY：命名子 FK 列 |
-| `onDelete` | `OnDelete[]` | `{}` | `on_delete` | TO_ONE FK 删除策略：`RESTRICT` / `CASCADE` / `SET_NULL`；`{}`/未设置 = KEEP（默认——不执行任何操作）。应用层（无 DB FK）。见下文「删除策略」+ ADR-0022 |
+| `relatedField` | String | `""` | `relatedField` | TO_ONE：始终为 `id`——留空（非 id 值在启动时被拒绝；若要存储业务编码，使关联模型以 code-as-id）。ONE_TO_MANY：命名子 FK 列 |
+| `onDelete` | `OnDelete[]` | `{}` | `on_delete` | TO_ONE FK 删除策略：`RESTRICT` / `CASCADE` / `SET_NULL`；`{}`/未设置 = KEEP（默认——不执行任何操作）。应用层（无 DB FK）。见下文「删除策略」 |
 | `joinModel` | `Class<?>` | `Void.class` | `joinModel` | M2M 连接模型类；`joinModelName`（String）回退 |
 | `joinLeft` | String | `""` | `joinLeft` | |
 | `joinRight` | String | `""` | `joinRight` | |
@@ -126,12 +126,14 @@ public enum CustomerTier {
 | （扫描器设置） | — | — | `optionSetCode` | 当 fieldType 为 `OPTION`/`MULTI_OPTION` 时从枚举类型派生 |
 | （扫描器设置） | — | — | `appCode` / `id` | |
 | （FK 修复 post-init） | — | — | `modelId` | |
-| （系统计算） | — | — | `relatedFieldType` | TO_ONE FK 列的物理类型，在协调时从被引用模型的 `id` 镜像（+ 镜像 `length`/`scale`）（ADR-0024）；永不在 `@Field` 上声明 |
+| （系统计算） | — | — | `relatedFieldType` | TO_ONE FK 列的物理类型，在协调时从被引用模型的 `id` 镜像（+ 镜像 `length`/`scale`）；永不在 `@Field` 上声明 |
 | （不通过 `@Field` 暴露） | — | — | `hidden` | 仅 UI 标志，通过 Studio 设置 |
+
+**复制字段选择约定**（无论 `copyable` 标志如何均适用）：`ONE_TO_ONE` FK **始终排除**——复制会使两行共享独占关联行，破坏 1:1（或其唯一索引硬失败）；动态字段（`ONE_TO_MANY` / `MANY_TO_MANY` / computed / cascaded）因不是存储列而被排除；`MANY_TO_ONE` **保持可复制**——共享引用正是其语义。历史陷阱：`nonCopyable` → `copyable` 重命名是作为迁移（V6）完成的，**不是**通过 `renamedFrom`，因为该重命名会反转值的含义——值保留式重命名会带入错误值。
 
 #### 删除策略（`onDelete`）
 
-在 `MANY_TO_ONE` / `ONE_TO_ONE` FK 上，`onDelete` 声明当被引用（"One"）行被删除时，对**引用方**行采取的操作。在 `ModelServiceImpl.deleteByIds` 中于应用层强制执行——永不发出物理 DB `FOREIGN KEY ... ON DELETE`（关联为应用层）：
+在 `MANY_TO_ONE` / `ONE_TO_ONE` FK 上，`onDelete` 声明当被引用（"One"）行被删除时，对**引用方**行采取的操作。在 `ModelServiceImpl.deleteByIds` 中于应用层强制执行——永不发出物理 DB `FOREIGN KEY ... ON DELETE`。为何走应用层且永不使用真实 DB FK：软删除是 `UPDATE`，对 DB `ON DELETE` 不可见（FK 根本不会触发）；DB 级联会绕过权限、变更日志、审计盖章、软删除转换与租户范围；DB FK 无法表达「只统计 `deleted=false` 引用方」「不论租户一律拦截」或「仅在硬删除时置空」；且物理 FK 与永不自动 DROP 的 DDL 治理冲突。策略：
 
 - `RESTRICT` — 若存在任何存活（`deleted=false`）引用方，则阻止删除。
 - `CASCADE` — 在同一事务中删除引用方（每个遵循自身的软/硬删除）。**启动时拒绝**软删除 One 级联到硬删除 Many（可恢复的父级不得不可逆地删除子级——使 Many 也软删除，或使用 RESTRICT/SET_NULL）。
@@ -153,7 +155,9 @@ public enum CustomerTier {
 
 对于 OneToMany「删除父级 → 删除子级」，在**子级反向引用 FK** 上设置 `CASCADE`（FK 是唯一真相来源；`onDelete` 不在 `ONE_TO_MANY` 上声明）。
 
-启动时守卫（快速失败）：`onDelete` 仅对 TO_ONE 有效；`SET_NULL` 要求可空 FK；目标不得为 timeline 模型；**循环 / 自引用 `CASCADE`** 被拒绝（在应用代码中删除此类层次——组织树、BOM、分类树）；**深度超过 `MAX_CASCADE_DEPTH` 个模型的 `CASCADE` 链** 被拒绝（限制递归；错误会命名完整链）；以及从**软删除父级到硬删除子级**，或从**共享父级到多租户子级**的 `CASCADE` 被拒绝（见上表）。
+启动时守卫（快速失败）：`onDelete` 仅对 TO_ONE 有效；`SET_NULL` 要求可空 FK；**循环 / 自引用 `CASCADE`** 被拒绝（在应用代码中删除此类层次——组织树、BOM、分类树）；**深度超过 `MAX_CASCADE_DEPTH` 个模型的 `CASCADE` 链** 被拒绝（限制递归；错误会命名完整链）；以及从**软删除父级到硬删除子级**，或从**共享父级到多租户子级**的 `CASCADE` 被拒绝（见上表）。
+
+**timeline** 目标是允许的：入站 FK 策略在**实体删除**时触发（`deleteByIds`，会移除该逻辑 id 的所有切片——引用方 FK 存的是该逻辑 id，因此 RESTRICT 计数 / CASCADE 删除 / SET_NULL 置空均按它进行，不涉及生效日期解析）；切片级 `deleteBySliceId` 保持实体存活，故意不触发该策略。
 
 面向产品/元数据作者的字段级概述：[字段元数据中的 `onDelete`](../../features/metadata/field#224-ondelete)。
 

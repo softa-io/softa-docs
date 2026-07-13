@@ -128,8 +128,8 @@ extends `AuditableModel`.
 | `defaultValue` | String | `""` | `defaultValue` | |
 | `relatedModel` | `Class<?>` | `Void.class` | `relatedModel` | Class ref (compile-checked), e.g. `Foo.class`; `Void.class` → inferred from POJO type; **required** for `Long` FK. Use `relatedModelName` (String) for cross-module/dynamic models |
 | `relatedModelName` | String | `""` | `relatedModel` | String fallback to `relatedModel` (cross-module/dynamic) |
-| `relatedField` | String | `""` | `relatedField` | TO_ONE: always `id` — leave empty (a non-id value is rejected at boot, ADR-0024; to store a business code make the related model code-as-id). ONE_TO_MANY: names the child FK column |
-| `onDelete` | `OnDelete[]` | `{}` | `on_delete` | TO_ONE FK delete strategy: `RESTRICT` / `CASCADE` / `SET_NULL`; `{}`/unset = KEEP (default — do nothing). App-level (no DB FK). See "Delete strategy" below + ADR-0022 |
+| `relatedField` | String | `""` | `relatedField` | TO_ONE: always `id` — leave empty (a non-id value is rejected at boot; to store a business code make the related model code-as-id). ONE_TO_MANY: names the child FK column |
+| `onDelete` | `OnDelete[]` | `{}` | `on_delete` | TO_ONE FK delete strategy: `RESTRICT` / `CASCADE` / `SET_NULL`; `{}`/unset = KEEP (default — do nothing). App-level (no DB FK). See "Delete strategy" below |
 | `joinModel` | `Class<?>` | `Void.class` | `joinModel` | M2M join model class; `joinModelName` (String) fallback |
 | `joinLeft` | String | `""` | `joinLeft` | |
 | `joinRight` | String | `""` | `joinRight` | |
@@ -140,14 +140,20 @@ extends `AuditableModel`.
 | (scanner sets) | — | — | `optionSetCode` | derived from enum type when fieldType is `OPTION`/`MULTI_OPTION` |
 | (scanner sets) | — | — | `appCode` / `id` | |
 | (FK fixup post-init) | — | — | `modelId` | |
-| (system-computed) | — | — | `relatedFieldType` | physical type of a TO_ONE FK column, mirrored from the referenced model's `id` (+ mirrored `length`/`scale`) at reconciliation time (ADR-0024); never declared on `@Field` |
+| (system-computed) | — | — | `relatedFieldType` | physical type of a TO_ONE FK column, mirrored from the referenced model's `id` (+ mirrored `length`/`scale`) at reconciliation time; never declared on `@Field` |
 | (not exposed via `@Field`) | — | — | `hidden` | UI-only flag set via Studio |
+
+**Copy field-selection contract** (applies regardless of the `copyable` flag): `ONE_TO_ONE` FKs are **always excluded** — copying one would make two rows share an exclusively-owned related row, corrupting the 1:1 (or hard-failing on its unique index); dynamic fields (`ONE_TO_MANY` / `MANY_TO_MANY` / computed / cascaded) are excluded because they are not stored columns; `MANY_TO_ONE` **stays copyable** — a shared reference is exactly its semantics. Historical trap: the `nonCopyable` → `copyable` rename was done as a migration (V6), NOT via `renamedFrom`, because the rename inverts the value's meaning — a value-preserving rename would have carried wrong values.
 
 #### Delete strategy (`onDelete`)
 
 On a `MANY_TO_ONE` / `ONE_TO_ONE` FK, `onDelete` declares what happens to the **referencing** rows when
 the referenced ("One") row is deleted. Enforced application-level in `ModelServiceImpl.deleteByIds` — no
-physical DB `FOREIGN KEY ... ON DELETE` is ever emitted (relations are app-level):
+physical DB `FOREIGN KEY ... ON DELETE` is ever emitted. Why app-level and never a real DB FK: soft
+delete is an `UPDATE`, invisible to a DB `ON DELETE` (the FK would simply never fire); a DB cascade
+bypasses permissions, change logs, audit stamping, soft-delete conversion and tenant scoping; a DB FK
+cannot express "count only `deleted=false` referrers", "block regardless of tenant", or "null only on
+hard delete"; and physical FKs clash with the never-auto-DROP DDL governance. Strategies:
 
 - `RESTRICT` — block the delete if any live (`deleted=false`) referrer exists.
 - `CASCADE` — delete the referrers in the same transaction (each follows its own soft/hard delete).
@@ -179,12 +185,17 @@ transaction — chunking bounds statement size, not lock duration).
 For a OneToMany "delete parent → delete children", put `CASCADE` on the **child's back-reference FK**
 (the FK is the single source of truth; `onDelete` is not declared on `ONE_TO_MANY`).
 
-Boot-time guards (fail-fast): `onDelete` is valid only on TO_ONE; `SET_NULL` requires a nullable FK; the
-target may not be a timeline model; a **cyclic / self-referential `CASCADE`** is rejected (delete such
-hierarchies — org trees, BOM, category trees — in application code); a **`CASCADE` chain deeper than
-`MAX_CASCADE_DEPTH` models** is rejected (bounds recursion; the error names the full chain); and a
-`CASCADE` from a **soft-delete parent to a hard-delete child**, or from a **shared parent to a
-multi-tenant child**, is rejected (see the matrix above).
+Boot-time guards (fail-fast): `onDelete` is valid only on TO_ONE; `SET_NULL` requires a nullable FK; a
+**cyclic / self-referential `CASCADE`** is rejected (delete such hierarchies — org trees, BOM, category
+trees — in application code); a **`CASCADE` chain deeper than `MAX_CASCADE_DEPTH` models** is rejected
+(bounds recursion; the error names the full chain); and a `CASCADE` from a **soft-delete parent to a
+hard-delete child**, or from a **shared parent to a multi-tenant child**, is rejected (see the matrix
+above).
+
+A **timeline** target is allowed: the inbound-FK strategy fires on **entity deletion** (`deleteByIds`,
+which removes all slices of the logical id — referencing FKs store that logical id, so RESTRICT counts /
+CASCADE deletes / SET_NULL nulls by it, no effective-date resolution involved); slice-level
+`deleteBySliceId` keeps the entity alive and deliberately does not trigger it.
 
 Field-level overview for product/metadata authors: [`onDelete` in Field metadata](../../features/metadata/field#224-ondelete).
 

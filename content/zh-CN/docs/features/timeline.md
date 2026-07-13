@@ -8,6 +8,7 @@
 
 - 当 `timeline = true` 时，表示该模型为时间轴模型，必须包含保留字段 `effectiveStartDate` 和 `effectiveEndDate`。系统会在启动时校验，如缺失则抛出异常。
 - 当 `timeline = false` 时，表示普通模型，**不允许**定义 `effectiveStartDate` 与 `effectiveEndDate` 保留字段。
+- 时间轴模型**要求使用应用侧生成的逻辑 id**——`idStrategy = DISTRIBUTED_LONG`（或 `DISTRIBUTED_STRING` / `EXTERNAL_ID`）。`DB_AUTO_ID` 会在启动时被拒绝：自增落在物理主键 `sliceId` 上，首条切片的共享逻辑 `id` 列将无人填充（后续拆分/更正行会携带实体已有的 id 并沿用）。
 
 ### 1.2 主键与关键字段
 
@@ -16,7 +17,12 @@
 - `effectiveEndDate`：切片生效结束日期。
 - `id`：逻辑（业务）主键，用于与非时间轴模型兼容。所有指向时间轴模型的业务外键都引用该字段。
 - 如数据库需要用于变更日志的自增“记录号”（如 `record_id`），可以自行增加，不属于框架保留字段。
-- 推荐的唯一约束：`(id, effectiveStartDate, effectiveEndDate)`。
+- 推荐的唯一约束：`(id, effectiveStartDate, effectiveEndDate)`——同一索引兼顾 as-of 读取覆盖（结束日期可在索引内判定）与并发写入完整性：区间维护是先查后写，同一实体上真正的并发写冲突会以唯一约束冲突暴露，而不是静默产生相同起始日的切片。声明时须给出**显式 `indexName`**（默认拼接名在表名较长时会超过 60 字符的全局上限）：
+
+  ```java
+  @Index(indexName = "uk_<table>_timeline",
+         fields = {"id", "effectiveStartDate", "effectiveEndDate"}, unique = true)
+  ```
 
 ### 1.3 元数据关联关系
 
@@ -91,10 +97,17 @@
 
 ### 2.5 删除接口
 
-- `deleteById` / `deleteByIds`：删除某个业务 `id` 下的所有切片。
-- `deleteBySliceId`：删除单个切片，并自动修正前后切片的时间范围。
+- `deleteById` / `deleteByIds`：删除某个业务 `id` 下的所有切片——这是**实体删除**，也是入站外键删除策略（`onDelete` 的 RESTRICT / CASCADE / SET_NULL，按逻辑 `id` 键控）对引用方模型生效的时机。
+- `deleteBySliceId`：删除单个切片，并自动修正前后切片的时间范围。实体本身仍然存在，因此 `onDelete` **刻意不会**触发。
 
-### 2.6 时间轴关联查询规则
+### 2.6 Versioning seam（引擎内部）
+
+- `ModelServiceImpl` 中所有时间轴处理都经一条 `VersioningStrategy` 接缝（`service/versioning/`）：`IdentityStrategy` 对普通模型是空操作，`TimelineStrategy` 适配 `TimelineService` 中的区间维护算法。新增读路径必须把 Filters/FlexQuery 走 `scopedRead` 出口——避免在各调用点散落 `if (isTimelineModel)`。
+- 跨时间轴退出是**契约上的双重触发**：显式的 `FlexQuery.acrossTimelineData()` 标志，**或**调用方自行提供的 `effectiveStartDate` / `effectiveEndDate` 条件（表示“我自己做时间过滤”）。任一条件都会抑制默认的生效日钳制；二者均为有意、稳定的行为。
+- **已接受的限制**（曾评估并否决主从表拆分——其主要收益是真实的数据库 FK 目标，但引用完整性由应用层保证且不生成物理 FK，因此该收益无意义）：版本无关字段（如 `code`）会在每个切片上重复；**不支持对时间轴模型声明按 code 引用的关系**（`code` 在切片间并非物理唯一）。请按逻辑 `id`（as-of）引用时间轴实体，或通过 `sliceId` 钉住某一切片；**运行时**按 “`code` + 生效日期” 做 as-of 查询是完全支持的（不重叠区间保证唯一）。
+- `Context.effectiveDate` 是环境态（默认今天）。跨线程扇出任务的批处理引擎必须把上下文（ScopedValue）传播到工作线程——例如按 `payDate` 计价的发薪跑批——否则该分支会静默按“今天”计价。
+
+### 2.7 时间轴关联查询规则
 
 - 当关联对象是时间轴模型时，Many2One/One2One 的关联查询会在 `LEFT JOIN ON` 中自动附加：
 
@@ -102,7 +115,7 @@
   effectiveStartDate <= effectiveDate AND effectiveEndDate >= effectiveDate
   ```
 
-- One2Many / ManyToMany 的级联查询同样会基于 `effectiveDate` 过滤切片。
+- One2Many / Many2Many 的级联查询同样会基于 `effectiveDate` 过滤切片。
 
 ## 3. 示例
 
@@ -110,19 +123,21 @@
 
 ```java
 @Data
-@Schema(name = "ProductPrice")
 @EqualsAndHashCode(callSuper = true)
+@Model(label = "Product Price", timeline = true, idStrategy = IdStrategy.DISTRIBUTED_LONG)
+@Index(indexName = "uk_product_price_timeline",
+       fields = {"id", "effectiveStartDate", "effectiveEndDate"}, unique = true)
 public class ProductPrice extends TimelineModel {
     @Serial
     private static final long serialVersionUID = 1L;
 
-    @Schema(description = "业务 ID")
+    @Field(label = "ID")
     private Long id;
 
-    @Schema(description = "产品 ID")
+    @Field(label = "Product ID")
     private Long productId;
 
-    @Schema(description = "价格")
+    @Field(label = "Price")               // BigDecimal → DECIMAL(32,8) by default (money)
     private BigDecimal price;
 }
 ```
