@@ -20,7 +20,8 @@
 - `groupBy`：用于分组的字段列表。
 - `splitBy`：用于拆分查询结果的字段（Split Query 场景）。
 - `summary`：是否返回汇总数据（例如合计行）。
-- `effectiveDate`：用于评估“按生效日期”数据的日期（时间轴模型）。
+- `effectiveDate`：用于评估时间轴（按生效日期）数据的日期；默认为今天。当 `acrossTimeline` 为 true 时忽略。
+- `acrossTimeline`：仅时间轴模型。为 `true` 时返回**全部**版本切片（跳过生效日钳制）——例如某条记录的完整版本列表。默认 `false` 只返回在 `effectiveDate` 上生效的那一切片。映射到 `FlexQuery.acrossTimelineData()`；对非时间轴模型为 no-op。`/searchList` 的 `SearchListParams` 同样支持。`SearchNameParams` 上不提供该字段。
 - `subQueries`：一个 Map，key 为关联字段名，value 为对应的 `SubQuery` 配置，用于定义关联字段如何展开。
 
 示例请求（基础分页 + subQueries）：

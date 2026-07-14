@@ -18,7 +18,8 @@
 - `groupBy`: list of fields to group by.
 - `splitBy`: field to split results by (for split queries).
 - `summary`: boolean flag to indicate whether to return summary data (e.g., totals) for the query.
-- `effectiveDate`: date for evaluating effective-dated data.
+- `effectiveDate`: date for evaluating effective-dated (timeline) data; default is today. Ignored when `acrossTimeline` is true.
+- `acrossTimeline`: timeline models only. When `true`, return **all** version slices (skip the effective-date clamp) — for example a record's full version list. Default `false` returns the single slice effective on `effectiveDate`. Maps to `FlexQuery.acrossTimelineData()`; no-op for non-timeline models. Also available on `SearchListParams` for `/searchList`. Not present on `SearchNameParams`.
 - `subQueries`: map of relational field names to `SubQuery` objects, defining how to expand those relations.
 
 Example request (basic paging + subQueries):

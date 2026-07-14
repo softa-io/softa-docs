@@ -63,6 +63,12 @@ Example timeline slices (same logical department `id`):
 - Queries like `getById/getByIds/searchList/searchPage` return only slices effective on `effectiveDate` by default.
 - To query history across time, use `FlexQuery#acrossTimelineData()` or include `effectiveStartDate`/`effectiveEndDate` in filters.
 - Cascaded reads propagate `effectiveDate`.
+- **View a record's version list from the REST API**: `/searchPage` (or `/searchList`) with the row's `id` in `filters` and `acrossTimeline: true` returns all slices (each carrying its own `sliceId` and effective range). The `acrossTimeline` flag is the explicit half of the dual trigger, exposed on `QueryParams` / `SearchListParams`; it is not on `SearchNameParams` (a displayName picker wants the as-of option, not every version). When `acrossTimeline` is true, `effectiveDate` is ignored. Example:
+
+```jsonc
+POST /{model}/searchPage
+{ "filters": [["id","=",6]], "orders": [["effectiveStartDate","DESC"]], "acrossTimeline": true }
+```
 
 ### 2.3 create APIs
 - For `createOne/createList`, if `effectiveStartDate` is empty, it uses the current `effectiveDate`; if `effectiveEndDate` is empty, it is set to `9999-12-31`.
@@ -79,7 +85,7 @@ Example timeline slices (same logical department `id`):
 
 ### 2.6 Versioning seam (engine internals)
 - All timeline handling in `ModelServiceImpl` routes through one `VersioningStrategy` seam (`service/versioning/`): `IdentityStrategy` is a no-op for regular models, `TimelineStrategy` adapts the interval-maintenance algorithm in `TimelineService`. New read paths must route Filters/FlexQuery through the `scopedRead` exits — there is no per-call-site `if (isTimelineModel)` to forget.
-- The across-timeline opt-out is a **dual trigger by contract**: the explicit `FlexQuery.acrossTimelineData()` flag, **or** caller-supplied `effectiveStartDate`/`effectiveEndDate` conditions (which declare "I am doing my own temporal filtering"). Either suppresses the default effective-date clamp; both are intended, stable behavior.
+- The across-timeline opt-out is a **dual trigger by contract**: the explicit `FlexQuery.acrossTimelineData()` flag (also set from REST via `QueryParams` / `SearchListParams.acrossTimeline`), **or** caller-supplied `effectiveStartDate`/`effectiveEndDate` conditions (which declare "I am doing my own temporal filtering"). Either suppresses the default effective-date clamp; both are intended, stable behavior.
 - **Accepted limitations** (a master-detail table split was evaluated and rejected — its headline benefit, a real DB FK target, is moot because referential integrity is enforced app-level and no physical FKs are emitted): version-invariant fields (e.g. `code`) repeat on every slice, and a **declarative reference-by-code relation to a timeline model is not supported** (`code` is not physically unique across slices). Reference timeline entities by logical `id` (as-of) or pin one slice via `sliceId`; a **runtime** "`code` + effective date" as-of query is fully supported (non-overlapping intervals make it unique).
 - `Context.effectiveDate` is ambient state (defaults to today). Batch engines that fan work out across threads must propagate the context (ScopedValue) to workers — e.g. a payroll run pricing by `payDate` — or that branch silently prices "as of today".
 
@@ -123,6 +129,16 @@ FlexQuery historyQuery = new FlexQuery(new Filters().eq("id", 1L))
         .acrossTimelineData()
         .orderBy(Orders.ofAsc("effectiveStartDate"));
 List<Map<String, Object>> history = modelService.searchList("ProductPrice", historyQuery);
+```
+
+### 3) REST: full version list for one record
+```jsonc
+POST /ProductPrice/searchPage
+{
+  "filters": [["id", "=", 1]],
+  "orders": [["effectiveStartDate", "ASC"]],
+  "acrossTimeline": true
+}
 ```
 
 ## 3. Performance

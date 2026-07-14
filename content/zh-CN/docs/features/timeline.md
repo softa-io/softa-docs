@@ -83,6 +83,12 @@
 - `getById` / `getByIds` / `searchList` / `searchPage` 默认只返回在当前 `effectiveDate` 下生效的切片。
 - 如需跨时间维度查询历史记录，可使用 `FlexQuery#acrossTimelineData()`，或在筛选条件中显式包含 `effectiveStartDate` / `effectiveEndDate`。
 - 级联查询会自动传递 `effectiveDate` 到关联的时间轴模型。
+- **通过 REST API 查看某条记录的版本列表**：在 `/searchPage`（或 `/searchList`）的 `filters` 中带上该行的 `id`，并设置 `acrossTimeline: true`，即可返回全部切片（每条带各自的 `sliceId` 与生效区间）。`acrossTimeline` 是双重触发中的显式一侧，暴露在 `QueryParams` / `SearchListParams` 上；**不在** `SearchNameParams` 上（displayName 选择器需要的是 as-of 选项，而非全部版本）。当 `acrossTimeline` 为 true 时，`effectiveDate` 被忽略。示例：
+
+```jsonc
+POST /{model}/searchPage
+{ "filters": [["id","=",6]], "orders": [["effectiveStartDate","DESC"]], "acrossTimeline": true }
+```
 
 ### 2.3 创建接口
 
@@ -103,7 +109,7 @@
 ### 2.6 Versioning seam（引擎内部）
 
 - `ModelServiceImpl` 中所有时间轴处理都经一条 `VersioningStrategy` 接缝（`service/versioning/`）：`IdentityStrategy` 对普通模型是空操作，`TimelineStrategy` 适配 `TimelineService` 中的区间维护算法。新增读路径必须把 Filters/FlexQuery 走 `scopedRead` 出口——避免在各调用点散落 `if (isTimelineModel)`。
-- 跨时间轴退出是**契约上的双重触发**：显式的 `FlexQuery.acrossTimelineData()` 标志，**或**调用方自行提供的 `effectiveStartDate` / `effectiveEndDate` 条件（表示“我自己做时间过滤”）。任一条件都会抑制默认的生效日钳制；二者均为有意、稳定的行为。
+- 跨时间轴退出是**契约上的双重触发**：显式的 `FlexQuery.acrossTimelineData()` 标志（REST 侧由 `QueryParams` / `SearchListParams.acrossTimeline` 设置），**或**调用方自行提供的 `effectiveStartDate` / `effectiveEndDate` 条件（表示“我自己做时间过滤”）。任一条件都会抑制默认的生效日钳制；二者均为有意、稳定的行为。
 - **已接受的限制**（曾评估并否决主从表拆分——其主要收益是真实的数据库 FK 目标，但引用完整性由应用层保证且不生成物理 FK，因此该收益无意义）：版本无关字段（如 `code`）会在每个切片上重复；**不支持对时间轴模型声明按 code 引用的关系**（`code` 在切片间并非物理唯一）。请按逻辑 `id`（as-of）引用时间轴实体，或通过 `sliceId` 钉住某一切片；**运行时**按 “`code` + 生效日期” 做 as-of 查询是完全支持的（不重叠区间保证唯一）。
 - `Context.effectiveDate` 是环境态（默认今天）。跨线程扇出任务的批处理引擎必须把上下文（ScopedValue）传播到工作线程——例如按 `payDate` 计价的发薪跑批——否则该分支会静默按“今天”计价。
 
@@ -154,6 +160,17 @@ FlexQuery historyQuery = new FlexQuery(new Filters().eq("id", 1L))
         .acrossTimelineData()
         .orderBy(Orders.ofAsc("effectiveStartDate"));
 List<Map<String, Object>> history = modelService.searchList("ProductPrice", historyQuery);
+```
+
+### 3.3 REST：拉取某条记录的完整版本列表
+
+```jsonc
+POST /ProductPrice/searchPage
+{
+  "filters": [["id", "=", 1]],
+  "orders": [["effectiveStartDate", "ASC"]],
+  "acrossTimeline": true
+}
 ```
 
 ## 4. 性能考虑
