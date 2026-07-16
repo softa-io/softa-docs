@@ -26,7 +26,7 @@ Example scenarios:
 - persistent projections for instances, approval tasks, approval records, delegations, CC rules, and trigger events
 - optional Pulsar-based trigger and async-task integration
 
-This README documents the current backend contract implemented in this module.
+This page documents the current backend contract implemented in `flow-starter`.
 
 ## Current Model
 
@@ -79,6 +79,14 @@ Current `FlowNodeType` values:
 from the node palette and rejected at compile time (`UNSUPPORTED_NODE_TYPE`), so a flow
 containing them cannot publish.
 
+Node-behavior invariants:
+
+- **`Subflow` is synchronous-only**: the orchestrator fails the parent if a child
+  enters a waiting state (`WAITING_APPROVAL` / `TIMER` / `ASYNC`), and recursive
+  subflow invocation is rejected. Model human steps in the parent flow, not a child.
+- **`ParallelFork` branches execute serially** (deterministic order), not
+  wall-clock-parallel — the gateway models routing topology, not concurrency.
+
 ### Runtime Statuses
 
 Defined `FlowExecutionStatus` values:
@@ -97,10 +105,15 @@ Defined `FlowExecutionStatus` values:
 
 ## API Overview
 
+Host applications embedding the engine in-process should integrate through the
+`FlowClient` facade (`io.softa.starter.flow.api`) rather than looping back over
+REST — actor / initiator / tenant identity is always resolved server-side from the
+context, never passed as call parameters. See the in-module integration guide under `starters/flow-starter/docs/integration-guide.md` in the Softa source repository.
+
 ### Design APIs (flow editor)
 
 Base path: `/flow/designs` — the dedicated surface for the graphical editor
-(the full editor API contract lives in the flow-starter source repository under `starters/flow-starter/docs/frontend-editor-api.md`).
+(the full editor API contract lives in the Softa source repository under `starters/flow-starter/docs/frontend-editor-api.md`).
 The generic model API at `/FlowDesign/**` remains available as the platform
 data plane and is intentionally not intercepted.
 
@@ -146,11 +159,10 @@ Base path: `/flow/runtime`
 | Method | Path | Description |
 |---|---|---|
 | `POST` | `/flow/runtime/instances/start` | Start a flow instance |
-| `POST` | `/flow/runtime/instances/debug` | Start and return the resolved bundle snapshot plus runtime state |
 | `GET` | `/flow/runtime/instances/{instanceId}?includeTrace=` | Get one runtime instance (trace excluded by default) |
 | `GET` | `/flow/runtime/instances/{instanceId}/overlay` | Per-node run state for canvas painting |
 | `GET` | `/flow/runtime/instances/{instanceId}/trace?sinceSequence=` | Incremental trace rows for polling |
-| `POST` | `/flow/runtime/instances/search` | Paged instance summaries (filters: flowCode/designId/status/initiator/model/row) |
+| `POST` | `/flow/runtime/instances/search` | Paged summaries of the caller's own instances — the initiator filter is always the authenticated user (filters: flowCode/designId/status/model/row/createdFrom/createdTo) |
 | `POST` | `/flow/runtime/instances/approve` | Approve a pending approval |
 | `POST` | `/flow/runtime/instances/reject` | Reject a pending approval |
 | `POST` | `/flow/runtime/instances/transfer` | Transfer a pending approval task |
@@ -184,11 +196,12 @@ Base path: `/flow/approvalTasks`
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/flow/approvalTasks/pending` | Pending tasks for the current actor (paged: returns `Page`) |
-| `GET` | `/flow/approvalTasks/completed` | Completed tasks for the current actor (paged) |
-| `GET` | `/flow/approvalTasks/cc` | CC tasks for the current actor (paged; `read=` filters unread/read) |
-| `GET` | `/flow/approvalTasks/inbox` | Unified inbox view |
-| `GET` | `/flow/approvalTasks/instance/{instanceId}` | All tasks for one runtime instance |
+| `GET` | `/flow/approvalTasks/counts` | Inbox badge counts for the current actor (`{pendingApprovals, unreadCc}` — same filter definitions as the paged `/pending` and `/cc?read=false` queries) |
+| `GET` | `/flow/approvalTasks/pending?flowCode=&instanceId=&nodeId=&pageNumber=&pageSize=` | Pending tasks for the current actor (paged: returns `Page`) |
+| `GET` | `/flow/approvalTasks/completed?flowCode=&instanceId=&nodeId=&pageNumber=&pageSize=` | Completed tasks for the current actor (paged) |
+| `GET` | `/flow/approvalTasks/cc?read=&flowCode=&instanceId=&nodeId=&pageNumber=&pageSize=` | CC tasks for the current actor (paged; `read=false` unread, `read=true` acknowledged, omit `read` for both) |
+| `GET` | `/flow/approvalTasks/inbox?flowCode=&instanceId=&nodeId=&includeCompletedApprovals=&pageNumber=&pageSize=` | Unified inbox view (pending approvals + CC; optional completed approvals) |
+| `GET` | `/flow/approvalTasks/instance/{instanceId}` | All tasks for one runtime instance (participants / initiator only) |
 
 ### Approval Records
 
@@ -217,9 +230,18 @@ Base path: `/flow/delegations`
 | Method | Path | Description |
 |---|---|---|
 | `POST` | `/flow/delegations` | Create a delegation rule |
-| `GET` | `/flow/delegations/my?delegatorId=` | Delegations created by one delegator |
-| `GET` | `/flow/delegations/to-me?delegateId=` | Active delegations assigned to one delegate |
+| `GET` | `/flow/delegations/my` | Delegations created by the caller (delegator resolved from the login context) |
+| `GET` | `/flow/delegations/to-me` | Active delegations assigned to the caller (delegate resolved from the login context) |
 | `POST` | `/flow/delegations/{id}/cancel` | Cancel a delegation rule |
+
+### Monitor
+
+Base path: `/flow/monitor` — operator-facing; the search endpoint requires the system admin role (`@RequireRole(SystemRoleAdmin)`, fail-closed when the host app wires no role provider). A caller holding that role also bypasses the participant scoping on the instance detail / overlay / trace / approval-history reads.
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/flow/monitor/health` | Flow runtime health snapshot (per-status instance counts, overdue timers) |
+| `POST` | `/flow/monitor/instances/search` | Cross-initiator paged instance summaries; honors the request's `initiatorId` filter when present |
 
 ### Event Logs
 
@@ -227,7 +249,8 @@ Base path: `/flow/events`
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/flow/events?flowCode=&sourceModel=&sourceRowId=&instanceId=&success=&pageNumber=&pageSize=` | Paged event log, newest first (filters combine with AND; list rows exclude the parameters payload) |
+| `GET` | `/flow/events?flowCode=&sourceModel=&sourceRowId=&instanceId=&success=&eventTimeFrom=&eventTimeTo=&pageNumber=&pageSize=` | Paged event log, newest first (filters combine with AND; list rows exclude the parameters payload) |
+| `GET` | `/flow/events/{id}` | Single event including the raw trigger-parameters payload |
 
 ## Approval Model
 
@@ -257,6 +280,11 @@ Important integration note:
 
 - `OrganizationService` is defined as an SPI (`MetadataOrganizationService` is the default when wired). The default resolver path also supports variable-based sources via `ApproverResolutionService`.
 - If you need real org-tree lookup, provide a custom `OrganizationService` bean or populate resolution variables such as `initiatorManagerId` and `roleApprovers` before the flow reaches the approval node.
+
+Approver dedup: the default policy is **`GLOBAL`** — a user who already approved an
+earlier node is auto-passed on later nodes (recorded as `AUTO_APPROVE`). Residual
+risk: a mid-flow form edit is still auto-endorsed by that earlier approval; set the
+policy to `CONTIGUOUS` or `NONE` on flows where a re-look matters.
 
 ### Additional Approval Actions
 
@@ -322,7 +350,7 @@ registered executor's node type has such an entry.
 | `VALIDATE_DATA` | `ValidateDataTaskExecutor` | Built in |
 | `TRANSFORM` | `ExtractTransformTaskExecutor` | Built in |
 | `CALL_WEBHOOK` | `WebHookTaskExecutor` | Built in |
-| `CALL_SERVICE` | `CallServiceTaskExecutor` | **Disabled by default** (ADR-0005). Opt-in via `flow.task.builtin.call-service.enabled=true`; a non-empty `flow.task.call-service.allow-list` of permitted bean-name prefixes is then mandatory |
+| `CALL_SERVICE` | `CallServiceTaskExecutor` | **Disabled by default**. Opt-in via `flow.task.builtin.call-service.enabled=true`; a non-empty `flow.task.call-service.allow-list` of permitted bean-name prefixes is then mandatory |
 | `SEND_EMAIL` | `SendEmailTaskExecutor` | Registered only when `MessageService` is available |
 | `SEND_SMS` | `SendSmsTaskExecutor` | Registered only when `MessageService` is available |
 | `SEND_INBOX_NOTIFICATION` | `SendInboxNotificationTaskExecutor` | Registered only when `MessageService` is available |
@@ -332,7 +360,7 @@ registered executor's node type has such an entry.
 
 Current module notes:
 
-- `CALL_SERVICE` ships a bundled executor but is **disabled by default** (ADR-0005): it invokes an arbitrary Spring bean method by name, so it must be explicitly enabled and given a non-empty bean-name allow-list.
+- `CALL_SERVICE` ships a bundled executor but is **disabled by default**: it invokes an arbitrary Spring bean method by name, so it must be explicitly enabled and given a non-empty bean-name allow-list.
 
 ## Trigger And Messaging Integration
 
@@ -373,7 +401,6 @@ Important timer note:
 | `FlowDelegation` | Delegation rules |
 | `FlowEvent` | Trigger event logs |
 | `FlowDebugHistory` | Debug snapshots |
-| `FlowFormDefinition` | Form definitions bound to flow nodes |
 | `FlowParallelBranch` | Parallel branch tracking |
 
 Primary storage adapters in this module:

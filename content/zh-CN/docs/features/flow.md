@@ -21,7 +21,7 @@ Flow > BP = Workflow > BPMN
 - 实例、审批任务、审批记录、委托、抄送规则和触发事件的持久化投影
 - 可选的基于 Pulsar 的触发与异步任务集成
 
-本 README 记录本模块当前实现的后端契约。
+本页记录 `flow-starter` 当前实现的后端契约。
 
 ## 当前模型
 
@@ -69,6 +69,11 @@ Flow > BP = Workflow > BPMN
 
 \* `HumanTask` 和 `ForEach` 已定义但**尚未运行时支持**：它们从节点面板中省略，并在编译时被拒绝（`UNSUPPORTED_NODE_TYPE`），因此包含它们的流程无法发布。
 
+节点行为不变量：
+
+- **`Subflow` 仅支持同步**：若子流程进入等待状态（`WAITING_APPROVAL` / `TIMER` / `ASYNC`），编排器会使父流程失败；递归子流程调用会被拒绝。人工步骤应建模在父流程中，而非子流程。
+- **`ParallelFork` 分支串行执行**（确定性顺序），而非墙钟并行——该网关建模路由拓扑，而非并发。
+
 ### 运行时状态
 
 已定义的 `FlowExecutionStatus` 值：
@@ -85,11 +90,13 @@ Flow > BP = Workflow > BPMN
 
 ## API 概览
 
+宿主应用若在进程内嵌入引擎，应通过 `FlowClient` 门面（`io.softa.starter.flow.api`）集成，而不是绕回 REST——actor / initiator / tenant 身份始终从服务端上下文解析，绝不作为调用参数传入。参见 Softa 源仓库中模块内集成指南：`starters/flow-starter/docs/integration-guide.md`。
+
 ### 设计 API（flow 编辑器）
 
-基础路径：`/flow/designs` — 图形编辑器的专用表面（完整编辑器 API 契约位于 flow-starter 源仓库的 `starters/flow-starter/docs/frontend-editor-api.md`）。通用模型 API `/FlowDesign/**` 仍作为平台数据平面可用，且有意不被拦截。
+基础路径：`/flow/designs` — 图形编辑器的专用表面（完整编辑器 API 契约位于 Softa 源仓库的 `starters/flow-starter/docs/frontend-editor-api.md`）。通用模型 API `/FlowDesign/**` 仍作为平台数据平面可用，且有意不被拦截。
 
-| 方法 | 路径 | 说明 |
+| Method | Path | 说明 |
 |---|---|---|
 | `POST` | `/flow/designs` | 创建草稿 |
 | `GET` | `/flow/designs?keyword=&scenario=&pageNumber=&pageSize=` | 分页草稿列表（不含画布） |
@@ -109,7 +116,7 @@ Flow > BP = Workflow > BPMN
 
 基础路径：`/flow/bundles`
 
-| 方法 | 路径 | 说明 |
+| Method | Path | 说明 |
 |---|---|---|
 | `GET` | `/flow/bundles?designId=` | 一个设计的修订版列表（无 `designId` 时为每个设计的活动 bundle） |
 | `GET` | `/flow/bundles/{bundleId}?include=design` | 一个修订版摘要，可选含画布完整设计快照 |
@@ -119,7 +126,7 @@ Flow > BP = Workflow > BPMN
 
 基础路径：`/flow/nodeDescriptors`
 
-| 方法 | 路径 | 说明 |
+| Method | Path | 说明 |
 |---|---|---|
 | `GET` | `/flow/nodeDescriptors` | 列出编辑器面板的所有节点描述符 |
 | `GET` | `/flow/nodeDescriptors?scenario=PROCESS` | 按 `FlowScenario` 过滤描述符 |
@@ -128,14 +135,13 @@ Flow > BP = Workflow > BPMN
 
 基础路径：`/flow/runtime`
 
-| 方法 | 路径 | 说明 |
+| Method | Path | 说明 |
 |---|---|---|
 | `POST` | `/flow/runtime/instances/start` | 启动流程实例 |
-| `POST` | `/flow/runtime/instances/debug` | 启动并返回解析的 bundle 快照及运行时状态 |
 | `GET` | `/flow/runtime/instances/{instanceId}?includeTrace=` | 获取一个运行时实例（默认排除 trace） |
 | `GET` | `/flow/runtime/instances/{instanceId}/overlay` | 画布绘制的每节点运行状态 |
 | `GET` | `/flow/runtime/instances/{instanceId}/trace?sinceSequence=` | 用于轮询的增量 trace 行 |
-| `POST` | `/flow/runtime/instances/search` | 分页实例摘要（filters：flowCode/designId/status/initiator/model/row） |
+| `POST` | `/flow/runtime/instances/search` | 调用方自身实例的分页摘要——发起人过滤始终为已认证用户（filters：flowCode/designId/status/model/row/createdFrom/createdTo） |
 | `POST` | `/flow/runtime/instances/approve` | 批准待审批 |
 | `POST` | `/flow/runtime/instances/reject` | 拒绝待审批 |
 | `POST` | `/flow/runtime/instances/transfer` | 转交待审批任务 |
@@ -164,19 +170,20 @@ Flow > BP = Workflow > BPMN
 
 基础路径：`/flow/approvalTasks`
 
-| 方法 | 路径 | 说明 |
+| Method | Path | 说明 |
 |---|---|---|
-| `GET` | `/flow/approvalTasks/pending` | 当前 actor 的待办任务（分页：返回 `Page`） |
-| `GET` | `/flow/approvalTasks/completed` | 当前 actor 的已完成任务（分页） |
-| `GET` | `/flow/approvalTasks/cc` | 当前 actor 的抄送任务（分页；`read=` 过滤未读/已读） |
-| `GET` | `/flow/approvalTasks/inbox` | 统一收件箱视图 |
-| `GET` | `/flow/approvalTasks/instance/{instanceId}` | 一个运行时实例的所有任务 |
+| `GET` | `/flow/approvalTasks/counts` | 当前 actor 的收件箱徽章计数（`{pendingApprovals, unreadCc}`——过滤定义与分页 `/pending` 及 `/cc?read=false` 查询相同） |
+| `GET` | `/flow/approvalTasks/pending?flowCode=&instanceId=&nodeId=&pageNumber=&pageSize=` | 当前 actor 的待办任务（分页：返回 `Page`） |
+| `GET` | `/flow/approvalTasks/completed?flowCode=&instanceId=&nodeId=&pageNumber=&pageSize=` | 当前 actor 的已完成任务（分页） |
+| `GET` | `/flow/approvalTasks/cc?read=&flowCode=&instanceId=&nodeId=&pageNumber=&pageSize=` | 当前 actor 的抄送任务（分页；`read=false` 未读，`read=true` 已确认，省略 `read` 则两者都返回） |
+| `GET` | `/flow/approvalTasks/inbox?flowCode=&instanceId=&nodeId=&includeCompletedApprovals=&pageNumber=&pageSize=` | 统一收件箱视图（待审批 + 抄送；可选已完成审批） |
+| `GET` | `/flow/approvalTasks/instance/{instanceId}` | 一个运行时实例的所有任务（仅参与者 / 发起人） |
 
 ### 审批记录
 
 基础路径：`/flow/approvalRecords`
 
-| 方法 | 路径 | 说明 |
+| Method | Path | 说明 |
 |---|---|---|
 | `GET` | `/flow/approvalRecords/instance/{instanceId}` | 按运行时实例的审批历史 |
 | `GET` | `/flow/approvalRecords/history` | actor 范围的审批历史 |
@@ -186,7 +193,7 @@ Flow > BP = Workflow > BPMN
 
 基础路径：`/flow/ccConfigs`
 
-| 方法 | 路径 | 说明 |
+| Method | Path | 说明 |
 |---|---|---|
 | `POST` | `/flow/ccConfigs` | 创建抄送规则 |
 | `GET` | `/flow/ccConfigs?flowCode=` | 按 `flowCode` 列出抄送规则 |
@@ -196,20 +203,30 @@ Flow > BP = Workflow > BPMN
 
 基础路径：`/flow/delegations`
 
-| 方法 | 路径 | 说明 |
+| Method | Path | 说明 |
 |---|---|---|
 | `POST` | `/flow/delegations` | 创建委托规则 |
-| `GET` | `/flow/delegations/my?delegatorId=` | 某委托人创建的委托 |
-| `GET` | `/flow/delegations/to-me?delegateId=` | 分配给某受托人的活动委托 |
+| `GET` | `/flow/delegations/my` | 调用方创建的委托（委托人从登录上下文解析） |
+| `GET` | `/flow/delegations/to-me` | 分配给调用方的活动委托（受托人从登录上下文解析） |
 | `POST` | `/flow/delegations/{id}/cancel` | 取消委托规则 |
+
+### 监控
+
+基础路径：`/flow/monitor` — 面向运维；搜索端点需要系统管理员角色（`@RequireRole(SystemRoleAdmin)`，宿主应用未接入角色提供者时失败关闭）。持有该角色的调用者还会绕过实例详情 / overlay / trace / 审批历史读取上的参与者范围限制。
+
+| Method | Path | 说明 |
+|---|---|---|
+| `GET` | `/flow/monitor/health` | 流程运行时健康快照（按状态的实例计数、逾期定时器） |
+| `POST` | `/flow/monitor/instances/search` | 跨发起人的分页实例摘要；请求中若有 `initiatorId` 过滤则予以采纳 |
 
 ### 事件日志
 
 基础路径：`/flow/events`
 
-| 方法 | 路径 | 说明 |
+| Method | Path | 说明 |
 |---|---|---|
-| `GET` | `/flow/events?flowCode=&sourceModel=&sourceRowId=&instanceId=&success=&pageNumber=&pageSize=` | 分页事件日志，最新在前（filters 以 AND 组合；列表行排除 parameters payload） |
+| `GET` | `/flow/events?flowCode=&sourceModel=&sourceRowId=&instanceId=&success=&eventTimeFrom=&eventTimeTo=&pageNumber=&pageSize=` | 分页事件日志，最新在前（filters 以 AND 组合；列表行排除 parameters payload） |
+| `GET` | `/flow/events/{id}` | 单条事件，含原始触发参数 payload |
 
 ## 审批模型
 
@@ -217,16 +234,16 @@ Flow > BP = Workflow > BPMN
 
 - 审批模式：`ANY_ONE`、`UNANIMOUS`、`MIN_COUNT`、`PERCENTAGE`
 - 拒绝模式：`ANY_ONE`、`UNANIMOUS`、`MIN_COUNT`、`PERCENTAGE`
-- 每个 actor 每轮只能投一票有效票。
-- 编译时校验器拒绝不可能的阈值组合。
+- 同一 actor 在每个周期只能投一次有效票。
+- 编译时校验器会拒绝不可能的阈值组合。
 
 ### 审批人解析
 
 审批节点支持：
 
-- 通过 `config.approvers` 的静态审批人
-- 通过 `config.approverSource` 的动态审批人
-- 通过 `config.emptyApproverStrategy` 的空审批人策略
+- 通过 `config.approvers` 配置静态审批人
+- 通过 `config.approverSource` 配置动态审批人
+- 通过 `config.emptyApproverStrategy` 配置空审批人策略
 
 当前默认解析路径支持的动态源类型：
 
@@ -237,10 +254,12 @@ Flow > BP = Workflow > BPMN
 
 重要集成说明：
 
-- `OrganizationService` 定义为 SPI（接入时 `MetadataOrganizationService` 为默认）。默认解析路径还通过 `ApproverResolutionService` 支持基于变量的源。
-- 若需真实组织树查找，提供自定义 `OrganizationService` bean，或在流程到达审批节点前填充 `initiatorManagerId`、`roleApprovers` 等解析变量。
+- `OrganizationService` 定义为 SPI（接入时默认使用 `MetadataOrganizationService`）。默认解析路径还通过 `ApproverResolutionService` 支持基于变量的源。
+- 若需要真实组织树查询，请提供自定义 `OrganizationService` bean，或在流程到达审批节点前填充如 `initiatorManagerId`、`roleApprovers` 等解析变量。
 
-### 其他审批操作
+审批人去重：默认策略为 **`GLOBAL`**——已在先前节点审批过的用户在后续节点自动通过（记为 `AUTO_APPROVE`）。残余风险：流程中途的表单编辑仍会被该先前审批自动背书；在需要重新审阅的流程上，将策略设为 `CONTIGUOUS` 或 `NONE`。
+
+### 额外审批动作
 
 - transfer
 - delegate
@@ -263,11 +282,11 @@ Flow > BP = Workflow > BPMN
 - `AUTO_REJECT`
 - `ESCALATE`
 
-`ApprovalTimeoutScheduler` 针对持久化的待审批处理提醒、自动操作和升级。
+`ApprovalTimeoutScheduler` 针对已持久化的待审批处理提醒、自动动作与升级。
 
 ## 任务执行模型
 
-基于执行器的任务节点使用 `TaskNodeConfig`。节点 **`FlowNodeType`** 选择执行器——config 中没有单独的 `executor` 字段。
+由执行器支持的任务节点使用 `TaskNodeConfig`。节点的 **`FlowNodeType`** 选择执行器——config 中没有单独的 `executor` 字段。
 
 ```json
 {
@@ -280,11 +299,11 @@ Flow > BP = Workflow > BPMN
 }
 ```
 
-- `input` 支持 `{{ expr }}` 插值；解析由执行器拥有（数据执行器为类型感知，自由形状 payload 为递归插值）
-- `options` 为执行器特定
-- 存在时，`outputVariable` 将原始执行器结果存于一个变量名之下
+- `input` 支持 `{{ expr }}` 插值；解析由执行器负责（数据执行器按类型感知，自由形态 payload 递归插值）
+- `options` 为执行器特定配置
+- `outputVariable` 若存在，将原始执行器结果存入该变量名
 
-每种任务节点类型在 `TaskConfigTypes` 中注册**类型化 input config DTO**：编译器在发布时将 `config.input` 解析为 DTO，并拒绝缺失的必填键（`MISSING_REQUIRED_INPUT`），因此配置错误的节点在发布时失败而非执行中途失败。`DefaultTaskExecutorRegistry` 在启动时断言每个已注册执行器的节点类型都有此类条目。
+每种任务节点类型在 `TaskConfigTypes` 中注册有**类型化 input config DTO**：编译器在发布时将 `config.input` 解析为该 DTO，并拒绝缺失的必填键（`MISSING_REQUIRED_INPUT`），因此配置错误的节点在发布时失败，而非执行中途。`DefaultTaskExecutorRegistry` 在启动时断言每个已注册执行器的节点类型都有对应条目。
 
 ### 内置任务执行器
 
@@ -298,21 +317,21 @@ Flow > BP = Workflow > BPMN
 | `VALIDATE_DATA` | `ValidateDataTaskExecutor` | 内置 |
 | `TRANSFORM` | `ExtractTransformTaskExecutor` | 内置 |
 | `CALL_WEBHOOK` | `WebHookTaskExecutor` | 内置 |
-| `CALL_SERVICE` | `CallServiceTaskExecutor` | **默认禁用**（ADR-0005）。通过 `flow.task.builtin.call-service.enabled=true` 启用；随后 `flow.task.call-service.allow-list` 中允许的 bean 名前缀非空为必填 |
-| `SEND_EMAIL` | `SendEmailTaskExecutor` | 仅当 `MessageService` 可用时注册 |
-| `SEND_SMS` | `SendSmsTaskExecutor` | 仅当 `MessageService` 可用时注册 |
-| `SEND_INBOX_NOTIFICATION` | `SendInboxNotificationTaskExecutor` | 仅当 `MessageService` 可用时注册 |
-| `QUERY_AI` | `QueryAiTaskExecutor` | 仅当 `AiRobotService` 可用时注册 |
-| `ASYNC_TASK` | `AsyncTaskExecutor` | 仅当 `FlowAsyncTaskProducer` 可用时注册 |
-| `GENERATE_FILE` | `GenerateFileTaskExecutor` | 仅当 `DocumentTemplateService`（file-starter）可用时注册 |
+| `CALL_SERVICE` | `CallServiceTaskExecutor` | **默认禁用**。通过 `flow.task.builtin.call-service.enabled=true` 启用；随后必须提供非空的 `flow.task.call-service.allow-list`（允许的 bean 名前缀） |
+| `SEND_EMAIL` | `SendEmailTaskExecutor` | 仅在 `MessageService` 可用时注册 |
+| `SEND_SMS` | `SendSmsTaskExecutor` | 仅在 `MessageService` 可用时注册 |
+| `SEND_INBOX_NOTIFICATION` | `SendInboxNotificationTaskExecutor` | 仅在 `MessageService` 可用时注册 |
+| `QUERY_AI` | `QueryAiTaskExecutor` | 仅在 `AiRobotService` 可用时注册 |
+| `ASYNC_TASK` | `AsyncTaskExecutor` | 仅在 `FlowAsyncTaskProducer` 可用时注册 |
+| `GENERATE_FILE` | `GenerateFileTaskExecutor` | 仅在 `DocumentTemplateService`（file-starter）可用时注册 |
 
 当前模块说明：
 
-- `CALL_SERVICE` 附带内置执行器但**默认禁用**（ADR-0005）：按名称调用任意 Spring bean 方法，因此必须显式启用并给定非空 bean 名 allow-list。
+- `CALL_SERVICE` 附带内置执行器但**默认禁用**：它按名称调用任意 Spring bean 方法，因此必须显式启用并给出非空的 bean 名允许列表。
 
 ## 触发与消息集成
 
-支持的触发源（`TriggerSource` 密封子类型）：
+支持的触发源（`TriggerSource` sealed 子类型）：
 
 - `EntityChange`
 - `Api`
@@ -320,39 +339,38 @@ Flow > BP = Workflow > BPMN
 - `Subflow`
 - `FieldChange`（仅 COMPUTE 场景）
 
-Pulsar 连接组件按条件注册：
+Pulsar 相关组件按条件注册：
 
 | 属性 | 组件 | 用途 |
 |---|---|---|
-| `mq.topics.flow-event.topic` | `FlowEventProducer`、`FlowEventConsumer` | 异步触发触发与消费 |
-| `mq.topics.flow-async-task.topic` | `FlowAsyncTaskProducer`、`FlowAsyncTaskConsumer` | 异步任务分派与回调恢复 |
+| `mq.topics.flow-event.topic` | `FlowEventProducer`、`FlowEventConsumer` | 异步触发投递与消费 |
+| `mq.topics.flow-async-task.topic` | `FlowAsyncTaskProducer`、`FlowAsyncTaskConsumer` | 异步任务分发与回调恢复 |
 | `mq.topics.change-log.topic` | `ChangeLogFlowConsumer` | 实体变更驱动的流程触发 |
 | `mq.topics.cron-task.topic` | `CronTaskFlowConsumer` | Cron 驱动的流程触发 |
-| `mq.topics.flow-timer.topic` | `FlowTimerConsumer` | 定时器唤醒消费端 |
+| `mq.topics.flow-timer.topic` | `FlowTimerConsumer` | 定时器唤醒的消费侧 |
 
 重要定时器说明：
 
 - 模块包含定时器恢复消费者。
-- 发布 `FlowTimerMessage` 的调度器或生产者仍须由宿主应用或其他集成模块提供。
+- 发布 `FlowTimerMessage` 的调度器或生产者仍需由宿主应用或其他集成模块提供。
 
 ## 持久化模型
 
 | 实体 | 说明 |
 |---|---|
 | `FlowDesign` | 草稿工作副本 |
-| `FlowBundle` | 已发布编译 bundle |
-| `FlowInstance` | 持久化运行时实例状态（trace 和审批历史**未**嵌入——见两个专用表） |
-| `FlowExecutionTrace` | 仅追加的执行 trace 行（内存状态仅保留当前尝试的 delta） |
+| `FlowBundle` | 已发布的编译 bundle |
+| `FlowInstance` | 持久化运行时实例状态（trace 与审批历史**不**内嵌——见两张专用表） |
+| `FlowExecutionTrace` | 仅追加的执行 trace 行（内存状态只保留当前尝试的增量） |
 | `FlowApprovalTask` | 待办/已完成/抄送任务投影 |
-| `FlowApprovalRecord` | 审批操作审计账本——权威审批历史，由实例存储与实例行在同一事务中 flush |
+| `FlowApprovalRecord` | 审批动作审计账本——权威审批历史，由实例存储与实例行在同一事务中刷写 |
 | `FlowCcConfig` | 自动抄送规则 |
 | `FlowDelegation` | 委托规则 |
 | `FlowEvent` | 触发事件日志 |
 | `FlowDebugHistory` | 调试快照 |
-| `FlowFormDefinition` | 绑定到流程节点的表单定义 |
 | `FlowParallelBranch` | 并行分支跟踪 |
 
-本模块主要存储适配器：
+本模块的主要存储适配器：
 
 - `OrmFlowBundleRegistry`
 - `OrmFlowInstanceStore`
@@ -362,10 +380,10 @@ Pulsar 连接组件按条件注册：
 编辑器面板由通过 `/flow/nodeDescriptors` 暴露的 `FlowNodeDescriptor` 记录构建。
 
 - 结构描述符来自 `BuiltinNodeDescriptorProvider`
-- 基于执行器的任务描述符来自 `TaskExecutorDescriptorProvider`
-- 描述符包含 label、icon、排序、config schema、默认 config 和允许的场景
+- 由执行器支持的任务描述符来自 `TaskExecutorDescriptorProvider`
+- 描述符包含标签、图标、排序、config schema、默认 config 以及允许的场景
 
-`TaskExecutorDescriptorProvider` 仅暴露实际注册为 Spring bean 的执行器的任务节点，因此 `QUERY_AI`、`ASYNC_TASK` 等条件执行器仅在其依赖存在时出现。
+`TaskExecutorDescriptorProvider` 仅暴露实际注册为 Spring bean 的执行器对应的任务节点，因此像 `QUERY_AI` 和 `ASYNC_TASK` 这类条件执行器仅在其依赖存在时出现。
 
 ## 前端图兼容性
 
@@ -386,14 +404,14 @@ Pulsar 连接组件按条件注册：
 | `Edge.data` | `FlowGraphEdge.data` |
 | `Viewport {x, y, zoom}` | `FlowGraphViewport {x, y, zoom}` |
 
-## 宿主应用集成检查清单
+## 宿主应用集成清单
 
-在真实应用中启用 `flow-starter` 前，请确认：
+在真实应用中启用 `flow-starter` 之前，请确认：
 
 - 将 `flow-starter` 加入应用 classpath
 - 通过通用模型 API 创建并暴露 `FlowDesign` 草稿
-- 若需邮件、短信、IM 或应用内通知，提供真实的 `ApprovalNotificationService`
-- 若需基于经理/角色/部门的审批人，提供自定义 `OrganizationService` 或填充审批人解析变量
+- 若需要邮件、短信、IM 或站内通知，提供真实的 `ApprovalNotificationService`
+- 若需要基于经理/角色/部门的审批人，提供自定义 `OrganizationService` 或填充审批人解析变量
 - 若使用触发或异步任务，启用 Pulsar topics
-- 若使用 `TIMER` 节点，提供定时调度/发布
-- 若流程需调用 Spring bean，显式启用 `CALL_SERVICE`（及其 bean 名 allow-list）；其他任务节点类型均附带可用执行器，按能力 bean 条件注册
+- 若使用 `TIMER` 节点，提供定时器调度/发布
+- 若流程需要调用 Spring bean，显式启用 `CALL_SERVICE`（及其 bean 名允许列表）；其余任务节点类型均附带可用执行器，并按其能力 bean 条件注册
