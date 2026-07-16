@@ -372,4 +372,4 @@ When `fieldName` changes, Softa synchronizes the column name by default. You can
 
 ### 2.30 `description`
 
-The business description of the field.
+The business description of the field — a concise user-facing summary, rendered as the field tooltip on forms and carried into the generated API docs. Limited to **512 characters**, enforced when annotations are parsed at boot; keep design rationale and contributor notes in code comments instead.

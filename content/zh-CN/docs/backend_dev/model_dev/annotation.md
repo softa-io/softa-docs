@@ -67,7 +67,7 @@ public enum CustomerTier {
 | `label` | String | `""` | `label` | 空 → 人性化类名（`DeptInfo`→"Dept Info"）；i18n 翻译按 id 覆盖 |
 | `renamedFrom` | String | `""` | `renamedFrom` | 重命名时紧邻的前一个模型名（单步，无链）——见下文「重命名」 |
 | `tableName` | String | `""` | `tableName` | 空 → `snake_case(modelName)` |
-| `description` | String | `""` | `description` | |
+| `description` | String | `""` | `description` | **≤512 字符**，解析期强制校验（目录列宽）；写面向使用者的简明摘要——设计备注放 Javadoc |
 | `displayName` | String[] | `{}` | `displayName` | 列表显示默认值 |
 | `searchName` | String[] | `{}` | `searchName` | 搜索字段默认值 |
 | `defaultOrder` | String[] | `{}` | `defaultOrder` | 如 `"createdTime:desc"` |
@@ -96,7 +96,7 @@ public enum CustomerTier {
 | （Java 类型） | — | — | `fieldType` | 通过 `TypeInference` 推断 |
 | `label` | String | `""` | `label` | 空 → 人性化字段名（`deptId`→"Dept Id"）；i18n 翻译按 id 覆盖 |
 | `renamedFrom` | String | `""` | `renamedFrom` | 重命名时紧邻的前一个字段名（单步）——见下文「重命名」 |
-| `description` | String | `""` | `description` | |
+| `description` | String | `""` | `description` | **≤512 字符**，解析期强制校验（目录列宽）；写面向使用者的简明摘要——设计备注放 Javadoc |
 | `fieldType` | `FieldType[]` | `{}` | `fieldType` | 单值，无花括号（如 `fieldType = FieldType.MULTI_FILE`）；`OPTION`/`MULTI_OPTION` **不能**显式书写 |
 | `columnName` | String | `""` | `columnName` | 空 → `snake_case(fieldName)` |
 | `length` | int | `0` | `length` | `0` → 类型默认：STRING/OPTION 64，MULTI_STRING/ORDERS 256，DOUBLE 24（测量），BIG_DECIMAL 32（金额）；其他需显式声明。MySQL 将 `length > 16383` 渲染为 TEXT |
@@ -168,7 +168,7 @@ public enum CustomerTier {
 | （枚举简单名） | — | — | `optionSetCode` | 推断，不可覆盖 |
 | `label` | String | `""` | `label` | 显示标签；空 → 人性化枚举名（`TenantStatus`→"Tenant Status"） |
 | `renamedFrom` | String | `""` | `renamedFrom` | 重命名时紧邻的前一个选项集编码（单步） |
-| `description` | String | `""` | `description` | |
+| `description` | String | `""` | `description` | **≤512 字符**，解析期强制校验（目录列宽）；写面向使用者的简明摘要——设计备注放 Javadoc |
 | （扫描器设置） | — | — | `appCode` / `id` | |
 | （Studio 开关） | — | — | `active` / `optionItems` | 运行时聚合 |
 
@@ -180,7 +180,7 @@ public enum CustomerTier {
 | （外层枚举简单名） | — | — | `optionSetCode` | 推断 |
 | `label` | String | `""` | `label` | 默认为人性化常量名（`MULTI_FILE`→"Multi File"）；显式声明以自定义。当等于人性化名称时可省略（若别无他物可省略整个 `@OptionItem`） |
 | `renamedFrom` | String | `""` | `renamedFrom` | 重命名时紧邻的前一个条目编码（单步） |
-| `description` | String | `""` | `description` | |
+| `description` | String | `""` | `description` | **≤512 字符**，解析期强制校验（目录列宽）；写面向使用者的简明摘要——设计备注放 Javadoc |
 | `sequence` | int | `-1` | `sequence` | `-1` → 使用 `ordinal() + 1` |
 | `parentItemCode` | String | `""` | `parentItemCode` | 层次结构 |
 | `itemTone` | `OptionItemTone[]` | `{}` | `itemTone` | 单元素 |
