@@ -112,10 +112,11 @@ POST /{model}/searchPage
 - 不推荐直接手动修改 `effectiveEndDate`。如果希望新增一个新生效期的切片，应当使用 `create`，传入已有的 `id` 和新的 `effectiveStartDate`。
 - 如果上层需要支持“更正（correct）”类接口（对历史切片就地更正而不新增切片），通常需要通过 `sliceId` 精确定位；目前 ORM 未内置专门的 correct API。
 
-### 2.5 删除接口
+### 2.5 删除 / 复制接口
 
 - `deleteById` / `deleteByIds`：删除某个业务 `id` 下的所有切片——这是**实体删除**，也是入站外键删除策略（`onDelete` 的 RESTRICT / CASCADE / SET_NULL，按逻辑 `id` 键控）对引用方模型生效的时机。
 - `deleteBySliceId`：删除单个切片，并自动修正前后切片的时间范围。实体本身仍然存在，因此 `onDelete` **刻意不会**触发。
+- `copyById` / `copyByIds`：把**当前（as-of）切片**复制为一个**新实体**——可复制字段集排除所有时间轴结构键（`id`/`sliceId`/生效日期），因此副本获得全新的逻辑 `id` 和以当天为起点的首切片。它**不会**复制完整版本历史，也不会给源实体新增切片。（`businessKey` 字段为 `copyable = false`，复制后需为副本设置新的业务编码。）
 
 ### 2.6 Versioning seam（引擎内部）
 

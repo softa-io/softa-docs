@@ -3,4 +3,5 @@ export default {
   "side-panel": "Side Panel Components",
   picker: "Picker Components",
   "model-sidecar": "Model Sidecar",
+  flow: "Flow Editor",
 }

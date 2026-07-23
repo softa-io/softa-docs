@@ -792,6 +792,8 @@ Recommended default layout:
 | `enableDuplicate`      | `boolean`                 | No       | auto                                  | Built-in duplicate action switch. `false` disables. Omitted follows default behavior (read-only forms hide unless explicitly `true`). |
 | `enableDelete`         | `boolean`                 | No       | auto                                  | Built-in delete action switch. `false` disables. Omitted follows default behavior (read-only forms hide unless explicitly `true`). |
 | `confirmDeleteMessage` | `string`                  | No       | `Delete this {modelLabel}? This action cannot be undone.` | Confirm text for built-in delete action. |
+| `timeline`      | `ModelFormTimelineConfig` | No       | -                                     | Timeline-model behavior toggles (`enableAddVersion` / `enableVersionPanel` / `versionSummaryFields`, all optional). Only consulted when `metaModel.timeline` is true; see "Timeline Models" below. |
+| `sliceId`       | `string \| null`          | No       | `?sliceId=` search param              | Timeline models, edit mode only: load this specific version (slice) instead of the as-of row (`searchList` by `sliceId` across the timeline). Full-page forms normally use the `?sliceId=<x>` search param (ignored in dialog mode); embedded forms pass the prop. |
 | `children`      | `ReactNode`               | Yes      | -                                     | Form page layout content (`FormHeader/FormToolbar/FormBody`).                               |
 
 Runtime field conditions:
@@ -822,7 +824,7 @@ Remote `Field.onChange` in `ModelForm`:
 | ------------- | ----------- | -------- | -------------------------------------------- | ----------------------------------------- |
 | `title`       | `string`    | No       | `metaModel.label` (fallback `pageTitle`) | Optional override.                        |
 | `description` | `string`    | No       | `metaModel.description`                      | Optional override.                        |
-| `extras`      | `ReactNode` | No       | -                                            | Extra header content rendered near title. |
+| `extras`      | `ReactNode` | No       | -                                            | Extra header content rendered near title. For timeline models in edit mode, the header automatically renders a `FormSliceBadge` before `extras`: the loaded version's effective range (`Current · 2026-01-01 → ongoing`, `9999-12-31` shown as `ongoing`) with a Current / Past / Future tone. It answers "which version am I looking at"; nothing renders for non-timeline models or in create mode. |
 | `children`    | `ReactNode` | No       | -                                            | Display-mode content below description. `Field` children render as read-only values via `FieldDisplayScope`. Use `Group` for inline layout. |
 
 **FormHeader with display-mode children:**
@@ -1145,6 +1147,21 @@ Example:
   - `update`: `<=5` expanded, `>5` show first 5 + `Show all fields (N)`
   - `create`: collapsed by default
   - `delete`: operation info only
+
+## Timeline Models
+
+Active only when `metaModel.timeline` is true; non-timeline models ignore everything in this section.
+
+- **Slice badge**: in edit mode, `FormHeader` automatically renders the loaded version's effective range with a Current / Past / Future tone (`Current · 2026-01-01 → ongoing`; `9999-12-31` renders as `ongoing`). Nothing renders in create mode.
+- **Version list data**: `useVersionListQuery(modelName, id)` fetches ALL slices of one entity (`acrossTimeline: true`, newest effective range first). Its query key follows the `[modelName, ...]` convention, so `invalidateModelQueries` refreshes it after addVersion / update / deleteBySliceId mutations.
+- **`timeline` prop** (`ModelFormTimelineConfig`): `enableAddVersion` / `enableVersionPanel` / `versionSummaryFields` — toggles for the built-in Add Version action and the Versions panel.
+- **Add Version action**: a built-in toolbar action on persisted timeline records. Gate: `metaModel.timeline` AND create permission (server-side `addVersion` runs the create pipeline, so a user may add versions without update permission) AND `timeline.enableAddVersion !== false`. Entering the mode discards pending edits first (confirm dialog when dirty) so `dirtyFields` captures exactly the new version's delta.
+- **Add-version mode**: the toolbar shows a required "Effective from" date (defaults to today) with a live hint — "Unchanged fields carry over from the adjacent version", switching to "A version already starts on this date — submitting corrects that version instead" on a same-start collision (dates come from `useVersionListQuery`, loaded only while the mode is active). Fields unlock even when entered from route read-mode. Record-level actions (Create New / Duplicate / Delete) hide while the mode is active; the submit button reads `Add Version`.
+- **Add-version submit**: a delta — `id` + `effectiveStartDate` + dirty fields — via `addVersionAndFetch`; fields absent from the payload are copied forward from the true adjacent slice server-side (this is why the form never submits the full row: a stale full-row snapshot would overwrite intermediate versions). Submitting with zero dirty fields is allowed (a pure copy-forward version). XToMany relation patches are excluded in this mode — they are keyed to the source slice's rows. On success the form returns to read mode as-of today; opening the new version directly lands with the Versions panel.
+- **Cancel** in add-version mode discards the draft and exits the mode without navigating.
+- **Versions panel**: on timeline models with a persisted record, `FormBody` renders a `Versions` side panel above the audit log (same right column / bottom stack). Each row shows the effective range with a Current / Past / Future badge and a summary (`timeline.versionSummaryFields`, defaulting to the model `displayName`); the loaded version is highlighted. Row actions: `Open` / `Correct` navigate via the `?sliceId=` search param (read / edit mode; hidden inside side-form shells, which have no slice routing), `Delete` removes the version after a destructive confirm. Deleting the ONLY version deletes the entity itself (a timeline entity IS its slices), so the confirm escalates to record-level wording and the call routes through entity deletion — `onDelete` FK strategies apply (inside side-form shells the sole-version delete stays disabled: no list navigation target). Expanding a row loads that version's slice-level change log (`getSliceChangeLog`). Disable the panel with `timeline.enableVersionPanel: false`.
+- **Loading a specific version**: with `sliceId` (prop or search param) the form loads that slice across the timeline instead of the as-of row — the badge shows its real range, edit mode corrects exactly that version (`update` keyed by `sliceId`), and Add Version branches from it.
+- **Entity deletion**: the built-in Delete confirm on timeline models states the blast radius — "All N versions will be removed" (N from the Versions panel's cached query).
 
 ## Page Navigation (Back + Prev/Next in Header)
 

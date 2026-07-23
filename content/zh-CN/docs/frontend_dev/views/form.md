@@ -792,6 +792,8 @@ export default function UserProfileFormPage() {
 | `enableDuplicate`      | `boolean`                 | No       | auto                                  | 内置复制动作开关。`false` 禁用。省略则遵循默认（只读表单隐藏，除非显式 `true`）。 |
 | `enableDelete`         | `boolean`                 | No       | auto                                  | 内置删除动作开关。`false` 禁用。省略则遵循默认（只读表单隐藏，除非显式 `true`）。 |
 | `confirmDeleteMessage` | `string`                  | No       | `Delete this {modelLabel}? This action cannot be undone.` | 内置删除动作的确认文案。 |
+| `timeline`      | `ModelFormTimelineConfig` | No       | -                                     | 时间轴模型行为开关（`enableAddVersion` / `enableVersionPanel` / `versionSummaryFields`，均可选）。仅当 `metaModel.timeline` 为 true 时生效；见下文「时间轴模型」。 |
+| `sliceId`       | `string \| null`          | No       | `?sliceId=` 搜索参数                  | 仅时间轴模型的编辑模式：加载指定版本（切片）而非 as-of 行（按 `sliceId` 跨时间轴 `searchList`）。整页表单通常用 `?sliceId=<x>` 搜索参数（对话框模式忽略）；嵌入式表单直接传该 prop。 |
 | `children`      | `ReactNode`               | Yes      | -                                     | 表单页面布局内容（`FormHeader/FormToolbar/FormBody`）。                               |
 
 运行时字段条件：
@@ -822,7 +824,7 @@ export default function UserProfileFormPage() {
 | ------------- | ----------- | -------- | -------------------------------------------- | ----------------------------------------- |
 | `title`       | `string`    | No       | `metaModel.label` (fallback `pageTitle`) | 可选覆盖。                        |
 | `description` | `string`    | No       | `metaModel.description`                      | 可选覆盖。                        |
-| `extras`      | `ReactNode` | No       | -                                            | 标题附近渲染的额外 header 内容。 |
+| `extras`      | `ReactNode` | No       | -                                            | 标题附近渲染的额外 header 内容。时间轴模型在编辑模式下，header 会在 `extras` 之前自动渲染 `FormSliceBadge`：当前加载版本的生效区间（`Current · 2026-01-01 → ongoing`，`9999-12-31` 显示为 `ongoing`），带 Current / Past / Future 色调，回答"我正在看哪个版本"；非时间轴模型或新建模式不渲染。 |
 | `children`    | `ReactNode` | No       | -                                            | 描述下方的展示模式内容。`Field` 子节点通过 `FieldDisplayScope` 以只读值渲染。行内布局使用 `Group`。 |
 
 **带展示模式子节点的 FormHeader：**
@@ -1145,6 +1147,21 @@ function UnlockDialog() {
   - `update`：`<=5` 展开，`>5` 显示前 5 个 + `Show all fields (N)`
   - `create`：默认折叠
   - `delete`：仅操作信息
+
+## 时间轴模型
+
+仅当 `metaModel.timeline` 为 true 时生效；非时间轴模型忽略本节全部内容。
+
+- **切片徽章**：编辑模式下，`FormHeader` 自动渲染当前加载版本的生效区间，带 Current / Past / Future 色调（`Current · 2026-01-01 → ongoing`；`9999-12-31` 渲染为 `ongoing`）。新建模式不渲染。
+- **版本列表数据**：`useVersionListQuery(modelName, id)` 拉取一个实体的全部切片（`acrossTimeline: true`，生效区间新者在前）。其 query key 遵循 `[modelName, ...]` 约定，因此 addVersion / update / deleteBySliceId 变更后 `invalidateModelQueries` 会自动刷新它。
+- **`timeline` prop**（`ModelFormTimelineConfig`）：`enableAddVersion` / `enableVersionPanel` / `versionSummaryFields` ——内置 Add Version 动作与 Versions 面板的开关。
+- **Add Version 动作**：已持久化时间轴记录上的内置工具栏动作。门控：`metaModel.timeline` 且具备 create 权限（服务端 `addVersion` 走 create 管线，因此没有 update 权限的用户也可以新增版本）且 `timeline.enableAddVersion !== false`。进入模式前先丢弃未保存修改（有脏值时弹确认框），从而让 `dirtyFields` 恰好捕获新版本的增量。
+- **新增版本模式**：工具栏显示必填的 "Effective from" 日期（默认今天）与实时提示——常态为 "Unchanged fields carry over from the adjacent version"，与既有版本同一生效日时切换为 "A version already starts on this date — submitting corrects that version instead"（日期数据来自 `useVersionListQuery`，仅模式激活时加载）。即使从路由只读模式进入，字段也会解锁。模式激活期间隐藏记录级动作（Create New / Duplicate / Delete）；提交按钮显示 `Add Version`。
+- **新增版本提交**：增量提交——`id` + `effectiveStartDate` + 脏字段——走 `addVersionAndFetch`；载荷中缺失的字段由服务端从真实相邻切片复制前滚（这正是表单从不提交整行的原因：过期的整行快照会覆盖中间版本）。允许零脏字段提交（纯 copy-forward 版本）。该模式下排除 XToMany 关系补丁——它们键在源切片的行上。成功后表单回到 as-of 今天的只读视图；直接打开新版本由 Versions 面板承接。
+- 新增版本模式中的 **Cancel** 丢弃草稿并退出模式，不发生导航。
+- **Versions 面板**：时间轴模型的已持久化记录上，`FormBody` 在审计日志上方渲染 `Versions` 侧板（同一右栏 / 底部堆叠）。每行显示生效区间、Current / Past / Future 徽标与摘要（`timeline.versionSummaryFields`，缺省用模型 `displayName`）；当前加载版本高亮。行动作：`Open` / `Correct` 经 `?sliceId=` 搜索参数导航（只读 / 编辑模式；侧滑表单壳内隐藏——无切片路由），`Delete` 在破坏性确认后删除该版本。删除**唯一**版本即删除实体本身（时间轴实体就是它的全部切片），确认文案升级为记录级措辞并改走实体删除——`onDelete` 外键删除策略随之生效（侧滑表单壳内唯一版本的删除保持禁用：无列表导航目标）。展开行加载该版本的切片级变更日志（`getSliceChangeLog`）。用 `timeline.enableVersionPanel: false` 关闭面板。
+- **加载指定版本**：携带 `sliceId`（prop 或搜索参数）时，表单跨时间轴加载该切片而非 as-of 行——徽章显示其真实区间，编辑模式恰好修正该版本（`update` 以 `sliceId` 为键），Add Version 也从它分叉。
+- **实体删除**：时间轴模型的内置 Delete 确认会明示影响范围——"All N versions will be removed"（N 来自 Versions 面板已缓存的查询）。
 
 ## 页面导航（Header 中的 Back + Prev/Next）
 

@@ -110,6 +110,7 @@ public enum CustomerTier {
 | `expression` | String | `""` | `expression` | AviatorScript |
 | `dynamic` | boolean | `false` | `dynamic` | 非物理存储 |
 | `encrypted` | boolean | `false` | `encrypted` | 静态加密 |
+| `autoSequence` | boolean | `false` | `auto_sequence` | INSERT 时字段为空则从序列自动取号；仅 STRING（不支持 `dynamic`/`computed`/id，仅 RDBMS）；需配套 `sys_sequence` 行 `"<Model>.<field>"`（缺行则插入失败，fail-closed）。搭配 `readonly` = 严格系统取号（拒绝调用方传值）；不搭配 = 信任调用方传值（导入场景）。复制时永不携带 |
 | `maskingType` | `MaskingType[]` | `{}` | `maskingType` | 单元素 |
 | `defaultValue` | String | `""` | `defaultValue` | |
 | `relatedModel` | `Class<?>` | `Void.class` | `relatedModel` | 类引用（编译期检查），如 `Foo.class`；`Void.class` → 从 POJO 类型推断；`Long` FK **必填**。跨模块/动态模型使用 `relatedModelName`（String） |

@@ -172,6 +172,7 @@ Note:
 | 30 | widgetType | Option | Preferred UI widget |  |
 | 31 | columnName | String | Table column name | Read-only |
 | 32 | description | String | Field description |  |
+| 33 | autoSequence | Boolean | Auto-sequence on insert, default `false` | See [§2.31](#231-autosequence) |
 
 ### 2.1 `label`
 
@@ -373,3 +374,7 @@ When `fieldName` changes, Softa synchronizes the column name by default. You can
 ### 2.30 `description`
 
 The business description of the field — a concise user-facing summary, rendered as the field tooltip on forms and carried into the generated API docs. Limited to **512 characters**, enforced when annotations are parsed at boot; keep design rationale and contributor notes in code comments instead.
+
+### 2.31 `autoSequence`
+
+Auto-fills the field from a sequence on INSERT when the submitted value is blank. STRING fields only (not `dynamic` / `computed` / the primary key; RDBMS storage only), and it pairs with a `sys_sequence` row named `"<Model>.<field>"` — a missing sequence row fails the insert (fail-closed). Combined with `readonly` it becomes strict system numbering (caller-supplied values are rejected); without `readonly`, caller-supplied values are trusted (import scenarios). The value is never carried on copy — a copied record gets a fresh number allocated on insert.
