@@ -480,11 +480,11 @@ Delete one row by id. All slices related to this `id` will be deleted for timeli
 
 ### Responses Data Schema
 
-<a id="opIddeleteSlice"></a>
+<a id="opIddeleteBySliceId"></a>
 
-## POST deleteSlice
+## POST deleteBySliceId
 
-POST /{modelName}/deleteSlice
+POST /{modelName}/deleteBySliceId
 
 Delete a slice of the timeline model by `sliceId`.
 
@@ -503,6 +503,104 @@ Delete a slice of the timeline model by `sliceId`.
 {
   "code": 0,
   "data": true,
+  "error": "string",
+  "message": "string"
+}
+```
+
+### Responses
+
+|HTTP Status Code |Meaning|Description|Data schema|
+|---|---|---|---|
+|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
+
+### Responses Data Schema
+
+<a id="opIdaddVersion"></a>
+
+## POST addVersion
+
+POST /{modelName}/addVersion
+
+Timeline models only: add a version (slice) to an EXISTING entity. The body must carry the entity's `id`; `effectiveStartDate` defaults to the context effective date. Fields absent from the body are copied forward from the adjacent slice, so a delta payload (`id` + `effectiveStartDate` + changed fields) is the recommended form. Adjacent slices are split/corrected automatically. Returns the new version's `sliceId` (the existing `sliceId` when a same-start slice is corrected in place).
+
+> Body Parameters
+
+```json
+{
+  "id": 6,
+  "effectiveStartDate": "2026-08-01",
+  "name": "New Department Name"
+}
+```
+
+### Params
+
+|Name|Location|Type|Required|Description|
+|---|---|---|---|---|
+|modelName|path|string| yes |none|
+|body|body|object| yes |Version data carrying the existing entity's `id` (delta form recommended).|
+
+> Response Examples
+
+> 200 Response
+
+```json
+{
+  "code": 0,
+  "data": 1899999999999999,
+  "error": "string",
+  "message": "string"
+}
+```
+
+### Responses
+
+|HTTP Status Code |Meaning|Description|Data schema|
+|---|---|---|---|
+|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
+
+### Responses Data Schema
+
+<a id="opIdaddVersionAndFetch"></a>
+
+## POST addVersionAndFetch
+
+POST /{modelName}/addVersionAndFetch
+
+Like `addVersion`, then fetches the full version row by its `sliceId` (across the timeline — the new version's effective date may not be today).
+
+> Body Parameters
+
+```json
+{
+  "id": 6,
+  "effectiveStartDate": "2026-08-01",
+  "name": "New Department Name"
+}
+```
+
+### Params
+
+|Name|Location|Type|Required|Description|
+|---|---|---|---|---|
+|modelName|path|string| yes |none|
+|body|body|object| yes |Version data carrying the existing entity's `id` (delta form recommended).|
+
+> Response Examples
+
+> 200 Response
+
+```json
+{
+  "code": 0,
+  "data": {
+    "id": 6,
+    "sliceId": 1899999999999999,
+    "name": "New Department Name",
+    "effectiveStartDate": "2026-08-01",
+    "effectiveEndDate": "9999-12-31"
+  },
   "error": "string",
   "message": "string"
 }

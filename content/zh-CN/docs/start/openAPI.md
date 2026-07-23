@@ -480,11 +480,11 @@ POST /{modelName}/deleteOne
 
 ### 返回数据结构
 
-<a id="opIddeleteSlice"></a>
+<a id="opIddeleteBySliceId"></a>
 
-## POST deleteSlice
+## POST deleteBySliceId
 
-POST /{modelName}/deleteSlice
+POST /{modelName}/deleteBySliceId
 
 根据 sliceId 参数删除时间轴模型1条切片记录。
 
@@ -503,6 +503,104 @@ POST /{modelName}/deleteSlice
 {
   "code": 0,
   "data": true,
+  "error": "string",
+  "message": "string"
+}
+```
+
+### 返回结果
+
+|状态码|状态码含义|说明|数据模型|
+|---|---|---|---|
+|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
+
+### 返回数据结构
+
+<a id="opIdaddVersion"></a>
+
+## POST addVersion
+
+POST /{modelName}/addVersion
+
+仅时间轴模型：给**已有**实体新增一个版本（切片）。请求体必须携带该实体的 `id`；`effectiveStartDate` 缺省为上下文生效日期。请求体中未提供的字段会自动从相邻切片复制前滚，因此推荐提交增量（`id` + `effectiveStartDate` + 变更字段）。相邻切片会自动拆分/修正。返回新版本的 `sliceId`（当生效开始日与既有切片相同时，就地修正该切片并返回其 `sliceId`）。
+
+> Body 请求参数
+
+```json
+{
+  "id": 6,
+  "effectiveStartDate": "2026-08-01",
+  "name": "New Department Name"
+}
+```
+
+### 请求参数
+
+|名称|位置|类型|必选|说明|
+|---|---|---|---|---|
+|modelName|path|string| 是 |none|
+|body|body|object| 是 |携带已有实体 `id` 的版本数据（推荐增量形式）。|
+
+> 返回示例
+
+> 200 Response
+
+```json
+{
+  "code": 0,
+  "data": 1899999999999999,
+  "error": "string",
+  "message": "string"
+}
+```
+
+### 返回结果
+
+|状态码|状态码含义|说明|数据模型|
+|---|---|---|---|
+|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
+
+### 返回数据结构
+
+<a id="opIdaddVersionAndFetch"></a>
+
+## POST addVersionAndFetch
+
+POST /{modelName}/addVersionAndFetch
+
+与 `addVersion` 相同，随后按 `sliceId` 跨时间轴取回完整版本行（新版本的生效日期未必是今天）。
+
+> Body 请求参数
+
+```json
+{
+  "id": 6,
+  "effectiveStartDate": "2026-08-01",
+  "name": "New Department Name"
+}
+```
+
+### 请求参数
+
+|名称|位置|类型|必选|说明|
+|---|---|---|---|---|
+|modelName|path|string| 是 |none|
+|body|body|object| 是 |携带已有实体 `id` 的版本数据（推荐增量形式）。|
+
+> 返回示例
+
+> 200 Response
+
+```json
+{
+  "code": 0,
+  "data": {
+    "id": 6,
+    "sliceId": 1899999999999999,
+    "name": "New Department Name",
+    "effectiveStartDate": "2026-08-01",
+    "effectiveEndDate": "9999-12-31"
+  },
   "error": "string",
   "message": "string"
 }

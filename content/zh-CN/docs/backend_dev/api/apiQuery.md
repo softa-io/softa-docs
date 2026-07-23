@@ -12,6 +12,7 @@
   - 控制当关联字段被展开（通过 `ConvertType` 或 SubQuery）时，返回哪些字段。
   - 对于 ManyToOne / OneToOne，除了 `fields` 中指定的字段外，显示名称字段总是会被额外返回。
   - 对于 OneToMany / ManyToMany，如果既没有出现在 `fields` 中，也没有在 `subQueries` 中配置，则不会出现在响应中。
+  - 对时间轴模型，即使 `fields` 做了窄选择，`sliceId` 也总会随行返回（类似乐观锁下的 `version`），返回的版本行可直接用于 `update` / `deleteBySliceId`。
 - `filters`：筛选条件列表。每个条件使用数组形式表示 `[field, operator, value]`，例如：`["status", "=", "ACTIVE"]`。
 - `orders`：排序规则列表。每条规则为 `[field, direction]` 形式，例如：`["createdTime", "DESC"]`。也可以使用字符串形式，如 `"createdTime DESC, name ASC"`。
 - `aggFunctions`：需要执行的聚合函数列表，例如：`["SUM(amount)", "COUNT(id)"]`。

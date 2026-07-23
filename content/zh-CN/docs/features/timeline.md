@@ -83,7 +83,7 @@
 - `getById` / `getByIds` / `searchList` / `searchPage` 默认只返回在当前 `effectiveDate` 下生效的切片。
 - 如需跨时间维度查询历史记录，可使用 `FlexQuery#acrossTimelineData()`，或在筛选条件中显式包含 `effectiveStartDate` / `effectiveEndDate`。
 - 级联查询会自动传递 `effectiveDate` 到关联的时间轴模型。
-- **通过 REST API 查看某条记录的版本列表**：在 `/searchPage`（或 `/searchList`）的 `filters` 中带上该行的 `id`，并设置 `acrossTimeline: true`，即可返回全部切片（每条带各自的 `sliceId` 与生效区间）。`acrossTimeline` 是双重触发中的显式一侧，暴露在 `QueryParams` / `SearchListParams` 上；**不在** `SearchNameParams` 上（displayName 选择器需要的是 as-of 选项，而非全部版本）。当 `acrossTimeline` 为 true 时，`effectiveDate` 被忽略。示例：
+- **通过 REST API 查看某条记录的版本列表**：在 `/searchPage`（或 `/searchList`）的 `filters` 中带上该行的 `id`，并设置 `acrossTimeline: true`，即可返回全部切片（每条带各自的 `sliceId` 与生效区间）。时间轴模型即使做了窄字段选择，`sliceId` 也会自动随行返回（类似乐观锁下的 `version`）：版本行无需二次查询即可直接操作——用 `update` 修正、用 `deleteBySliceId` 删除。`acrossTimeline` 是双重触发中的显式一侧，暴露在 `QueryParams` / `SearchListParams` 上；**不在** `SearchNameParams` 上（displayName 选择器需要的是 as-of 选项，而非全部版本）。当 `acrossTimeline` 为 true 时，`effectiveDate` 被忽略。示例：
 
 ```jsonc
 POST /{model}/searchPage
@@ -94,6 +94,17 @@ POST /{model}/searchPage
 
 - 在 `createOne` / `createList` 中，如果未提供 `effectiveStartDate`，则默认使用当前 `effectiveDate`；如果未提供 `effectiveEndDate`，则默认使用 `9999-12-31`。
 - 当为已有 `id` 再创建新切片时，系统会根据新的 `effectiveStartDate` 自动拆分或调整相邻切片。
+
+**三种写入意图，显式区分：**
+
+| 意图 | API | 关键点 |
+|---|---|---|
+| 创建**新**实体 | `create*`（**不带** `id`） | 生成新的逻辑 `id` + 首切片 |
+| 给**已有**实体新增版本 | `addVersion`（或 `create*` 带已有 `id`） | 返回新版本的 `sliceId` |
+| 修正某个已有版本 | `update*` | 以 `sliceId` 为键（提交的 `id` 会被数据库值覆盖） |
+
+- `addVersion(modelName, row)` 是显式的新增版本入口（REST：`POST /{model}/addVersion`，与 `deleteBySliceId` 对偶）：行数据必须携带已有实体的 `id`，返回新版本的 `sliceId`（当生效开始日与既有切片相同时，就地修正该切片并返回其 `sliceId`）。行里未提供的字段会自动从相邻切片复制前滚，因此推荐提交增量（`id` + `effectiveStartDate` + 变更字段）。`addVersionAndFetch` 额外按 `sliceId` 跨时间轴取回完整版本行（新版本的生效日期未必是今天）。
+- **守卫**：`create*` 携带**不存在**的 `id` 时，对 `DISTRIBUTED_LONG/STRING` 模型直接拒绝——避免 id 笔误静默铸造出新实体。豁免：`EXTERNAL_ID` 模型（新实体本就自带 id）与 `enableInsertId` 导入模式（预置 id）。
 
 ### 2.4 更新接口
 
