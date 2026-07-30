@@ -7,6 +7,7 @@ A timeline model records historical slices of data over time. It is useful for b
 - `timeline = true` indicates this is a timeline model. It must contain the reserved fields `effectiveStartDate` and `effectiveEndDate`. The system validates these fields on startup and throws an exception if missing.
 - `timeline = false` indicates a non-timeline model. Non-timeline models must not define the reserved fields `effectiveStartDate` and `effectiveEndDate`.
 - A timeline model **requires an app-generated logical id** — `idStrategy = DISTRIBUTED_LONG` (or `DISTRIBUTED_STRING` / `EXTERNAL_ID`). `DB_AUTO_ID` is rejected at boot: the auto-increment lands on the physical `sliceId`, so nothing would fill the shared logical `id` column of a first slice (split/correct rows arrive carrying the entity's existing id and keep it).
+- A timeline model must **not** declare `activeControl` (rejected at boot): `active` is an entity-level switch, while timeline storage makes every field per-slice — the combination would silently mutate the feature's semantics and blind the interval algorithm's neighbor probes. Express period state as a versioned business field; terminate the timeline via `setEndDate` (§2.6).
 
 ### 1.2 Primary Keys and Fields
 - `sliceId`: physical primary key of a timeline model, used to update a slice.
@@ -74,20 +75,21 @@ POST /{model}/searchPage
 - For `createOne/createList`, if `effectiveStartDate` is empty, it uses the current `effectiveDate`; if `effectiveEndDate` is empty, it is set to `9999-12-31`.
 - If an existing `id` is provided, the system automatically splits or adjusts adjacent slices based on the new `effectiveStartDate`.
 
-**The three write intents, made explicit:**
+**The write intents, made explicit:**
 
 | Intent | API | Key |
 |---|---|---|
 | Create a NEW entity | `create*` **without** `id` | fresh logical `id` + genesis slice |
 | Add a version to an EXISTING entity | `addVersion` (or `create*` with the existing `id`) | returns the new `sliceId` |
 | Correct one existing version | `update*` | keyed by `sliceId` (any supplied `id` is overwritten from the DB) |
+| Terminate / reopen the timeline | `setEndDate` (§2.6) | keyed by logical `id`; writes the LAST slice's end date |
 
 - `addVersion(modelName, row)` is the explicit add-version entry (REST: `POST /{model}/addVersion`, counterpart of `deleteBySliceId`): the row must carry the existing entity's `id`, and it returns the new version's `sliceId` (when the start date matches an existing slice, that slice is corrected in place and its `sliceId` is returned). Fields absent from the row are copied forward from the adjacent slice, so a delta payload (`id` + `effectiveStartDate` + changed fields) is the recommended form. `addVersionAndFetch` also returns the full version row, fetched by `sliceId` across the timeline (the new version's effective date may not be today).
 - **Guard**: a `create*` call carrying an `id` that matches **no** entity is rejected for `DISTRIBUTED_LONG/STRING` models — a typo must not silently mint a new entity with a caller-chosen id. Exceptions: `EXTERNAL_ID` models (new entities legitimately arrive with their id) and the `enableInsertId` import mode (preset ids).
 
 ### 2.4 update APIs
 - The current implementation uses `sliceId` as the update primary key. Updating `effectiveStartDate` automatically corrects adjacent slices' `effectiveEndDate`.
-- Manual updates to `effectiveEndDate` are not recommended. To create a new slice, use `create` with an existing `id` and a new `effectiveStartDate`.
+- `effectiveEndDate` is system-computed and **stripped from every generic update write**; the single sanctioned write path is `setEndDate` (§2.6). To create a new slice, use `create` with an existing `id` and a new `effectiveStartDate`.
 - If an upper layer provides a "correct"-style API (update data without creating a new slice), it should locate by `sliceId` (the ORM currently does not provide a dedicated correct API).
 
 ### 2.5 delete / copy APIs
@@ -95,13 +97,29 @@ POST /{model}/searchPage
 - `deleteBySliceId`: deletes a single slice and automatically corrects adjacent slice ranges. The entity survives, so `onDelete` deliberately does **not** fire.
 - `copyById/copyByIds`: copies the **current (as-of) slice** into a **new entity** — the copyable field set excludes every structural timeline key (`id`/`sliceId`/effective dates), so the copy gets a fresh logical `id` and a genesis slice at the current date. It does **not** duplicate the full version history, and does not add a slice to the source entity. (`businessKey` fields are `copyable = false`, so set a new code on the copy.)
 
-### 2.6 Versioning seam (engine internals)
+### 2.6 Termination & gaps (`setEndDate`)
+
+- `setEndDate(modelName, id, endDate)` (REST: `POST /{model}/setEndDate`) writes the `effectiveEndDate` of the entity's **LAST** slice — the single sanctioned write to the system-computed end date. An `endDate` before `9999-12-31` **terminates** the timeline: as-of reads after it return nothing. Passing `9999-12-31` **reopens** it. The tail slice is resolved server-side from the logical `id`, so callers never race a stale `sliceId`.
+- `endDate` must not precede the tail slice's own `effectiveStartDate` — delete the trailing version(s) first (`deleteBySliceId`) to terminate earlier; nothing is ever implicitly discarded.
+- **Revive**: a later `addVersion` whose start is after a terminated end date inserts a fresh open segment, deliberately leaving a **gap**. Routing falls out of the existing algorithm — no special cases:
+
+| `addVersion` start lands... | Behavior |
+|---|---|
+| inside existing coverage | normal split / same-start correct; a terminated end date survives the split |
+| inside a gap, before a later segment | fills forward: new slice ends one day before the next segment's start |
+| after everything (terminated tail) | revives: fresh segment open to `9999-12-31`; the gap stays |
+
+- **Gaps are safe, silent, and deliberate.** A gap is "no coverage": as-of reads inside it return no row — exactly the state a not-yet-effective entity (future-dated genesis) already produces, so consumers carry no new obligation. Overlaps — the actual corruption class (two rows for one date) — remain constructively impossible: only `setEndDate` writes an end date, and only on the tail, which has no right neighbor. Gaps have no first-class row, so "why is it dark" lives only in the changelog; a domain that needs a queryable reason (suspended vs terminated, reporting rows) should model a **versioned status field** on top — the two compose.
+- Termination is **not** deletion: the entity `id` stays valid, inbound FKs keep resolving (as-of joins simply return nothing past the end date), and the `onDelete` strategy does not fire.
+- Sharp edges (the generic interval rules applied at a termination boundary — visible in the version list, one `setEndDate` away from repair): a revived segment created with no neighbor copies nothing (genesis-like — provide required fields); moving a revived segment's start left onto the terminated segment re-derives that end date (the gap is bridged); deleting the slice that carries the terminated end date transfers it to the predecessor (the heal rule), rather than reopening.
+
+### 2.7 Versioning seam (engine internals)
 - All timeline handling in `ModelServiceImpl` routes through one `VersioningStrategy` seam (`service/versioning/`): `IdentityStrategy` is a no-op for regular models, `TimelineStrategy` adapts the interval-maintenance algorithm in `TimelineService`. New read paths must route Filters/FlexQuery through the `scopedRead` exits — there is no per-call-site `if (isTimelineModel)` to forget.
 - The across-timeline opt-out is a **dual trigger by contract**: the explicit `FlexQuery.acrossTimelineData()` flag (also set from REST via `QueryParams` / `SearchListParams.acrossTimeline`), **or** caller-supplied `effectiveStartDate`/`effectiveEndDate` conditions (which declare "I am doing my own temporal filtering"). Either suppresses the default effective-date clamp; both are intended, stable behavior.
 - **Accepted limitations** (a master-detail table split was evaluated and rejected — its headline benefit, a real DB FK target, is moot because referential integrity is enforced app-level and no physical FKs are emitted): version-invariant fields (e.g. `code`) repeat on every slice, and a **declarative reference-by-code relation to a timeline model is not supported** (`code` is not physically unique across slices). Reference timeline entities by logical `id` (as-of) or pin one slice via `sliceId`; a **runtime** "`code` + effective date" as-of query is fully supported (non-overlapping intervals make it unique).
 - `Context.effectiveDate` is ambient state (defaults to today). Batch engines that fan work out across threads must propagate the context (ScopedValue) to workers — e.g. a payroll run pricing by `payDate` — or that branch silently prices "as of today".
 
-### 2.7 search Join Rules for Timeline Associations
+### 2.8 search Join Rules for Timeline Associations
 - When the related object is a timeline model, Many2One/One2One queries automatically append to the `LEFT JOIN ON` clause:
   `effectiveStartDate <= effectiveDate AND effectiveEndDate >= effectiveDate`.
 - One2Many/Many2Many cascades also filter slices based on `effectiveDate`.

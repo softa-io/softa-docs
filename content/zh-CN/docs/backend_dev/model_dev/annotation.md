@@ -73,8 +73,8 @@ public enum CustomerTier {
 | `defaultOrder` | String[] | `{}` | `defaultOrder` | 如 `"createdTime:desc"` |
 | `softDelete` | boolean | `false` | `softDelete` | |
 | `softDeleteField` | String | `"deleted"` | `softDeleteField` | 仅当 `softDelete = true` 时生效 |
-| `activeControl` | boolean | `false` | `activeControl` | 添加 `active` 门控列 |
-| `timeline` | boolean | `false` | `timeline` | 生效日期行（见 Timeline Model） |
+| `activeControl` | boolean | `false` | `activeControl` | 添加 `active` 门控列；与 `timeline` 互斥（启动时拒绝） |
+| `timeline` | boolean | `false` | `timeline` | 生效日期行（见 Timeline Model）；与 `activeControl` 互斥——期间状态建为版本化业务字段，终结走 `setEndDate` |
 | `idStrategy` | `IdStrategy` | `DB_AUTO_ID` | `idStrategy` | |
 | `storageType` | `StorageType` | `RDBMS` | `storageType` | |
 | `versionLock` | boolean | `false` | `versionLock` | 乐观锁列 |

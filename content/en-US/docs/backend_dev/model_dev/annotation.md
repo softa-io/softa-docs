@@ -84,8 +84,8 @@ public enum CustomerTier {
 | `defaultOrder` | String[] | `{}` | `defaultOrder` | e.g. `"createdTime:desc"` |
 | `softDelete` | boolean | `false` | `softDelete` | |
 | `softDeleteField` | String | `"deleted"` | `softDeleteField` | effective only when `softDelete = true` |
-| `activeControl` | boolean | `false` | `activeControl` | adds `active` gate column |
-| `timeline` | boolean | `false` | `timeline` | effective-dated rows (see Timeline Model) |
+| `activeControl` | boolean | `false` | `activeControl` | adds `active` gate column; mutually exclusive with `timeline` (boot-rejected) |
+| `timeline` | boolean | `false` | `timeline` | effective-dated rows (see Timeline Model); mutually exclusive with `activeControl` — express period state as a versioned business field and terminate via `setEndDate` |
 | `idStrategy` | `IdStrategy` | `DB_AUTO_ID` | `idStrategy` | |
 | `storageType` | `StorageType` | `RDBMS` | `storageType` | |
 | `versionLock` | boolean | `false` | `versionLock` | optimistic-lock column |

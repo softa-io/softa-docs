@@ -614,6 +614,43 @@ Like `addVersion`, then fetches the full version row by its `sliceId` (across th
 
 ### Responses Data Schema
 
+<a id="opIdsetEndDate"></a>
+
+## POST setEndDate
+
+POST /{modelName}/setEndDate
+
+Timeline models only: set the end date of the entity's LAST slice. An `endDate` before `9999-12-31` terminates the timeline (as-of reads after it return nothing); passing `9999-12-31` reopens it. Must not precede the last slice's start date — delete trailing versions first to terminate earlier. A later `addVersion` starting after a terminated end date revives the entity as a new segment, leaving a gap.
+
+### Params
+
+|Name|Location|Type|Required|Description|
+|---|---|---|---|---|
+|modelName|path|string| yes |none|
+|id|query|string| yes |Logical id of the timeline entity.|
+|endDate|query|string(date)| yes |New end date of the LAST slice; `9999-12-31` reopens.|
+
+> Response Examples
+
+> 200 Response
+
+```json
+{
+  "code": 0,
+  "data": true,
+  "error": "string",
+  "message": "string"
+}
+```
+
+### Responses
+
+|HTTP Status Code |Meaning|Description|Data schema|
+|---|---|---|---|
+|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
+
+### Responses Data Schema
+
 <a id="opIdgetUnmaskedField"></a>
 
 ## GET getUnmaskedField

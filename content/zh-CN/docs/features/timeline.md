@@ -9,6 +9,7 @@
 - 当 `timeline = true` 时，表示该模型为时间轴模型，必须包含保留字段 `effectiveStartDate` 和 `effectiveEndDate`。系统会在启动时校验，如缺失则抛出异常。
 - 当 `timeline = false` 时，表示普通模型，**不允许**定义 `effectiveStartDate` 与 `effectiveEndDate` 保留字段。
 - 时间轴模型**要求使用应用侧生成的逻辑 id**——`idStrategy = DISTRIBUTED_LONG`（或 `DISTRIBUTED_STRING` / `EXTERNAL_ID`）。`DB_AUTO_ID` 会在启动时被拒绝：自增落在物理主键 `sliceId` 上，首条切片的共享逻辑 `id` 列将无人填充（后续拆分/更正行会携带实体已有的 id 并沿用）。
+- 时间轴模型**不得**声明 `activeControl`（启动时拒绝）：`active` 是实体级开关，而时间轴存储让每个字段都按切片存在——两者组合会悄然改变该特性的语义，并让区间算法的邻居探测失明。期间状态请建为版本化业务字段；终结时间轴用 `setEndDate`（§2.6）。
 
 ### 1.2 主键与关键字段
 
@@ -95,13 +96,14 @@ POST /{model}/searchPage
 - 在 `createOne` / `createList` 中，如果未提供 `effectiveStartDate`，则默认使用当前 `effectiveDate`；如果未提供 `effectiveEndDate`，则默认使用 `9999-12-31`。
 - 当为已有 `id` 再创建新切片时，系统会根据新的 `effectiveStartDate` 自动拆分或调整相邻切片。
 
-**三种写入意图，显式区分：**
+**写入意图，显式区分：**
 
 | 意图 | API | 关键点 |
 |---|---|---|
 | 创建**新**实体 | `create*`（**不带** `id`） | 生成新的逻辑 `id` + 首切片 |
 | 给**已有**实体新增版本 | `addVersion`（或 `create*` 带已有 `id`） | 返回新版本的 `sliceId` |
 | 修正某个已有版本 | `update*` | 以 `sliceId` 为键（提交的 `id` 会被数据库值覆盖） |
+| 终结 / 重开时间轴 | `setEndDate`（§2.6） | 以逻辑 `id` 为键；写入最后一个切片的结束日 |
 
 - `addVersion(modelName, row)` 是显式的新增版本入口（REST：`POST /{model}/addVersion`，与 `deleteBySliceId` 对偶）：行数据必须携带已有实体的 `id`，返回新版本的 `sliceId`（当生效开始日与既有切片相同时，就地修正该切片并返回其 `sliceId`）。行里未提供的字段会自动从相邻切片复制前滚，因此推荐提交增量（`id` + `effectiveStartDate` + 变更字段）。`addVersionAndFetch` 额外按 `sliceId` 跨时间轴取回完整版本行（新版本的生效日期未必是今天）。
 - **守卫**：`create*` 携带**不存在**的 `id` 时，对 `DISTRIBUTED_LONG/STRING` 模型直接拒绝——避免 id 笔误静默铸造出新实体。豁免：`EXTERNAL_ID` 模型（新实体本就自带 id）与 `enableInsertId` 导入模式（预置 id）。
@@ -109,7 +111,7 @@ POST /{model}/searchPage
 ### 2.4 更新接口
 
 - 当前实现以 `sliceId` 作为更新主键。更新 `effectiveStartDate` 时，系统会自动修正前后相邻切片的 `effectiveEndDate`。
-- 不推荐直接手动修改 `effectiveEndDate`。如果希望新增一个新生效期的切片，应当使用 `create`，传入已有的 `id` 和新的 `effectiveStartDate`。
+- `effectiveEndDate` 由系统计算，**在所有通用 update 写入中一律被剥离**；唯一合法写入口是 `setEndDate`（§2.6）。如果希望新增一个新生效期的切片，应当使用 `create`，传入已有的 `id` 和新的 `effectiveStartDate`。
 - 如果上层需要支持“更正（correct）”类接口（对历史切片就地更正而不新增切片），通常需要通过 `sliceId` 精确定位；目前 ORM 未内置专门的 correct API。
 
 ### 2.5 删除 / 复制接口
@@ -118,14 +120,30 @@ POST /{model}/searchPage
 - `deleteBySliceId`：删除单个切片，并自动修正前后切片的时间范围。实体本身仍然存在，因此 `onDelete` **刻意不会**触发。
 - `copyById` / `copyByIds`：把**当前（as-of）切片**复制为一个**新实体**——可复制字段集排除所有时间轴结构键（`id`/`sliceId`/生效日期），因此副本获得全新的逻辑 `id` 和以当天为起点的首切片。它**不会**复制完整版本历史，也不会给源实体新增切片。（`businessKey` 字段为 `copyable = false`，复制后需为副本设置新的业务编码。）
 
-### 2.6 Versioning seam（引擎内部）
+### 2.6 终结与空窗（`setEndDate`）
+
+- `setEndDate(modelName, id, endDate)`（REST：`POST /{model}/setEndDate`）写入实体**最后一个**切片的 `effectiveEndDate`——这是对系统计算的结束日的唯一合法写入口。`endDate` 早于 `9999-12-31` 即**终结**时间轴：其后的 as-of 读取返回空。传 `9999-12-31` 即**重开**。尾切片由服务端按逻辑 `id` 解析，调用方永远不会与过期的 `sliceId` 赛跑。
+- `endDate` 不得早于尾切片自身的 `effectiveStartDate`——要终结到更早的日期，先用 `deleteBySliceId` 删除尾部版本；任何数据都不会被隐式丢弃。
+- **复活（Revive）**：起始日晚于已终结结束日的后续 `addVersion` 会插入一个全新的开放段，并**刻意留下空窗（gap）**。路由完全由既有算法自然导出——没有特例：
+
+| `addVersion` 起始日落在… | 行为 |
+|---|---|
+| 既有覆盖区间内 | 正常拆分 / 同日就地修正；已终结的结束日在拆分中保留 |
+| 空窗内、后续段之前 | 向前填充：新切片结束于下一段起始日的前一天 |
+| 一切之后（已终结的尾部） | 复活：新段开放至 `9999-12-31`；空窗保留 |
+
+- **空窗是安全、静默且有意的。** 空窗即"无覆盖"：其内的 as-of 读取无行返回——与"尚未生效的实体（未来日期的首切片）"产生的状态完全一致，消费方没有任何新增义务。重叠——真正的损坏类别（同一日期两行）——依然构造性不可能：只有 `setEndDate` 写结束日，且只写尾切片，而尾切片没有右邻。空窗没有一等行，"这段为什么是暗的"只存在于变更日志；需要可查询原因（停用 vs 终结、报表行）的领域应在其上建**版本化状态字段**——两者可组合。
+- 终结**不是**删除：实体 `id` 保持有效，入站外键照常解析（as-of 关联在结束日之后只是返回空），`onDelete` 策略不会触发。
+- 尖锐边界（通用区间规则作用于终结边界的自然结果——在版本列表中可见，一次 `setEndDate` 即可修复）：无邻居的复活段不复制任何内容（等同创世——需提供必填字段）；把复活段的起始日左移到已终结段上会重新推导该结束日（空窗被桥接）；删除携带终结结束日的切片时，该结束日转移给前驱（heal 规则），而不是重开。
+
+### 2.7 Versioning seam（引擎内部）
 
 - `ModelServiceImpl` 中所有时间轴处理都经一条 `VersioningStrategy` 接缝（`service/versioning/`）：`IdentityStrategy` 对普通模型是空操作，`TimelineStrategy` 适配 `TimelineService` 中的区间维护算法。新增读路径必须把 Filters/FlexQuery 走 `scopedRead` 出口——避免在各调用点散落 `if (isTimelineModel)`。
 - 跨时间轴退出是**契约上的双重触发**：显式的 `FlexQuery.acrossTimelineData()` 标志（REST 侧由 `QueryParams` / `SearchListParams.acrossTimeline` 设置），**或**调用方自行提供的 `effectiveStartDate` / `effectiveEndDate` 条件（表示“我自己做时间过滤”）。任一条件都会抑制默认的生效日钳制；二者均为有意、稳定的行为。
 - **已接受的限制**（曾评估并否决主从表拆分——其主要收益是真实的数据库 FK 目标，但引用完整性由应用层保证且不生成物理 FK，因此该收益无意义）：版本无关字段（如 `code`）会在每个切片上重复；**不支持对时间轴模型声明按 code 引用的关系**（`code` 在切片间并非物理唯一）。请按逻辑 `id`（as-of）引用时间轴实体，或通过 `sliceId` 钉住某一切片；**运行时**按 “`code` + 生效日期” 做 as-of 查询是完全支持的（不重叠区间保证唯一）。
 - `Context.effectiveDate` 是环境态（默认今天）。跨线程扇出任务的批处理引擎必须把上下文（ScopedValue）传播到工作线程——例如按 `payDate` 计价的发薪跑批——否则该分支会静默按“今天”计价。
 
-### 2.7 时间轴关联查询规则
+### 2.8 时间轴关联查询规则
 
 - 当关联对象是时间轴模型时，Many2One/One2One 的关联查询会在 `LEFT JOIN ON` 中自动附加：
 

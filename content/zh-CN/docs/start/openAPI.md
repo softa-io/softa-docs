@@ -614,6 +614,43 @@ POST /{modelName}/addVersionAndFetch
 
 ### 返回数据结构
 
+<a id="opIdsetEndDate"></a>
+
+## POST setEndDate
+
+POST /{modelName}/setEndDate
+
+仅时间轴模型：设置实体**最后一个**切片的结束日。`endDate` 早于 `9999-12-31` 即终结时间轴（其后的 as-of 读取返回空）；传 `9999-12-31` 即重开。不得早于尾切片的起始日——要终结到更早的日期，先删除尾部版本。终结之后起始日更晚的 `addVersion` 会以新段复活该实体，并留下空窗（gap）。
+
+### 请求参数
+
+|名称|位置|类型|必选|说明|
+|---|---|---|---|---|
+|modelName|path|string| 是 |none|
+|id|query|string| 是 |时间轴实体的逻辑 id。|
+|endDate|query|string(date)| 是 |最后一个切片的新结束日；`9999-12-31` 表示重开。|
+
+> 返回示例
+
+> 200 Response
+
+```json
+{
+  "code": 0,
+  "data": true,
+  "error": "string",
+  "message": "string"
+}
+```
+
+### 返回结果
+
+|状态码|状态码含义|说明|数据模型|
+|---|---|---|---|
+|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
+
+### 返回数据结构
+
 <a id="opIdgetUnmaskedField"></a>
 
 ## GET getUnmaskedField
