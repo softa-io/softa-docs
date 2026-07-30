@@ -56,7 +56,7 @@ public enum CustomerTier {
 | `itemCode` | `@JsonValue` 字段值（回退 `enum.name()`） | —（不可覆盖） |
 | `tableName` | `snake_case(modelName)` | `@Model.tableName` |
 | `columnName` | `snake_case(fieldName)` | `@Field.columnName` |
-| `fieldType` | 通过 `TypeInference` 从 Java 类型推断（如 `String`→`STRING`、enum→`OPTION`、`List<enum>`→`MULTI_OPTION`、`@Model` POJO→`MANY_TO_ONE`） | `@Field.fieldType = FieldType.X`（单值，无花括号）；**`OPTION` / `MULTI_OPTION` 不能显式书写** |
+| `fieldType` | 通过 `TypeInference` 从 Java 类型推断（如 `String`→`STRING`、enum→`OPTION`、`List<enum>`→`MULTI_OPTION`、`@Model` POJO→`MANY_TO_ONE`、`DTOFieldObject` POJO→`DTO`） | `@Field.fieldType = FieldType.X`（单值，无花括号）；**`OPTION` / `MULTI_OPTION` 不能显式书写** |
 | index `indexName` | `idx_<table>_<col>...` / 唯一时为 `uk_<table>_<col>...` | `@Index.indexName` |
 
 ### `@Model` ↔ `SysModel`

@@ -16,18 +16,20 @@ Field metadata is a collection of descriptive information about model fields. It
 | 6 | Boolean | Boolean | false |  |
 | 7 | Date | Date |  | Format `yyyy-MM-dd`, e.g. `2026-02-01`. |
 | 8 | DateTime | DateTime |  | Format `yyyy-MM-dd HH:mm:ss`, e.g. `2026-02-01 12:15:20`. |
-| 9 | Option | Single select |  |  |
-| 10 | MultiOption | Multi select | [] |  |
-| 11 | MultiString | String list | [] |  |
-| 12 | File | Single file |  | Virtual field: upload and bind a file. |
-| 13 | MultiFile | Multiple files |  | Virtual field: upload and bind multiple files. |
-| 14 | JSON | JSON |  | Stored as a JSON string. |
-| 15 | Filters | Filters |  | Stores filter conditions (infix expression). |
-| 16 | Orders | Orders |  | Stores multi-field ordering conditions. |
-| 17 | OneToOne | One-to-one |  | Configure `relatedModel`. |
-| 18 | ManyToOne | Many-to-one |  | Configure `relatedModel`. |
-| 19 | OneToMany | One-to-many |  | Virtual field: configure `relatedModel` + `relatedField`. |
-| 20 | ManyToMany | Many-to-many |  | Virtual field: configure `relatedModel` + `joinModel` + `joinLeft` + `joinRight`. |
+| 9 | Time | Time |  | Format `HH:mm:ss`, e.g. `12:15:20`. |
+| 10 | Option | Single select |  |  |
+| 11 | MultiOption | Multi select | [] |  |
+| 12 | MultiString | String list | [] |  |
+| 13 | File | Single file |  | Virtual field: upload and bind a file. |
+| 14 | MultiFile | Multiple files |  | Virtual field: upload and bind multiple files. |
+| 15 | JSON | JSON |  | Stored as a JSON string. |
+| 16 | DTO | DTO |  | Strongly-typed value object stored as a JSON string. |
+| 17 | Filters | Filters |  | Stores filter conditions (infix expression). |
+| 18 | Orders | Orders |  | Stores multi-field ordering conditions. |
+| 19 | OneToOne | One-to-one |  | Configure `relatedModel`. |
+| 20 | ManyToOne | Many-to-one |  | Configure `relatedModel`. |
+| 21 | OneToMany | One-to-many |  | Virtual field: configure `relatedModel` + `relatedField`. |
+| 22 | ManyToMany | Many-to-many |  | Virtual field: configure `relatedModel` + `joinModel` + `joinLeft` + `joinRight`. |
 
 > Notes:
 > 1. For OneToOne/ManyToOne/OneToMany/ManyToMany, the foreign keys are **logical** foreign keys, not physical database foreign keys.
@@ -43,7 +45,11 @@ In code, it is a `LocalDate` object. The display format is `yyyy-MM-dd`, e.g. `2
 
 A date-time type accurate to seconds. In code, it is a `LocalDateTime` object. In the database, it is stored as a timestamp. The display format is `yyyy-MM-dd HH:mm:ss`, e.g. `2026-02-01 12:15:20`.
 
-### 1.3 `Option`
+### 1.3 `Time`
+
+A time-of-day type accurate to seconds, without a date part. In code, it is a `LocalTime` object. The display format is `HH:mm:ss`, e.g. `12:15:20`.
+
+### 1.4 `Option`
 
 A single-select field. You must configure the `optionSetCode` attribute (the option set code). For annotation-declared entities it is derived automatically from the enum type.
 
@@ -53,45 +59,51 @@ When fetching a single-select field through the API, the default response is an 
 
 For option set configuration and usage, see the [Option Set](option) section.
 
-### 1.4 `MultiOption`
+### 1.5 `MultiOption`
 
 Multi-select fields allow selecting multiple options from the same option set. When saving, you pass a list of option item codes, and the database stores the codes separated by `,`.
 
 When reading a multi-select field through the API, the default response is a list of `OptionReference` objects (`[{itemCode, label, ...}, ...]`).
 
-### 1.5 `MultiString`
+### 1.6 `MultiString`
 
 Used to store multiple string values in a single field. In code, it is processed as a string list; in the database, values are stored separated by `,`.
 
-### 1.6 `File`
+### 1.7 `File`
 
 Used to upload and bind a single file. The file is automatically stored in the `FileRecord` model.
 
-### 1.7 `MultiFile`
+### 1.8 `MultiFile`
 
 Used to upload and bind multiple files. Files are automatically stored in the `FileRecord` model.
 
-### 1.8 `JSON`
+### 1.9 `JSON`
 
 Typically used only for JSON storage and object conversion. If you need indexing or conditional querying on JSON data, you must handle it manually.
 
-### 1.9 `Filters`
+### 1.10 `DTO`
+
+A strongly-typed value object persisted as a JSON string. Declare a Java field whose class implements the `DTOFieldObject` marker interface — the field type is inferred as `DTO` automatically, and the ORM serializes/deserializes the value to/from the declared Java type.
+
+Compared with `JSON`: a `JSON` field holds a schema-less JSON tree, while a `DTO` field always converts back to the declared value-object class.
+
+### 1.11 `Filters`
 
 Used only for storing the JSON string of a `Filters` object.
 
-### 1.10 `Orders`
+### 1.12 `Orders`
 
 Used only for storing the JSON string of an `Orders` object.
 
-### 1.11 `OneToOne`
+### 1.13 `OneToOne`
 
 A relational field. Configure `relatedModel` and `relatedField`. The selected data is unique. Optionally set `onDelete` for the FK delete strategy when the referenced row is deleted (see [`onDelete`](#224-ondelete)).
 
-### 1.12 `ManyToOne`
+### 1.14 `ManyToOne`
 
 A relational field. Configure `relatedModel` and `relatedField`. Optionally set `onDelete` for the FK delete strategy when the referenced row is deleted (see [`onDelete`](#224-ondelete)).
 
-### 1.13 `OneToMany`
+### 1.15 `OneToMany`
 
 In most cases, OneToMany data is created, updated, or deleted on the client side for a single record by calling the Many-side model API.
 
@@ -114,7 +126,7 @@ Note:
 - `OneToMany` is a virtual field. It queries and binds data based on the logical foreign key of the related model, and the field itself does not have a physical database column.
 
 
-### 1.14 `ManyToMany`
+### 1.16 `ManyToMany`
 
 1. **Full submit**: `[id1, id2, id3]`. The framework computes the diff and creates or deletes join (middle) table rows accordingly.
 2. **Patch submit**, with `PatchType` as the key:

@@ -67,7 +67,7 @@ public enum CustomerTier {
 | `itemCode` | `@JsonValue` field value (fallback `enum.name()`) | — (no override) |
 | `tableName` | `snake_case(modelName)` | `@Model.tableName` |
 | `columnName` | `snake_case(fieldName)` | `@Field.columnName` |
-| `fieldType` | Java type via `TypeInference` (e.g. `String`→`STRING`, enum→`OPTION`, `List<enum>`→`MULTI_OPTION`, `@Model` POJO→`MANY_TO_ONE`) | `@Field.fieldType = FieldType.X` (single value, no braces); **`OPTION` / `MULTI_OPTION` cannot be written explicitly** |
+| `fieldType` | Java type via `TypeInference` (e.g. `String`→`STRING`, enum→`OPTION`, `List<enum>`→`MULTI_OPTION`, `@Model` POJO→`MANY_TO_ONE`, `DTOFieldObject` POJO→`DTO`) | `@Field.fieldType = FieldType.X` (single value, no braces); **`OPTION` / `MULTI_OPTION` cannot be written explicitly** |
 | index `indexName` | `idx_<table>_<col>...` / `uk_<table>_<col>...` for unique | `@Index.indexName` |
 
 ### `@Model` ↔ `SysModel`
