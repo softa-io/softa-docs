@@ -9,27 +9,28 @@
 | 序号 | 类型 | 类型名称 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
 | 1 | String | String | "" | 通过 `length` 配置最大字符串长度。 |
-| 2 | Integer | Integer | 0 | 通过 `length` 配置整数位数。 |
-| 3 | Long | Long | 0L |  |
-| 4 | Double | Double | 0.00 | 通用小数（可接受精度损失）。 |
-| 5 | BigDecimal | BigDecimal | "0" | 高精度小数（金额/货币/汇率等）。 |
-| 6 | Boolean | Boolean | false |  |
-| 7 | Date | Date |  | 格式 `yyyy-MM-dd`，如 `2026-02-01`。 |
-| 8 | DateTime | DateTime |  | 格式 `yyyy-MM-dd HH:mm:ss`，如 `2026-02-01 12:15:20`。 |
-| 9 | Time | Time |  | 格式 `HH:mm:ss`，如 `12:15:20`。 |
-| 10 | Option | 单选 |  |  |
-| 11 | MultiOption | 多选 | [] |  |
-| 12 | MultiString | 字符串列表 | [] |  |
-| 13 | File | 单文件 |  | 虚拟字段：上传并绑定文件。 |
-| 14 | MultiFile | 多文件 |  | 虚拟字段：上传并绑定多个文件。 |
-| 15 | JSON | JSON |  | 以 JSON 字符串存储。 |
-| 16 | DTO | DTO |  | 强类型值对象，以 JSON 字符串存储。 |
-| 17 | Filters | Filters |  | 存储过滤条件（中缀表达式）。 |
-| 18 | Orders | Orders |  | 存储多字段排序条件。 |
-| 19 | OneToOne | 一对一 |  | 配置 `relatedModel`。 |
-| 20 | ManyToOne | 多对一 |  | 配置 `relatedModel`。 |
-| 21 | OneToMany | 一对多 |  | 虚拟字段：配置 `relatedModel` + `relatedField`。 |
-| 22 | ManyToMany | 多对多 |  | 虚拟字段：配置 `relatedModel` + `joinModel` + `joinLeft` + `joinRight`。 |
+| 2 | Text | Text |  | 无界长文本；须通过 `fieldType = FieldType.TEXT` 显式声明。 |
+| 3 | Integer | Integer | 0 | 通过 `length` 配置整数位数。 |
+| 4 | Long | Long | 0L |  |
+| 5 | Double | Double | 0.00 | 通用小数（可接受精度损失）。 |
+| 6 | BigDecimal | BigDecimal | "0" | 高精度小数（金额/货币/汇率等）。 |
+| 7 | Boolean | Boolean | false |  |
+| 8 | Date | Date |  | 格式 `yyyy-MM-dd`，如 `2026-02-01`。 |
+| 9 | DateTime | DateTime |  | 格式 `yyyy-MM-dd HH:mm:ss`，如 `2026-02-01 12:15:20`。 |
+| 10 | Time | Time |  | 格式 `HH:mm:ss`，如 `12:15:20`。 |
+| 11 | Option | 单选 |  |  |
+| 12 | MultiOption | 多选 | [] |  |
+| 13 | MultiString | 字符串列表 | [] |  |
+| 14 | File | 单文件 |  | 虚拟字段：上传并绑定文件。 |
+| 15 | MultiFile | 多文件 |  | 虚拟字段：上传并绑定多个文件。 |
+| 16 | JSON | JSON |  | 以 JSON 字符串存储。 |
+| 17 | DTO | DTO |  | 强类型值对象，以 JSON 字符串存储。 |
+| 18 | Filters | Filters |  | 存储过滤条件（中缀表达式）。 |
+| 19 | Orders | Orders |  | 存储多字段排序条件。 |
+| 20 | OneToOne | 一对一 |  | 配置 `relatedModel`。 |
+| 21 | ManyToOne | 多对一 |  | 配置 `relatedModel`。 |
+| 22 | OneToMany | 一对多 |  | 虚拟字段：配置 `relatedModel` + `relatedField`。 |
+| 23 | ManyToMany | 多对多 |  | 虚拟字段：配置 `relatedModel` + `joinModel` + `joinLeft` + `joinRight`。 |
 
 > 说明：
 > 1. 对于 OneToOne/ManyToOne/OneToMany/ManyToMany，外键为**逻辑**外键，非物理数据库外键。
@@ -37,19 +38,23 @@
 
 **需要额外说明的字段类型：**
 
-### 1.1 `Date`
+### 1.1 `Text`
+
+无界长文本，用于正文、模板、富描述等内容。从不推断——在 `String` 字段上显式声明 `@Field(fieldType = FieldType.TEXT)`。存储为 MySQL `MEDIUMTEXT`（16MB）/ PostgreSQL `TEXT`；`length` 可选，仅作应用层守卫。UI 默认渲染多行文本域（可选 RichText / Markdown / Code 控件），表格筛选仅提供包含/存在性操作符。
+
+### 1.2 `Date`
 
 在代码中为 `LocalDate` 对象。显示格式为 `yyyy-MM-dd`，如 `2026-02-01`。
 
-### 1.2 `DateTime`
+### 1.3 `DateTime`
 
 精确到秒的日期时间类型。在代码中为 `LocalDateTime` 对象。在数据库中以 timestamp 存储。显示格式为 `yyyy-MM-dd HH:mm:ss`，如 `2026-02-01 12:15:20`。
 
-### 1.3 `Time`
+### 1.4 `Time`
 
 精确到秒的时间类型，不含日期部分。在代码中为 `LocalTime` 对象。显示格式为 `HH:mm:ss`，如 `12:15:20`。
 
-### 1.4 `Option`
+### 1.5 `Option`
 
 单选字段。必须配置 `optionSetCode` 属性（选项集编码）。注解声明的实体从枚举类型自动派生。
 
@@ -59,51 +64,51 @@
 
 选项集配置与用法见 [选项集](option) 章节。
 
-### 1.5 `MultiOption`
+### 1.6 `MultiOption`
 
 多选字段允许从同一选项集中选择多个选项。保存时传入选项条目编码列表，数据库以 `,` 分隔存储编码。
 
 通过 API 读取多选字段时，默认响应为 `OptionReference` 对象列表（`[{itemCode, label, ...}, ...]`）。
 
-### 1.6 `MultiString`
+### 1.7 `MultiString`
 
 用于在单个字段中存储多个字符串值。在代码中作为字符串列表处理；在数据库中以 `,` 分隔存储。
 
-### 1.7 `File`
+### 1.8 `File`
 
 用于上传并绑定单个文件。文件自动存储在 `FileRecord` 模型中。
 
-### 1.8 `MultiFile`
+### 1.9 `MultiFile`
 
 用于上传并绑定多个文件。文件自动存储在 `FileRecord` 模型中。
 
-### 1.9 `JSON`
+### 1.10 `JSON`
 
 通常仅用于 JSON 存储与对象转换。若需对 JSON 数据索引或条件查询，须手动处理。
 
-### 1.10 `DTO`
+### 1.11 `DTO`
 
 以 JSON 字符串持久化的强类型值对象。声明一个 Java 字段，其类实现 `DTOFieldObject` 标记接口——字段类型自动推断为 `DTO`，ORM 在声明的 Java 类型与 JSON 之间自动序列化/反序列化。
 
 与 `JSON` 的区别：`JSON` 字段持有的是无模式的 JSON 树，`DTO` 字段始终转换回声明的值对象类。
 
-### 1.11 `Filters`
+### 1.12 `Filters`
 
 仅用于存储 `Filters` 对象的 JSON 字符串。
 
-### 1.12 `Orders`
+### 1.13 `Orders`
 
 仅用于存储 `Orders` 对象的 JSON 字符串。
 
-### 1.13 `OneToOne`
+### 1.14 `OneToOne`
 
 关联字段。配置 `relatedModel` 和 `relatedField`。所选数据唯一。可选配置 `onDelete`，声明被引用行删除时的 FK 策略（见 [`onDelete`](#224-ondelete)）。
 
-### 1.14 `ManyToOne`
+### 1.15 `ManyToOne`
 
 关联字段。配置 `relatedModel` 和 `relatedField`。可选配置 `onDelete`，声明被引用行删除时的 FK 策略（见 [`onDelete`](#224-ondelete)）。
 
-### 1.15 `OneToMany`
+### 1.16 `OneToMany`
 
 多数情况下，OneToMany 数据在客户端通过对单条记录调用 Many 侧模型 API 进行创建、更新或删除。
 
@@ -126,7 +131,7 @@
 - `OneToMany` 为虚拟字段。根据关联模型的逻辑外键查询并绑定数据，字段本身无物理数据库列。
 
 
-### 1.16 `ManyToMany`
+### 1.17 `ManyToMany`
 
 1. **全量提交**：`[id1, id2, id3]`。框架计算 diff 并相应创建或删除连接（中间）表行。
 2. **补丁提交**，以 `PatchType` 为键：

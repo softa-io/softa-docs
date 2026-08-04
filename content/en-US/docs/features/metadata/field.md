@@ -9,27 +9,28 @@ Field metadata is a collection of descriptive information about model fields. It
 | No. | Type | Type Name | Default Value | Description |
 | --- | --- | --- | --- | --- |
 | 1 | String | String | "" | Configure the maximum string length via `length`. |
-| 2 | Integer | Integer | 0 | Configure the number of integer digits via `length`. |
-| 3 | Long | Long | 0L |  |
-| 4 | Double | Double | 0.00 | General-purpose decimals (precision loss acceptable). |
-| 5 | BigDecimal | BigDecimal | "0" | High-precision decimals (money/currency/exchange rate, etc.). |
-| 6 | Boolean | Boolean | false |  |
-| 7 | Date | Date |  | Format `yyyy-MM-dd`, e.g. `2026-02-01`. |
-| 8 | DateTime | DateTime |  | Format `yyyy-MM-dd HH:mm:ss`, e.g. `2026-02-01 12:15:20`. |
-| 9 | Time | Time |  | Format `HH:mm:ss`, e.g. `12:15:20`. |
-| 10 | Option | Single select |  |  |
-| 11 | MultiOption | Multi select | [] |  |
-| 12 | MultiString | String list | [] |  |
-| 13 | File | Single file |  | Virtual field: upload and bind a file. |
-| 14 | MultiFile | Multiple files |  | Virtual field: upload and bind multiple files. |
-| 15 | JSON | JSON |  | Stored as a JSON string. |
-| 16 | DTO | DTO |  | Strongly-typed value object stored as a JSON string. |
-| 17 | Filters | Filters |  | Stores filter conditions (infix expression). |
-| 18 | Orders | Orders |  | Stores multi-field ordering conditions. |
-| 19 | OneToOne | One-to-one |  | Configure `relatedModel`. |
-| 20 | ManyToOne | Many-to-one |  | Configure `relatedModel`. |
-| 21 | OneToMany | One-to-many |  | Virtual field: configure `relatedModel` + `relatedField`. |
-| 22 | ManyToMany | Many-to-many |  | Virtual field: configure `relatedModel` + `joinModel` + `joinLeft` + `joinRight`. |
+| 2 | Text | Text |  | Unbounded long text; declared explicitly via `fieldType = FieldType.TEXT`. |
+| 3 | Integer | Integer | 0 | Configure the number of integer digits via `length`. |
+| 4 | Long | Long | 0L |  |
+| 5 | Double | Double | 0.00 | General-purpose decimals (precision loss acceptable). |
+| 6 | BigDecimal | BigDecimal | "0" | High-precision decimals (money/currency/exchange rate, etc.). |
+| 7 | Boolean | Boolean | false |  |
+| 8 | Date | Date |  | Format `yyyy-MM-dd`, e.g. `2026-02-01`. |
+| 9 | DateTime | DateTime |  | Format `yyyy-MM-dd HH:mm:ss`, e.g. `2026-02-01 12:15:20`. |
+| 10 | Time | Time |  | Format `HH:mm:ss`, e.g. `12:15:20`. |
+| 11 | Option | Single select |  |  |
+| 12 | MultiOption | Multi select | [] |  |
+| 13 | MultiString | String list | [] |  |
+| 14 | File | Single file |  | Virtual field: upload and bind a file. |
+| 15 | MultiFile | Multiple files |  | Virtual field: upload and bind multiple files. |
+| 16 | JSON | JSON |  | Stored as a JSON string. |
+| 17 | DTO | DTO |  | Strongly-typed value object stored as a JSON string. |
+| 18 | Filters | Filters |  | Stores filter conditions (infix expression). |
+| 19 | Orders | Orders |  | Stores multi-field ordering conditions. |
+| 20 | OneToOne | One-to-one |  | Configure `relatedModel`. |
+| 21 | ManyToOne | Many-to-one |  | Configure `relatedModel`. |
+| 22 | OneToMany | One-to-many |  | Virtual field: configure `relatedModel` + `relatedField`. |
+| 23 | ManyToMany | Many-to-many |  | Virtual field: configure `relatedModel` + `joinModel` + `joinLeft` + `joinRight`. |
 
 > Notes:
 > 1. For OneToOne/ManyToOne/OneToMany/ManyToMany, the foreign keys are **logical** foreign keys, not physical database foreign keys.
@@ -37,19 +38,23 @@ Field metadata is a collection of descriptive information about model fields. It
 
 **Field types that need additional explanation:**
 
-### 1.1 `Date`
+### 1.1 `Text`
+
+Unbounded long text for bodies, templates, and rich descriptions. Never inferred — declare `@Field(fieldType = FieldType.TEXT)` on a `String` field. Stored as MySQL `MEDIUMTEXT` (16MB) / PostgreSQL `TEXT`; `length` is optional and acts only as an application-level guard. The UI renders a multiline textarea by default (RichText / Markdown / Code widgets available), and table filtering offers substring/presence operators only.
+
+### 1.2 `Date`
 
 In code, it is a `LocalDate` object. The display format is `yyyy-MM-dd`, e.g. `2026-02-01`.
 
-### 1.2 `DateTime`
+### 1.3 `DateTime`
 
 A date-time type accurate to seconds. In code, it is a `LocalDateTime` object. In the database, it is stored as a timestamp. The display format is `yyyy-MM-dd HH:mm:ss`, e.g. `2026-02-01 12:15:20`.
 
-### 1.3 `Time`
+### 1.4 `Time`
 
 A time-of-day type accurate to seconds, without a date part. In code, it is a `LocalTime` object. The display format is `HH:mm:ss`, e.g. `12:15:20`.
 
-### 1.4 `Option`
+### 1.5 `Option`
 
 A single-select field. You must configure the `optionSetCode` attribute (the option set code). For annotation-declared entities it is derived automatically from the enum type.
 
@@ -59,51 +64,51 @@ When fetching a single-select field through the API, the default response is an 
 
 For option set configuration and usage, see the [Option Set](option) section.
 
-### 1.5 `MultiOption`
+### 1.6 `MultiOption`
 
 Multi-select fields allow selecting multiple options from the same option set. When saving, you pass a list of option item codes, and the database stores the codes separated by `,`.
 
 When reading a multi-select field through the API, the default response is a list of `OptionReference` objects (`[{itemCode, label, ...}, ...]`).
 
-### 1.6 `MultiString`
+### 1.7 `MultiString`
 
 Used to store multiple string values in a single field. In code, it is processed as a string list; in the database, values are stored separated by `,`.
 
-### 1.7 `File`
+### 1.8 `File`
 
 Used to upload and bind a single file. The file is automatically stored in the `FileRecord` model.
 
-### 1.8 `MultiFile`
+### 1.9 `MultiFile`
 
 Used to upload and bind multiple files. Files are automatically stored in the `FileRecord` model.
 
-### 1.9 `JSON`
+### 1.10 `JSON`
 
 Typically used only for JSON storage and object conversion. If you need indexing or conditional querying on JSON data, you must handle it manually.
 
-### 1.10 `DTO`
+### 1.11 `DTO`
 
 A strongly-typed value object persisted as a JSON string. Declare a Java field whose class implements the `DTOFieldObject` marker interface — the field type is inferred as `DTO` automatically, and the ORM serializes/deserializes the value to/from the declared Java type.
 
 Compared with `JSON`: a `JSON` field holds a schema-less JSON tree, while a `DTO` field always converts back to the declared value-object class.
 
-### 1.11 `Filters`
+### 1.12 `Filters`
 
 Used only for storing the JSON string of a `Filters` object.
 
-### 1.12 `Orders`
+### 1.13 `Orders`
 
 Used only for storing the JSON string of an `Orders` object.
 
-### 1.13 `OneToOne`
+### 1.14 `OneToOne`
 
 A relational field. Configure `relatedModel` and `relatedField`. The selected data is unique. Optionally set `onDelete` for the FK delete strategy when the referenced row is deleted (see [`onDelete`](#224-ondelete)).
 
-### 1.14 `ManyToOne`
+### 1.15 `ManyToOne`
 
 A relational field. Configure `relatedModel` and `relatedField`. Optionally set `onDelete` for the FK delete strategy when the referenced row is deleted (see [`onDelete`](#224-ondelete)).
 
-### 1.15 `OneToMany`
+### 1.16 `OneToMany`
 
 In most cases, OneToMany data is created, updated, or deleted on the client side for a single record by calling the Many-side model API.
 
@@ -126,7 +131,7 @@ Note:
 - `OneToMany` is a virtual field. It queries and binds data based on the logical foreign key of the related model, and the field itself does not have a physical database column.
 
 
-### 1.16 `ManyToMany`
+### 1.17 `ManyToMany`
 
 1. **Full submit**: `[id1, id2, id3]`. The framework computes the diff and creates or deletes join (middle) table rows accordingly.
 2. **Patch submit**, with `PatchType` as the key:

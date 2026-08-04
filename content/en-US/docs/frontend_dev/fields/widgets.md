@@ -15,7 +15,8 @@ Related docs:
 
 | FieldType     | Default behavior               | Supported WidgetType                                                              |
 | ------------- | ------------------------------ | --------------------------------------------------------------------------------- |
-| `String`      | single-line input              | `URL`, `Email`, `Phone`, `Text`, `RichText`, `TemplateEditor`, `Markdown`, `Code`, `Color`, `yyyy-MM`, `MM-dd`, `CronEditor` |
+| `String`      | single-line input              | `URL`, `Email`, `Phone`, `PlainText`, `RichText`, `TemplateEditor`, `Markdown`, `Code`, `Color`, `yyyy-MM`, `MM-dd`, `CronEditor` |
+| `Text`        | multiline textarea             | `RichText`, `Markdown`, `Code`, `TemplateEditor`                                  |
 | `MultiString` | tag-style comma/enter input    | -                                                                                 |
 | `Integer`     | numeric input                  | `Monetary`, `Percentage`, `Slider`                                                |
 | `Long`        | numeric input                  | `Monetary`, `Percentage`, `Slider`                                                |
@@ -66,10 +67,10 @@ Paste-friendly: pasting a value that begins with `+` re-parses to switch the cou
 
 Value contract: E.164 `string` (`"+<dialCode><nationalDigits>"`), or empty string when no number is entered. Schema-level validation should use `phoneE164` / `phoneE164Optional` from `@/utils/schema-validators`.
 
-### `Text`
+### `PlainText`
 
 ```tsx
-<Field fieldName="description" widgetType="Text" />
+<Field fieldName="description" widgetType="PlainText" />
 ```
 
 ### `RichText`

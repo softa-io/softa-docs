@@ -56,7 +56,7 @@ public enum CustomerTier {
 | `itemCode` | `@JsonValue` 字段值（回退 `enum.name()`） | —（不可覆盖） |
 | `tableName` | `snake_case(modelName)` | `@Model.tableName` |
 | `columnName` | `snake_case(fieldName)` | `@Field.columnName` |
-| `fieldType` | 通过 `TypeInference` 从 Java 类型推断（如 `String`→`STRING`、enum→`OPTION`、`List<enum>`→`MULTI_OPTION`、`@Model` POJO→`MANY_TO_ONE`、`DTOFieldObject` POJO→`DTO`） | `@Field.fieldType = FieldType.X`（单值，无花括号）；**`OPTION` / `MULTI_OPTION` 不能显式书写** |
+| `fieldType` | 通过 `TypeInference` 从 Java 类型推断（如 `String`→`STRING`、enum→`OPTION`、`List<enum>`→`MULTI_OPTION`、`@Model` POJO→`MANY_TO_ONE`、`DTOFieldObject` POJO→`DTO`） | `@Field.fieldType = FieldType.X`（单值，无花括号）；**`OPTION` / `MULTI_OPTION` 不能显式书写**；`TEXT`（无界长文本）**从不推断**——须在 `String` 字段上显式声明 |
 | index `indexName` | `idx_<table>_<col>...` / 唯一时为 `uk_<table>_<col>...` | `@Index.indexName` |
 
 ### `@Model` ↔ `SysModel`
@@ -99,7 +99,7 @@ public enum CustomerTier {
 | `description` | String | `""` | `description` | **≤512 字符**，解析期强制校验（目录列宽）；写面向使用者的简明摘要——设计备注放 Javadoc |
 | `fieldType` | `FieldType[]` | `{}` | `fieldType` | 单值，无花括号（如 `fieldType = FieldType.MULTI_FILE`）；`OPTION`/`MULTI_OPTION` **不能**显式书写 |
 | `columnName` | String | `""` | `columnName` | 空 → `snake_case(fieldName)` |
-| `length` | int | `0` | `length` | `0` → 类型默认：STRING/OPTION 64，MULTI_STRING/ORDERS 256，DOUBLE 24（测量），BIG_DECIMAL 32（金额）；其他需显式声明。MySQL 将 `length > 16383` 渲染为 TEXT |
+| `length` | int | `0` | `length` | `0` → 类型默认：STRING/OPTION 64，MULTI_STRING/ORDERS 256，DOUBLE 24（测量），BIG_DECIMAL 32（金额）；其他需显式声明。`TEXT` 字段的 length 可选——纯应用层守卫（列本身无界）。遗留路由：MySQL 将 STRING `length > 16383` 渲染为 TEXT（64KB 字节；新代码用 `fieldType = TEXT`） |
 | `scale` | int | `0` | `scale` | `0` → 类型默认：DOUBLE 2，BIG_DECIMAL 8（DECIMAL 小数位） |
 | `required` | boolean | `false` | `required` | NOT NULL 约束 |
 | `readonly` | boolean | `false` | `readonly` | UI 提示 |

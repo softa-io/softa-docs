@@ -395,7 +395,7 @@ Current supported examples:
 
 `Field` supports `fullWidth` for these field renderers:
 
-- `StringField + TextWidget` (`fieldType="String"` + `widgetType="Text"`)
+- `StringField + PlainTextWidget` (`fieldType="String"` + `widgetType="PlainText"`)
 - `StringField + RichTextWidget` (`fieldType="String"` + `widgetType="RichText"`)
 - `StringField + MarkdownWidget` (`fieldType="String"` + `widgetType="Markdown"`)
 - `StringField + CodeWidget` (`fieldType="String"` + `widgetType="Code"`)
@@ -406,7 +406,7 @@ Default is `fullWidth={true}` for all fields above.
 Set `fullWidth={false}` to render in normal grid width.
 
 ```tsx
-<Field fieldName="description" widgetType="Text" />
+<Field fieldName="description" widgetType="PlainText" />
 <Field fieldName="notes" widgetType="RichText" fullWidth={false} />
 <Field fieldName="optionItems" fullWidth={false} />
 <Field fieldName="userIds" fullWidth={false} />
@@ -989,7 +989,7 @@ import { ExternalLink, Lock, RefreshCw, ShieldCheck } from "lucide-react";
 function UnlockDialog() {
   return (
     <ActionDialog title="Unlock Account">
-      <Field fieldName="reason" label="Reason" widgetType="Text" />
+      <Field fieldName="reason" label="Reason" widgetType="PlainText" />
     </ActionDialog>
   );
 }

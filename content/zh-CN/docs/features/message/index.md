@@ -121,6 +121,7 @@ softa:
         recipients: ops@example.com # comma-separated; empty = no alert mail
     mail:
       debug: false                  # Jakarta Mail protocol debug — never enable in prod (leaks AUTH)
+      max-body-chars: 1048576       # 出站正文单字段受理上限（字符数）；列本身是无界 TEXT
       fetch:
         batch-limit: 100            # max messages per cron tick per (config, folder)
         lease-timeout: 1h           # abandoned IMAP watermark lease takeover

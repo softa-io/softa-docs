@@ -168,7 +168,7 @@ import { Group } from "@/components/fields/composition";
 
 ```tsx
 <Field fieldName="name" />
-<Field fieldName="description" widgetType="Text" />
+<Field fieldName="description" widgetType="PlainText" />
 <Field fieldName="avatar" widgetType="Image" />
 <Field fieldName="notes" widgetType="Markdown" />
 ```
@@ -464,12 +464,8 @@ POST /<modelName>/onChange/<fieldName>
     "label": "Open",
     "itemTone": "Success"
   },
-  "readonly": {
-    "label": true
-  },
-  "required": {
-    "itemTone": true
-  }
+  "readonly": ["label"],
+  "required": ["itemTone"]
 }
 ```
 
@@ -477,7 +473,10 @@ POST /<modelName>/onChange/<fieldName>
 
 - `values` 只 patch 返回的 key；缺失的 key 保持不变
 - 返回 `null` 表示明确清空
+- `readonly` / `required` 是**完整集合**而非增量 patch：每个列表列出当前处于该状态的全部字段，受治理字段一旦不在列表中，就会重置回元数据和本地条件的取值；返回 `"readonly": []`（或省略）即解除
+- 受治理字段包括该 `Field` 在 `update` 中声明的字段、响应列表本身点名的字段，以及同一触发字段此前响应设置过状态的字段 —— 因此只要后续响应不再列出某字段，规则就会解除，无论该字段是否出现在 `update` 中
 - `readonly` / `required` 会独立于 `update` 应用
+- `readonly` / `required` 不是字段名数组时会被忽略并打印 console 警告；响应的其余部分（包括 `values`）仍会生效
 - 远程返回的 `readonly` / `required` 会覆盖元数据和本地条件，直到后续响应或作用域重置
 
 作用域说明：
@@ -562,7 +561,7 @@ companyId.cascadedField = "employeeId.department.companyId";
   - `URL`
   - `Email`
   - `Color`
-  - `Text`
+  - `PlainText`
   - `RichText`
   - `TemplateEditor`
   - `Markdown`
@@ -573,7 +572,7 @@ companyId.cascadedField = "employeeId.department.companyId";
 ```tsx
 <Field fieldName="name" />
 <Field fieldName="homepage" widgetType="URL" />
-<Field fieldName="description" widgetType="Text" />
+<Field fieldName="description" widgetType="PlainText" />
 <Field fieldName="notes" widgetType="Markdown" />
 <Field fieldName="content" widgetType="RichText" />
 ```
@@ -722,7 +721,7 @@ companyId.cascadedField = "employeeId.department.companyId";
 
 `fullWidth` 对这些字段渲染器有意义：
 
-- `Text`
+- `PlainText`
 - `RichText`
 - `TemplateEditor`
 - `Markdown`
@@ -746,7 +745,7 @@ companyId.cascadedField = "employeeId.department.companyId";
 ```tsx
 <Field fieldName="email" widgetType="Email" />
 
-<Field fieldName="bio" widgetType="Text" fullWidth />
+<Field fieldName="bio" widgetType="PlainText" fullWidth />
 
 <Field
   fieldName="notes"

@@ -162,6 +162,7 @@ softa:
         recipients: ops@example.com # comma-separated; empty = no alert mail
     mail:
       debug: false                  # Jakarta Mail protocol debug — never enable in prod (leaks AUTH)
+      max-body-chars: 1048576       # acceptance-time cap per outbound body field (characters); the columns themselves are unbounded TEXT
       fetch:
         batch-limit: 100            # max messages per cron tick per (config, folder)
         lease-timeout: 1h           # abandoned IMAP watermark lease takeover

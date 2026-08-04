@@ -592,7 +592,7 @@ import { ExternalLink, Lock, Pencil, ShieldCheck } from "lucide-react";
 function UnlockDialog() {
   return (
     <ActionDialog title="Unlock Account">
-      <Field fieldName="reason" label="Reason" widgetType="Text" />
+      <Field fieldName="reason" label="Reason" widgetType="PlainText" />
     </ActionDialog>
   );
 }

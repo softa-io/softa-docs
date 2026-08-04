@@ -170,7 +170,7 @@ Use `Field` as the single entry in app code:
 
 ```tsx
 <Field fieldName="name" />
-<Field fieldName="description" widgetType="Text" />
+<Field fieldName="description" widgetType="PlainText" />
 <Field fieldName="avatar" widgetType="Image" />
 <Field fieldName="notes" widgetType="Markdown" />
 ```
@@ -466,12 +466,8 @@ Response payload:
     "label": "Open",
     "itemTone": "Success"
   },
-  "readonly": {
-    "label": true
-  },
-  "required": {
-    "itemTone": true
-  }
+  "readonly": ["label"],
+  "required": ["itemTone"]
 }
 ```
 
@@ -479,7 +475,10 @@ Response rules:
 
 - `values` only patches returned keys; missing keys are left unchanged.
 - returned `null` means explicit clear.
+- `readonly` / `required` are **complete sets**, not patches: each list names every field in that state, and a governed field left out of the list is reset to what its metadata and local conditions say. Returning `"readonly": []` (or omitting it) unlocks.
+- governed fields are the ones this `Field` declared in `update`, plus any the response itself lists, plus any an earlier response of the same trigger put into a state — so a rule comes back off as soon as a later response stops listing the field, whether or not the field appears in `update`.
 - `readonly` / `required` are applied independently of `update`.
+- a `readonly` / `required` entry that is not an array of field names is ignored with a console warning; the rest of the response (including `values`) still applies.
 - remote `readonly` / `required` override metadata and local conditions until a later response or scope reset.
 
 Scope notes:
@@ -566,7 +565,7 @@ This section explains the default front-end behavior by `fieldType`. For widget-
   - `URL`
   - `Email`
   - `Color`
-  - `Text`
+  - `PlainText`
   - `RichText`
   - `TemplateEditor`
   - `Markdown`
@@ -577,7 +576,7 @@ Examples:
 ```tsx
 <Field fieldName="name" />
 <Field fieldName="homepage" widgetType="URL" />
-<Field fieldName="description" widgetType="Text" />
+<Field fieldName="description" widgetType="PlainText" />
 <Field fieldName="notes" widgetType="Markdown" />
 <Field fieldName="content" widgetType="RichText" />
 ```
@@ -726,7 +725,7 @@ Important runtime behavior:
 
 `fullWidth` is meaningful for:
 
-- `Text`
+- `PlainText`
 - `RichText`
 - `TemplateEditor`
 - `Markdown`
@@ -750,7 +749,7 @@ General guidance:
 ```tsx
 <Field fieldName="email" widgetType="Email" />
 
-<Field fieldName="bio" widgetType="Text" fullWidth />
+<Field fieldName="bio" widgetType="PlainText" fullWidth />
 
 <Field
   fieldName="notes"

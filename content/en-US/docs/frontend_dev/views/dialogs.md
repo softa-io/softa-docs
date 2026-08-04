@@ -110,7 +110,7 @@ export function UserAccountUnlockActionDialog() {
       <Field
         fieldName="reason"
         label="Reason (Optional)"
-        widgetType="Text"
+        widgetType="PlainText"
       />
     </ActionDialog>
   );

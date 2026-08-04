@@ -15,7 +15,8 @@
 
 | FieldType     | 默认行为                       | 支持的 WidgetType                                                              |
 | ------------- | ------------------------------ | ------------------------------------------------------------------------------- |
-| `String`      | 单行文本输入                   | `URL`, `Email`, `Phone`, `Text`, `RichText`, `TemplateEditor`, `Markdown`, `Code`, `Color`, `yyyy-MM`, `MM-dd`, `CronEditor` |
+| `String`      | 单行文本输入                   | `URL`, `Email`, `Phone`, `PlainText`, `RichText`, `TemplateEditor`, `Markdown`, `Code`, `Color`, `yyyy-MM`, `MM-dd`, `CronEditor` |
+| `Text`        | 多行文本域                     | `RichText`, `Markdown`, `Code`, `TemplateEditor`                                  |
 | `MultiString` | 标签式逗号/回车输入            | -                                                                                 |
 | `Integer`     | 数字输入                       | `Monetary`, `Percentage`, `Slider`                                                |
 | `Long`        | 数字输入                       | `Monetary`, `Percentage`, `Slider`                                                |
@@ -66,10 +67,10 @@
 
 值契约：E.164 格式的 `string`（`"+<区号><国内数字>"`），未输入则为空字符串。Schema 层校验建议使用 `@/utils/schema-validators` 中的 `phoneE164` / `phoneE164Optional`。
 
-### `Text`
+### `PlainText`
 
 ```tsx
-<Field fieldName="description" widgetType="Text" />
+<Field fieldName="description" widgetType="PlainText" />
 ```
 
 ### `RichText`
