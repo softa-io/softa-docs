@@ -58,7 +58,7 @@
 
 是否为此模型启用软删除功能。在业务系统中，须将被引用数据模型设为软删除，以避免影响历史数据关联的显示。
 
-当模型的 `softDelete` 属性配置为 `true` 时，系统自动为模型添加 `deleted` 字段（可通过 `softDeleteField` 配置，默认 `"deleted"`）。软删除会将 `deleted=true`，而非物理删除行。默认搜索与关联字段查找会排除软删除行，除非查询显式过滤软删除字段。
+当模型的 `softDelete` 属性配置为 `true` 时，模型必须声明 `deleted` 字段——字段名固定，与 `activeControl` 下的 `active` 完全一致。若要映射到名称不同的遗留列，用 `@Field(columnName = "...")`；逻辑字段名始终是 `deleted`。软删除会将 `deleted=true`，而非物理删除行。默认搜索与关联字段查找会排除软删除行，除非查询显式过滤 `deleted`。
 
 ### 2.4 `defaultOrder` 默认排序规则
 

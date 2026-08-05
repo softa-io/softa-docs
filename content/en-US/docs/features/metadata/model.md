@@ -58,7 +58,7 @@ The technical name of the model, using upper camel case. For example, `ProductCa
 
 Whether to enable the soft delete function for this model. In business systems, it is necessary to set referenced data models to soft delete to avoid affecting the display of historical data associations.
 
-When the `softDelete` attribute of the model is configured to `true`, the system automatically adds a `deleted` field (configurable via `softDeleteField`, default `"deleted"`). Soft delete sets `deleted=true` instead of removing the row. Soft-deleted rows are excluded from default searches and relational field lookups unless the query explicitly filters on the soft-delete field.
+When the `softDelete` attribute of the model is configured to `true`, the model must declare a `deleted` field — the name is fixed, exactly like `active` under `activeControl`. Map it onto a differently-named legacy column with `@Field(columnName = "...")`; the logical field name stays `deleted`. Soft delete sets `deleted=true` instead of removing the row. Soft-deleted rows are excluded from default searches and relational field lookups unless the query explicitly filters on `deleted`.
 
 ### 2.4 `defaultOrder` Default Sorting Rule
 

@@ -72,7 +72,6 @@ public enum CustomerTier {
 | `searchName` | String[] | `{}` | `searchName` | 搜索字段默认值 |
 | `defaultOrder` | String[] | `{}` | `defaultOrder` | 如 `"createdTime:desc"` |
 | `softDelete` | boolean | `false` | `softDelete` | |
-| `softDeleteField` | String | `"deleted"` | `softDeleteField` | 仅当 `softDelete = true` 时生效 |
 | `activeControl` | boolean | `false` | `activeControl` | 添加 `active` 门控列；与 `timeline` 互斥（启动时拒绝） |
 | `timeline` | boolean | `false` | `timeline` | 生效日期行（见 Timeline Model）；与 `activeControl` 互斥——期间状态建为版本化业务字段，终结走 `setEndDate` |
 | `idStrategy` | `IdStrategy` | `DB_AUTO_ID` | `idStrategy` | |
@@ -247,11 +246,23 @@ system:
 
 | `system.metadata.scanner-scope` | 扫描器运行 | DDL 执行 | 漂移检测 |
 |---|---|---|---|
-| `["*"]` | 启动时、急切、所有包 | 自动：`CREATE TABLE` / `ADD COLUMN` / `MODIFY COLUMN` / `ADD INDEX`。**永不自动 DROP** | n/a |
+| `["*"]` | 启动时、急切、所有包 | 自动：`CREATE TABLE` / `ADD COLUMN` / `MODIFY COLUMN` / `ADD INDEX`。**永不自动 DROP** | 无 Java 类的目录聚合根以 WARN 列名并附可复制 SQL |
 | `["io\\.acme\\.foo.*", …]` | 启动时、仅范围内包 | 相同自动策略，仅范围内模型 | n/a |
 | 空 / 未设置（默认，生产） | n/a | n/a | `MetadataAnnotationChecker` 在虚拟线程上于启动后运行；若代码与 DB 漂移则记录 WARN |
 
 在**共享开发数据库**上，为每位开发者设置窄范围（其自身包），使扫描器仅协调其正在积极修改的 Java 包。范围按包而非按类；应用身份仍为 `app_code`，物理表名冲突仍是数据库级问题。
+
+### 目录行策略
+
+目录是一个聚合：`sys_model` / `sys_option_set` 是**聚合根**，`sys_field` / `sys_model_index` / `sys_option_item` 是其属性。
+
+| 变更 | 是否应用 |
+|---|---|
+| 聚合根新增 / 修改 | ✅ |
+| 属性新增 / 修改 / **删除**（其聚合根有对应类时） | ✅ —— 注解拥有聚合根的属性集 |
+| **聚合根删除**（目录中存在但无 `@Model` / `@OptionSet` 类的行） | ❌ 在**任何** scope 下都不删，含 `["*"]` —— 聚合根及其属性行原样保留；`["*"]` 会以 WARN 列出名称并附可复制的 `DELETE` SQL |
+
+「无 Java 类的聚合根」是一等状态：Studio 无代码巷道与种子文件授权的模型本就没有 Java 类，且目录中没有任何列记录行归属——因此「孤儿」与「刻意无类」无法区分，自动删除会在每次启动时静默摧毁手工授权的定义。与下方 DDL 策略同一种不对称：自动增长，销毁只在人做出决定时。
 
 ### DDL 自动执行策略
 

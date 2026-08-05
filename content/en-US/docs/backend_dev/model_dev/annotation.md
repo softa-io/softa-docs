@@ -83,7 +83,6 @@ public enum CustomerTier {
 | `searchName` | String[] | `{}` | `searchName` | search-field defaults |
 | `defaultOrder` | String[] | `{}` | `defaultOrder` | e.g. `"createdTime:desc"` |
 | `softDelete` | boolean | `false` | `softDelete` | |
-| `softDeleteField` | String | `"deleted"` | `softDeleteField` | effective only when `softDelete = true` |
 | `activeControl` | boolean | `false` | `activeControl` | adds `active` gate column; mutually exclusive with `timeline` (boot-rejected) |
 | `timeline` | boolean | `false` | `timeline` | effective-dated rows (see Timeline Model); mutually exclusive with `activeControl` — express period state as a versioned business field and terminate via `setEndDate` |
 | `idStrategy` | `IdStrategy` | `DB_AUTO_ID` | `idStrategy` | |
@@ -303,7 +302,7 @@ system:
 
 | `system.metadata.scanner-scope` | Scanner runs | DDL execution | Drift detection |
 |---|---|---|---|
-| `["*"]` | Boot-time, eager, all packages | Auto: `CREATE TABLE` / `ADD COLUMN` / `MODIFY COLUMN` / `ADD INDEX`. **Never auto-DROP** | n/a |
+| `["*"]` | Boot-time, eager, all packages | Auto: `CREATE TABLE` / `ADD COLUMN` / `MODIFY COLUMN` / `ADD INDEX`. **Never auto-DROP** | Code-less catalog roots named in a WARN with copy-paste SQL |
 | `["io\\.acme\\.foo.*", …]` | Boot-time, in-scope packages only | Same auto-policy, in-scope models only | n/a |
 | empty / unset (default, prod) | n/a | n/a | `MetadataAnnotationChecker` runs post-boot on a virtual thread; logs WARN if code-vs-DB drift detected |
 
@@ -312,6 +311,18 @@ packages) so the scanner only reconciles the Java packages they are actively
 changing. Scope is per-package, not per-class; app identity is still
 `app_code`, and physical table-name collisions remain a database-level
 concern.
+
+### Catalog row policy
+
+The catalog is an aggregate: `sys_model` / `sys_option_set` are the **roots**, `sys_field` / `sys_model_index` / `sys_option_item` their attributes.
+
+| Change | Applied |
+|---|---|
+| Root added / modified | ✅ |
+| Attribute added / modified / **removed**, on a root whose class is present | ✅ — the annotations own the root's attribute set |
+| **Root removed** (a catalog row with no `@Model` / `@OptionSet` class) | ❌ under **every** scope, `["*"]` included — the root and its attribute rows are left untouched; `["*"]` logs a WARN naming them with copy-paste `DELETE` SQL |
+
+A code-less root is a first-class state: Studio no-code and seed-authored models never have a Java class, and nothing in the catalog records row ownership — so "orphan" and "deliberately code-less" cannot be told apart, and auto-deleting would silently destroy hand-authored definitions on every boot. Same asymmetry as the DDL policy below: grow automatically, destroy only on a human decision.
 
 ### DDL auto-execute policy
 
