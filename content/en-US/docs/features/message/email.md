@@ -28,6 +28,45 @@ tenant template (code + enabled)
 
 Template placeholders use the unified Softa syntax: `{{ variable }}`.
 
+#### Body modes
+
+`bodyMode` declares the MIME shape a template (and every record sent from it)
+produces — the UI picks editors and the send path picks parts off the same
+`BodyMode` vocabulary:
+
+| bodyMode | Sends | bodyHtml | bodyText |
+| --- | --- | --- | --- |
+| `HTML` | single `text/html` | authored | — |
+| `PLAIN` | single `text/plain` | — | authored |
+| `HTML_WITH_DERIVED_PLAIN` | `multipart/alternative` | authored | derived from the HTML at accept time (`HtmlUtils.toText`) |
+| `HTML_WITH_AUTHORED_PLAIN` | `multipart/alternative` | authored | authored (an empty value falls back to derived and the record is truthfully re-marked `DERIVED`) |
+
+Switching `bodyMode` in the template editor migrates the existing body into
+the editor the new mode actually sends (HTML → text via `HtmlUtils.toText`,
+text → escaped HTML paragraphs; a non-empty target is never overwritten) and
+clears the column the new mode ignores. Form state only — nothing persists
+until save, and Cancel restores the loaded record.
+
+#### Template tooling (editor endpoints)
+
+The Preview & Send Test dialog is backed by three id-addressable operations.
+`id` targets the **exact row being edited** — no resolution semantics, no
+`isEnabled` filter, so a disabled template stays fully inspectable and
+testable *before* being enabled; `code` keeps the tenant → platform overlay
+resolution for programmatic callers:
+
+- `GET /api/mail/templates/variables?id=|code=` — the template's distinct
+  input tokens in first-appearance order, classified for the input UI:
+  `VARIABLE` (simple names, unicode and dotted paths included → one text
+  input), `COLLECTION` (a Pebble `{% for %}` iterable → JSON value input),
+  `EXPRESSION` (operands supplied as raw JSON), `RESERVED_FIELD` (resolved
+  server-side). Template-local names — loop variables, Pebble's builtin
+  `loop`, `{% set %}` targets — are excluded.
+- `POST /api/mail/templates/preview` — renders subject / bodyHtml / bodyText
+  with the given variables, without sending.
+- `SendMailDTO.templateId` — a test send addressing the exact row through the
+  full production pipeline: what was previewed is what goes out.
+
 #### Delivery pipeline
 
 Every accepted send produces exactly one
@@ -40,7 +79,9 @@ PENDING → SENDING → SENT
                RETRY → SENDING → SENT
                    ↓
                    DEAD_LETTER (retries exhausted)
-               FAILED (permanent error: bad recipient, auth, malformed input)
+               FAILED (permanent provider reject: bad recipient, malformed input)
+               DEAD_LETTER (non-retryable, non-permanent: auth failure or
+                            unresolvable config — first failure, no retry burn)
 ```
 
 On failure, `ErrorClassifier` maps the provider error to an `ErrorCategory`
@@ -50,7 +91,12 @@ retry policy (`ExponentialBackoffPolicy`) decides:
 - **Retry** → `markRetry(nextRetryAt = now + backoff)` + enqueue a delayed
   outbox row on `mail-send` so the same delivery consumer re-drives it
 - **Fail** → `markFailed` (terminal; no retry; permanent provider reject)
-- **DeadLetter** → `markDeadLetter` + archive a `dead_letter_message` row (`source = SendExhausted`)
+- **DeadLetter** → `markDeadLetter` + archive a `dead_letter_message` row
+  (`source = SendExhausted`) — reached by exhausting the retry budget **or
+  immediately** on a non-retryable, non-permanent failure (AUTH class). A
+  config-resolution failure is stamped with the marker code
+  `CONFIG_NOT_RESOLVABLE` and takes the immediate route: a broken config never
+  heals by retrying — fix the config, then requeue via the manual Retry action.
 
 Business code usually does not need to choose a mail server explicitly. Defaults
 should be prepared by the platform or tenant admin.
@@ -137,6 +183,21 @@ Long fullRecordId = messageService.sendMail(dto);
 > same as "user has the email" — the user still waits seconds-to-minutes for the
 > provider to deliver, so the ~500ms of broker latency is invisible, while a
 > single async path avoids blocking HTTP threads and the stranded-`RETRY` edge case.
+
+#### Address rules
+
+Addresses are validated at **acceptance** — a bad address is a synchronous
+4xx naming the field and the offending entry, never an asynchronous SMTP
+failure discovered later on the send record:
+
+- `to` / `cc` / `bcc`: each list entry is exactly ONE strict RFC822 mailbox.
+  Display-name form (`Alice <alice@x.com>`) is allowed; an embedded list in a
+  single entry is rejected — one entry, one mailbox.
+- `replyTo`: one string carrying an RFC822 **address-list** — one or more
+  mailboxes. Comma / semicolon / newline separators are all accepted and
+  normalized to a comma list at acceptance; the record stores the normalized
+  form. Pure comma input is never rewritten, which keeps quoted display-names
+  with embedded commas (`"Smith, John" <j@x.com>`) intact.
 
 ### Independent Batch
 

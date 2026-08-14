@@ -26,6 +26,27 @@
 
 模板占位符使用统一的 Softa 语法：`{{ variable }}`。
 
+#### 正文模式
+
+`bodyMode` 声明模板（及由它发出的每条记录）产出的 MIME 形态——UI 据此选择编辑器，发送路径据此挑选 MIME part，同一套 `BodyMode` 词汇表：
+
+| bodyMode | 发送形态 | bodyHtml | bodyText |
+| --- | --- | --- | --- |
+| `HTML` | 单一 `text/html` | 作者撰写 | — |
+| `PLAIN` | 单一 `text/plain` | — | 作者撰写 |
+| `HTML_WITH_DERIVED_PLAIN` | `multipart/alternative` | 作者撰写 | 受理时从 HTML 派生（`HtmlUtils.toText`） |
+| `HTML_WITH_AUTHORED_PLAIN` | `multipart/alternative` | 作者撰写 | 作者撰写（为空时退回派生，记录如实改标 `DERIVED`） |
+
+在模板编辑器中切换 `bodyMode` 时，已有正文会迁移到新模式实际发送的编辑器（HTML → 文本走 `HtmlUtils.toText`，文本 → 转义后的 HTML 段落；非空目标绝不覆盖），新模式不使用的列会被清空。仅表单状态——保存前不落库，Cancel 恢复原记录。
+
+#### 模板工具（编辑器端点）
+
+Preview & Send Test 弹窗背后是三个可按 id 寻址的操作。`id` 指向**正在编辑的那一行**——无解析语义、无 `isEnabled` 过滤，禁用模板在启用之前即可完整检视与试发；`code` 保留租户 → 平台的 overlay 解析，供程序化调用方使用：
+
+- `GET /api/mail/templates/variables?id=|code=`——模板的去重输入 token，按首次出现排序并为输入 UI 分类：`VARIABLE`（简单名，含 unicode 与点号路径 → 一行文本输入）、`COLLECTION`（Pebble `{% for %}` 的迭代集合 → JSON 值输入）、`EXPRESSION`（操作数以原始 JSON 提供）、`RESERVED_FIELD`（服务端解析）。模板局部名——循环变量、Pebble 内建 `loop`、`{% set %}` 目标——一律剔除。
+- `POST /api/mail/templates/preview`——按给定变量渲染 subject / bodyHtml / bodyText，不发送。
+- `SendMailDTO.templateId`——试发精确寻址该行并走完整生产管线：预览什么，发出什么。
+
 #### 投递管道
 
 每次接受的发送恰好产生一条 `MailSendRecord`。状态转换通过 CAS 辅助，因此 broker 重复投递会自我拒绝，无需去重表：
@@ -36,14 +57,16 @@ PENDING → SENDING → SENT
                RETRY → SENDING → SENT
                    ↓
                    DEAD_LETTER（重试耗尽）
-               FAILED（永久错误：错误收件人、认证、畸形输入）
+               FAILED（提供商永久拒绝：错误收件人、畸形输入）
+               DEAD_LETTER（不可重试且非永久：认证失败或配置无法解析——
+                            首败即入，不烧重试预算）
 ```
 
 失败时，`ErrorClassifier` 将提供商错误映射为 `ErrorCategory`（TRANSIENT / PERMANENT / INVALID_INPUT / AUTH / QUOTA / UNKNOWN），重试策略（`ExponentialBackoffPolicy`）决定：
 
 - **Retry** → `markRetry(nextRetryAt = now + backoff)` + 在 `mail-send` 上入队延迟 outbox 行，使同一投递消费者重新驱动
 - **Fail** → `markFailed`（终态；不重试；提供商永久拒绝）
-- **DeadLetter** → `markDeadLetter` + 归档 `dead_letter_message` 行（`source = SendExhausted`）
+- **DeadLetter** → `markDeadLetter` + 归档 `dead_letter_message` 行（`source = SendExhausted`）——重试预算耗尽到达，或不可重试且非永久的失败（AUTH 类）**首败直达**。配置解析失败以标记码 `CONFIG_NOT_RESOLVABLE` 走首败直达路线：配坏的 config 重试永远不会好——修复配置后用手动 Retry 重新入队。
 
 业务代码通常无需显式选择邮件服务器。默认应由平台或租户管理员准备。
 
@@ -111,6 +134,13 @@ Long fullRecordId = messageService.sendMail(dto);
 ```
 
 > **所有邮件发送均为异步。** `sendMail / sendMailBatch` 在一个 DB 事务中持久化 `MailSendRecord (PENDING)` + outbox 行并立即返回；SMTP 投递在 broker 驱动的消费者中发生。刻意无同步变体：SMTP `250 OK` **不等于**「用户已收到邮件」——用户仍须等待数秒到数分钟由提供商投递，因此约 500 ms 的 broker 延迟不可见，而单一异步路径避免阻塞 HTTP 线程及 stranded-`RETRY` 边界情况。
+
+#### 地址规则
+
+地址在**受理时**校验——写错的地址是同步 4xx、点名字段和具体条目，而不是留给异步管线、事后在发送记录上才发现的 SMTP 失败：
+
+- `to` / `cc` / `bcc`：每个列表元素必须是**恰好一个**严格 RFC822 mailbox。display-name 形式（`Alice <alice@x.com>`）合法；单个元素里夹带列表会被拒绝——一元素一地址。
+- `replyTo`：单个字符串承载 RFC822 **地址列表**——一个或多个 mailbox。逗号 / 分号 / 换行分隔均可，受理时归一化为逗号列表；记录存储归一化后的形式。纯逗号输入绝不改写——带引号内嵌逗号的 display-name（`"Smith, John" <j@x.com>`）得以保留。
 
 ### 独立批量
 

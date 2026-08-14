@@ -72,7 +72,16 @@
 2. 定时 `OutboxPublisher`（500 ms 轮询）通过框架 `versionLock` 将 `NEW` 行认领为 `PUBLISHING`，发布到对应 topic，并将 outbox 行翻转为 `PUBLISHED`。
 3. `@PulsarListener` 消费者读取消息（仅携带 `recordId` / `tenantId` / `traceId`），然后驱动渠道的 `DeliveryProcessor`，在调用提供商前 CAS 转换 `PENDING|RETRY → SENDING`。
 
-若未配置 broker topic，outbox 行保持 `NEW` 状态，发布者每次轮询重试——无丢失；发送仅排队直到运维提供 topic。**不**使用 Spring `@Async`。
+若未配置 broker topic，outbox 行保持 `NEW` 状态，发布者每次轮询重试——无丢失；发送仅排队直到运维提供 topic。当到期行等待在不可用路由上时，发布者会打出节流 WARN 点名滞留路由（每 5 分钟至多一条），因此 broker 宕机不会让记录在零日志证据下停在 `PENDING`。**不**使用 Spring `@Async`。
+
+### 手动重试
+
+自动恢复覆盖投递失败（`SendFailureHandler`：指数退避，然后 `FAILED` / `DEAD_LETTER`；认证错误、配置无法解析等不可重试失败跳过退避，首败即入死信）与在途卡死（`ZombieRecordSweeper`：陈旧 `SENDING` → `RETRY`、陈旧 outbox `PUBLISHING` → `NEW`）——但覆盖不了 outbox 行已对着坏 broker 死掉的记录。两个运维端点补上这个缺口：
+
+- `POST /MailSendRecord/retry?id=` / `POST /SmsSendRecord/retry?id=`——重新入队一条记录：`PENDING / RETRY / FAILED / DEAD_LETTER` → `RETRY` 并原子性写入**一条全新 outbox 行**。`SENT` 与在途 `SENDING` 被拒绝。可安全重复调用——投递认领是 CAS 门控的，重复调用空转，不可能重复发信。`retryCount` 持续累计：手动重试给予一次新尝试；再次失败回到 `FAILED` / `DEAD_LETTER`，而非重新武装整个自动重试预算。
+- `POST /OutboxEntry/requeue?id=`——重开一条 `DEAD` outbox 行（回 `NEW`，attempts 清零，立即到期）。发布失败是基础设施故障，broker 修好后应重新享有完整预算。其他状态被拒绝。
+
+HCM 管理界面在 Mail Send Record / SMS Send Record / Outbox Entry 详情页以按状态显隐的工具栏动作暴露这两个操作，并在对应列表页提供行级动作。
 
 ### Broker topics
 

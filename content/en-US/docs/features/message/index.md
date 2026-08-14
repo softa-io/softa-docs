@@ -108,7 +108,33 @@ path regardless of broker configuration:
 
 If no broker topic is configured, outbox rows stay in `NEW` state and are retried
 by the publisher on every poll — nothing is lost; sends just queue up until an
-operator supplies a topic. Spring `@Async` is **not** used.
+operator supplies a topic. When due rows are waiting on an unavailable route the
+publisher logs a throttled WARN naming the stranded route(s) (at most one line per
+5 minutes), so a down broker never leaves records `PENDING` without log evidence.
+Spring `@Async` is **not** used.
+
+### Manual retry
+
+Automatic recovery covers delivery failures (`SendFailureHandler`: exponential
+back-off, then `FAILED` / `DEAD_LETTER`; non-retryable failures such as auth
+errors or an unresolvable config skip the back-off and dead-letter on the
+first attempt) and stuck in-flight states (`ZombieRecordSweeper`:
+stale `SENDING` → `RETRY`, stale outbox `PUBLISHING` → `NEW`) — but not a record whose
+outbox row died against a broken broker. Two operator endpoints close that gap:
+
+- `POST /MailSendRecord/retry?id=` / `POST /SmsSendRecord/retry?id=` — requeue one record:
+  `PENDING / RETRY / FAILED / DEAD_LETTER` → `RETRY` plus a **fresh outbox row**, atomically.
+  `SENT` and in-flight `SENDING` are rejected. Safe to call repeatedly — the delivery claim
+  is CAS-guarded, so duplicates no-op and no double email/SMS is possible. `retryCount`
+  keeps counting: a manual retry grants one new attempt; another failure returns the record
+  to `FAILED` / `DEAD_LETTER` instead of re-arming the whole automatic budget.
+- `POST /OutboxEntry/requeue?id=` — reopen one `DEAD` outbox entry (`NEW`, attempts reset,
+  due immediately). Publish attempts are infra failures, so once the broker is fixed the
+  full budget applies again. Other statuses are rejected.
+
+The HCM admin UI surfaces both as status-gated toolbar actions on the
+Mail Send Record / SMS Send Record / Outbox Entry detail pages, and as
+row-level actions on the corresponding list pages.
 
 ### Broker topics
 
