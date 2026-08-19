@@ -18,8 +18,9 @@ docker-compose -f deploy/mini-app/docker-compose.yml up -d
 ### 2.2、方式二：源码运行 mini-app 应用
 * （1）使用 IDE 加载 Maven 模块。
 * （2）配置 application-dev.yml 文件中的 Redis 和数据库连接信息。
-* （3）在 MySQL 数据库执行 ./deploy/mini-app/init_mysql 中的 SQL 脚本。
 * （3）配置 Profile 为 dev，并运行 mini-app 应用的主程序。
+
+> 无需任何 SQL 初始化：空数据库上，启动对账器会先依据 `sys_*` 目录表自身的注解创建这几张表，随后 `["*"]` 范围的扫描器自动创建全部业务表。
 
 ### 2.3、调用 OpenAPI 接口
 mini-app 应用的 API 路径：`/api/mini`

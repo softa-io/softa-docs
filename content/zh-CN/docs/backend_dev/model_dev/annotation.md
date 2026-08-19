@@ -276,6 +276,27 @@ system:
 
 理由：增量 DDL 不丢失数据；`DROP` 操作具有破坏性，在大表上可能耗时数分钟。即使在开发环境，你也应有意识地选择删除 schema。
 
+### 目录表自举（`sys_*` 表自身的结构）
+
+五张启动读取的目录表（`sys_model`、`sys_field`、`sys_option_set`、
+`sys_option_item`、`sys_model_index`）没有行级的"上次已应用状态"——记录其他
+模型状态的行就存放在它们内部。因此在 `scanner-scope` 非空的每次启动中，扫描器
+会在严格读取目录之前，**依据这些表自身的注解对其做物理对账**：
+
+- 表不存在 → `CREATE TABLE` —— 全新空库**无需任何基线 SQL** 即可自举；
+- 列缺失 → `ADD COLUMN` —— 新框架版本新增的目录列在存量库上自动收敛，无需手写迁移；
+- 声明了 `renamedFrom` 且旧列存在 → `CHANGE COLUMN`（数据随行迁移）；新旧列同时
+  存在 → 启动失败并给出处理指引；
+- 物理列窄于声明（仅限有界宽度）→ 拓宽 `MODIFY COLUMN`；更宽 / 不可比 / 未声明的
+  物理列一律不动，由物理漂移审计报告。
+
+整个启动 DDL 窗口（目录对账 → 严格读取 → diff → DDL → 行写入）由数据库会话锁
+（MySQL `GET_LOCK` / PostgreSQL advisory lock，等待预算 60 秒）跨实例串行化，
+多副本同时启动同一数据库不会发生 DDL 竞争。
+
+仍需手写迁移的场景：为新增列在扫描器不管理的行上回填真实值的 `UPDATE`、任何
+`DROP`、以及 `scanner-scope` 为空的环境——那里不会自动应用任何变更，目录表也不例外。
+
 ## 元数据身份（`app_code`）
 
 `sys_*` 目录上**没有所有权层级列**。注解通道与 Studio 无代码通道协调**同一行，按业务键匹配**（`modelName` / `fieldName` / `optionSetCode` / `itemCode`，加上 `renamedFrom`）——同键行原地更新，不会按通道重复。

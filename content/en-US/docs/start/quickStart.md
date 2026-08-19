@@ -18,8 +18,9 @@ docker-compose -f deploy/mini-app/docker-compose.yml up -d
 ### 2.2 Method 2: Run the mini-app from Source Code
 1. Load the Maven module using an IDE.
 2. Configure the Redis and database connection information in the `application-dev.yml` file.
-3. Execute the SQL scripts in `./deploy/mini-app/init_mysql` in the MySQL database.
-4. Set the profile to `dev` and run the main program of the mini-app.
+3. Set the profile to `dev` and run the main program of the mini-app.
+
+> No SQL initialization is needed: on an empty database the boot reconciler first creates the `sys_*` catalog tables from their own annotations, then the `["*"]`-scope scanner creates every business table.
 
 ### 2.3 Call OpenAPI Interfaces
 The API path for the mini-app is: `/api/mini`

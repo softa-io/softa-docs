@@ -338,6 +338,34 @@ Rationale: additive DDL doesn't lose data; `DROP` operations are destructive
 and may take minutes on large tables. Even in dev, you should consciously
 choose to drop schema.
 
+### Catalog self-bootstrap (the `sys_*` tables' own schema)
+
+The five boot-read catalog tables (`sys_model`, `sys_field`, `sys_option_set`,
+`sys_option_item`, `sys_model_index`) have no row-level "last applied state" —
+the rows recording every other model's state live *inside* them. On every boot
+with a non-empty `scanner-scope`, the scanner therefore reconciles them
+**physically, from their own annotations, before the strict catalog read**:
+
+- table missing → `CREATE TABLE` — a fresh, empty database bootstraps with
+  **no baseline SQL at all**;
+- column missing → `ADD COLUMN` — a catalog-column addition in a new framework
+  version converges on existing databases without a hand-written migration;
+- declared `renamedFrom` with the prior column present → `CHANGE COLUMN`
+  (data carried); both old and new present → boot fails with instructions;
+- physically narrower than declared (bounded widths only) → widening
+  `MODIFY COLUMN`; anything wider / incomparable / undeclared is left
+  untouched and reported by the physical drift audit.
+
+The whole boot DDL window (catalog reconcile → strict read → diff → DDL → row
+writes) is serialized across instances by a database session lock (MySQL
+`GET_LOCK` / PostgreSQL advisory lock, 60s wait budget), so replicas booting
+the same database never race their DDL.
+
+What still needs a hand-written migration: backfill `UPDATE`s that give an
+added column real values on rows the scanner does not manage, any `DROP`, and
+environments running with an empty `scanner-scope` — there nothing
+auto-applies, catalog included.
+
 ## Metadata identity (`app_code`)
 
 There is **no ownership tier column** on the `sys_*` catalog. The annotation

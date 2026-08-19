@@ -91,7 +91,7 @@ Password: minioadmin
 ```bash
 docker-compose -f ./deploy/demo-app/docker-compose.yml up -d
 ```
-创建数据库实例，并执行 `deploy/demo-app/init_mysql` 中的 SQL 脚本。
+无需任何 SQL 种子：空数据库上，启动对账器会先依据 `sys_*` 目录表自身的注解创建这几张表，随后 `["*"]` 范围的扫描器自动创建全部业务表。若需要一份可审阅的参考 DDL（DB-first 工作流、DBA 审查），按需生成：`REGEN_BASELINE=true mvn test -pl apps/demo-app -Dtest=MetadataBaselineDdlGenerator`。
 
 # 7. 生产环境
 强烈建议生产环境通过流水线，并使用 Kubernetes 进行容器化部署。
