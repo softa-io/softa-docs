@@ -205,6 +205,8 @@ modelService.updateOne(modelName, { id, [groupBy.field]: column.id })
 
 `column.id` 为选项的 `itemCode`（Option 模式）或关联记录主键（查找模式）。
 
+**投影模型**（`MetaModel.projection === true`，来自 `@Model(projection = true)`——只读模型，映射到另一模型所有的表）：无论页面的 `enable*` 意图如何，所有写操作一律关闭——Create、列内新建链接、卡片 Delete、拖拽全部禁用（后端本就会拒绝这些写入）。
+
 需要服务端校验的业务动作（如环境互斥转换 Stable → Deploying）可自定义 `onCardMove`：
 
 ```tsx

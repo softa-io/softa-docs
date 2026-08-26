@@ -45,6 +45,7 @@
 | 17 | partitionField | String | 分区字段技术名 |  |  |
 | 18 | description | String | 模型描述 |  |  |
 | 19 | modelFields | OneToMany | 模型字段 |  |  |
+| 20 | projection | Boolean | 只读模型，映射到另一模型所有的表 | false | `true` ⇒ 永不生成 DDL；写 API 拒绝该模型；UI 隐藏新建/编辑/删除 |
 
 ### 2.1 `label` 模型标签
 
@@ -157,6 +158,10 @@
 ### 2.17 `modelFields` 模型字段
 
 模型字段列表。更多细节见 `Field Metadata`。
+
+### 2.18 `projection` 只读投影
+
+标记一个只读模型，它映射到一张**不归它所有**的物理表——另一模型的表（例如某报表暴露 `Employee` 表的部分列并附加自己的计算字段），或元数据扫描器之外创建的表（例如 BI 管线产物）。投影模型的元数据行照常对账，但永不生成 DDL、拒绝全部写 API（新建/更新/删除/复制）、不允许声明索引，UI 强制只读。每个非投影 RDBMS 模型独占其表：同一 `tableName` 声明两个 owner 会启动失败。
 
 ## 3. 模型定义
 

@@ -43,6 +43,7 @@ Model metadata describes and defines the data model, including the storage, stru
 | 15 | dataSource | String | Data source key |  | Model-level multi-data-source |
 | 16 | businessKey | MultiString | Business Key (Field List) |  |  |
 | 17 | partitionField | String | Partition field technical name |  |  |
+| 18 | projection | Boolean | Read-only model over a table another model owns | false | `true` ⇒ no DDL is ever generated; write APIs reject the model; UI hides create/edit/delete |
 | 18 | description | String | Model description |  |  |
 | 19 | modelFields | OneToMany | Model fields |  |  |
 
@@ -157,6 +158,10 @@ Description information for the model.
 ### 2.17 `modelFields` Model Fields
 
 A list of the model's fields. For more details, see `Field Metadata`.
+
+### 2.18 `projection` Read-only Projection
+
+Marks a read-only model over a physical table it does **not** own — either another model's table (e.g. a report exposing a subset of `Employee`'s columns plus its own computed fields) or a table created outside the metadata scanner (e.g. by a BI pipeline). A projection model reconciles its metadata rows like any model, but never generates DDL, rejects every write API (create / update / delete / copy), may not declare indexes, and forces the UI into read-only. Every non-projection RDBMS model owns its table exclusively: declaring two owners for one `tableName` fails at boot.
 
 ## 3. Model Definition
 

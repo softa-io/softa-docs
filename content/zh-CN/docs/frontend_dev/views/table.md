@@ -532,6 +532,8 @@ header 搜索框由模型元数据驱动（`resolveTableSearchConfig`）：place
 
 业务 props 设为 `false` 时仍优先 —— 显式 `enableCreate={false}` 的页面对 SUPER_ADMIN 也隐藏 Create。SUPER_ADMIN 短路权限检查本身（每个动作返回 `Granted`），但不覆盖显式业务 `false`。
 
+**投影模型**（`MetaModel.projection === true`，来自 `@Model(projection = true)`——只读模型，映射到另一模型所有的表）：所有内置写操作在权限门之上再关闭一层——Create、Import、内联编辑、批量编辑、批量 Delete 无论用户权限如何一律隐藏（后端本就会拒绝这些写入）。Export 保留，它是读操作。这是模型的结构属性而非权限——SUPER_ADMIN 看到的同样是只读表格。
+
 示例 —— 带一个自定义动作的自动门控列表：
 
 ```tsx

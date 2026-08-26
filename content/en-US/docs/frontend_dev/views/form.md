@@ -1094,6 +1094,8 @@ Status semantics match `ModelTable`:
 
 Business props still win when set to `false` (page explicitly hides Edit even for SUPER_ADMIN). SUPER_ADMIN short-circuits permission lookups internally.
 
+**Projection models** (`MetaModel.projection === true`, from `@Model(projection = true)` — a read-only model over a table another model owns): the form is forced into read-only in every mode (create included) and Edit / Create New / Duplicate / Delete / Add Version and the timeline version panel's Correct / Delete all close, on top of permissions — the backend rejects every write on such a model. Structural, not a permission: SUPER_ADMIN gets the same read-only form.
+
 Example:
 
 ```tsx

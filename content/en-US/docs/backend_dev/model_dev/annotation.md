@@ -90,6 +90,7 @@ public enum CustomerTier {
 | `versionLock` | boolean | `false` | `versionLock` | optimistic-lock column |
 | `multiTenant` | boolean | `false` | `multiTenant` | requires a `tenantId` field on the class |
 | `copyable` | boolean | `true` | `copyable` | `false` ⇒ copy APIs reject the model; UI hides Duplicate |
+| `projection` | boolean | `false` | `projection` | `true` ⇒ read-only model over a table it does NOT own (another model's table, or one created externally, e.g. by a BI pipeline). No DDL is ever generated for it; write APIs reject it; `@Index` on it is boot-rejected; RDBMS only. Every non-projection RDBMS model owns its table exclusively — two owners on one `tableName` fail at boot |
 | `dataSource` | String | `""` | `dataSource` | empty → primary datasource |
 | `businessKey` | String[] | `{}` | `businessKey` | composite supported |
 | `partitionField` | String | `""` | `partitionField` | |
@@ -337,6 +338,8 @@ A code-less root is a first-class state: Studio no-code and seed-authored models
 Rationale: additive DDL doesn't lose data; `DROP` operations are destructive
 and may take minutes on large tables. Even in dev, you should consciously
 choose to drop schema.
+
+**Projection models are outside this table entirely**: a model declared `@Model(projection = true)` (a read-only model over a table it does not own — another model's table, or one created externally, e.g. by a BI pipeline) generates **no DDL for any change**. Its `sys_*` rows still reconcile, but the table's shape belongs to its owning model or the external process. One table has ONE non-projection owner — a second owner fails at boot, which makes a fresh-database bootstrap deterministic (exactly one `CREATE` per table) and turns an accidental `tableName` collision into a boot error instead of a silent table merge. The physical drift audit checks a projection one-way (its declared columns must exist; the owner's other columns/indexes are never reported as undeclared), and a physically missing projection table logs an **ERROR** — never a boot failure, never auto-created. Convention for in-app sharing: repeat the owner's column declarations verbatim for the columns the projection exposes, and declare everything else `dynamic`.
 
 ### Catalog self-bootstrap (the `sys_*` tables' own schema)
 

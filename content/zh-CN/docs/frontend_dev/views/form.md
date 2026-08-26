@@ -1094,6 +1094,8 @@ function UnlockDialog() {
 
 业务 props 设为 `false` 时仍优先（页面显式隐藏 Edit，即使 SUPER_ADMIN）。SUPER_ADMIN 在内部短路权限查找。
 
+**投影模型**（`MetaModel.projection === true`，来自 `@Model(projection = true)`——只读模型，映射到另一模型所有的表）：表单在所有模式下强制只读（包括 create），Edit / Create New / Duplicate / Delete / Add Version 以及时间线版本面板的 Correct / Delete 全部关闭，叠加在权限之上——后端会拒绝此类模型的一切写入。这是结构属性而非权限：SUPER_ADMIN 得到同样的只读表单。
+
 示例：
 
 ```tsx

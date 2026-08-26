@@ -539,6 +539,8 @@ Status semantics (intentional three-state):
 
 Business props still win when set to `false` — a page that explicitly passes `enableCreate={false}` keeps Create hidden for SUPER_ADMIN too. SUPER_ADMIN short-circuits the permission check itself (every action returns `Granted`) but does NOT override an explicit business `false`.
 
+**Projection models** (`MetaModel.projection === true`, from `@Model(projection = true)` — a read-only model over a table another model owns): every built-in write affordance closes on top of the permission gate — Create, Import, inline edit, bulk edit and bulk Delete all hide regardless of the user's grants (the backend rejects the writes anyway). Export stays, it is a read. This is a structural property of the model, not a permission — SUPER_ADMIN sees the same read-only table.
+
 Example — auto-gated list with one custom action:
 
 ```tsx

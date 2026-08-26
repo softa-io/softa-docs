@@ -205,6 +205,8 @@ modelService.updateOne(modelName, { id, [groupBy.field]: column.id })
 
 `column.id` is the option `itemCode` (Option mode) or the related record's primary key (lookup mode).
 
+**Projection models** (`MetaModel.projection === true`, from `@Model(projection = true)` — a read-only model over a table another model owns) close every write affordance regardless of the page's `enable*` intent: Create, per-column create links, card Delete and drag-and-drop all disable (the backend rejects the writes anyway).
+
 For business actions that need server-side validation (e.g. env mutex transitions (e.g. Stable → Deploying)), supply a custom `onCardMove` handler instead:
 
 ```tsx

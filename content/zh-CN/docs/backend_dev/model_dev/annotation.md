@@ -79,6 +79,7 @@ public enum CustomerTier {
 | `versionLock` | boolean | `false` | `versionLock` | 乐观锁列 |
 | `multiTenant` | boolean | `false` | `multiTenant` | 要求类上有 `tenantId` 字段 |
 | `copyable` | boolean | `true` | `copyable` | `false` ⇒ 复制 API 拒绝该模型；UI 隐藏 Duplicate |
+| `projection` | boolean | `false` | `projection` | `true` ⇒ 只读模型，映射到一张**不归它所有**的表（另一模型的表，或外部创建的表，如 BI 管线产物）。永不生成 DDL；写 API 拒绝；声明 `@Index` 在启动时被拒；仅限 RDBMS。每个非投影 RDBMS 模型独占其表——同一 `tableName` 出现两个 owner 会启动失败 |
 | `dataSource` | String | `""` | `dataSource` | 空 → 主数据源 |
 | `businessKey` | String[] | `{}` | `businessKey` | 支持组合 |
 | `partitionField` | String | `""` | `partitionField` | |
@@ -275,6 +276,8 @@ system:
 | `DROP TABLE` / `DROP COLUMN` / `DROP INDEX` | ❌ — 记录 WARN 并提供可复制 SQL |
 
 理由：增量 DDL 不丢失数据；`DROP` 操作具有破坏性，在大表上可能耗时数分钟。即使在开发环境，你也应有意识地选择删除 schema。
+
+**投影模型完全不在上表范围内**：声明 `@Model(projection = true)` 的模型（只读模型，映射到一张不归它所有的表——另一模型的表，或外部创建的表，如 BI 管线产物）**任何变更都不生成 DDL**。其 `sys_*` 行仍正常对账，但表的物理形状归其 owner 模型或外部进程所有。一张表只有一个非投影 owner——出现第二个 owner 会启动失败，这既让全新数据库自举变得确定（每表恰好一条 `CREATE`），也把意外的 `tableName` 撞名从静默合表变成启动报错。物理漂移审计对投影只做单向检查（它声明的列必须物理存在；owner 的其他列/索引不会被报为 undeclared），投影的表物理缺失时记录 **ERROR**——不会导致启动失败，也不会被自动创建。应用内共表的约定：投影暴露的列逐字重复 owner 的声明，其余字段全部声明为 `dynamic`。
 
 ### 目录表自举（`sys_*` 表自身的结构）
 

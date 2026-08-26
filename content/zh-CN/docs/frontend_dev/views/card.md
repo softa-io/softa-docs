@@ -334,8 +334,8 @@ import { SideTree } from "@/components/views/shared/side-panel/SideTree";
 | `filters`     | `FilterCondition`                                             | 否       | -       | 推荐基础过滤。优先于 `initialParams.filters` 与 `MultiView.Tab.filters`（上下文）。与工作区/运行时过滤 AND 合并。见 [precedence](./multi-view#filter--order-precedence)。 |
 | `initialParams` | `QueryParamsWithoutFields`                                  | 否       | -       | 高级初始查询设置（`pageSize` 等）。`filters` / `orders` 优先用顶层属性。        |
 | `children`    | `ReactNode`                                                   | 否       | -       | `ModelCard.Header`、`Field`、`ModelCard.Footer`，以及一个可选侧栏。                                |
-| `enableCreate`| `boolean`                                                     | 否       | `true`  | 工具栏显示创建按钮。                                                                               |
-| `enableDelete`| `boolean`                                                     | 否       | `false` | 每张卡片显示 `...` 删除操作。                                                                       |
+| `enableCreate`| `boolean`                                                     | 否       | `true`  | 工具栏显示创建按钮。投影模型（`MetaModel.projection === true`——只读模型，映射到另一模型所有的表）强制关闭。 |
+| `enableDelete`| `boolean`                                                     | 否       | `false` | 每张卡片显示 `...` 删除操作。投影模型同 `enableCreate` 强制关闭。                                     |
 | `pageSize`    | `number`                                                      | 否       | `20`    | 服务端页大小。                                                                                       |
 | `columns`     | `number`                                                      | 否       | -       | 固定网格列数（1–6）。默认响应式。                                                             |
 | `linkTo`      | `string`                                                      | 否       | -       | 点击导航的子目录名（单段）。前往 `${pathname}/${linkTo}/${id}?mode=read`。省略则默认 `${pathname}/${id}?mode=read`。 |
