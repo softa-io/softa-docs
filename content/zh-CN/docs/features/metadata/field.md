@@ -340,7 +340,7 @@ Softa 使用 **[AviatorScript](https://github.com/killme2008/aviatorscript)** �
 
 **TO_ONE** 外键（`ManyToOne` / `OneToOne`）的删除策略：当被引用（"One"）行被删除时，**引用方**行如何处理。
 
-这是在 `ModelServiceImpl.deleteByIds` 中执行的**应用层**策略。Softa **不会**生成物理数据库 `FOREIGN KEY ... ON DELETE` 约束。为何必须应用层、从不建真实 DB FK：软删是 `UPDATE`，对 DB `ON DELETE` 不可见（FK 根本不会触发）；DB 级联会绕过权限、变更日志、审计戳、软删转换与租户隔离；DB FK 无法表达「仅统计 `deleted=false` 引用方」或「仅硬删时 SET_NULL」；物理 FK 也与永不自动 DROP 的 DDL 治理冲突。
+这是在 `ModelServiceImpl.deleteByIds` 中执行的**应用层**策略。Softa **不会**生成物理数据库 `FOREIGN KEY ... ON DELETE` 约束。为何必须应用层、从不建真实 DB FK：软删是 `UPDATE`，对 DB `ON DELETE` 不可见（FK 根本不会触发）；DB 级联会绕过权限、变更日志、审计戳、软删转换与租户隔离；DB FK 无法表达「仅统计 `deleted=false` 引用方」或「仅硬删时 SET_NULL」；物理 FK 约束也游离于注解驱动的 DDL 治理之外（扫描器既不声明也不管理它们）。
 
 | 取值 | 行为 |
 | --- | --- |
@@ -386,7 +386,7 @@ OneToOne/ManyToOne 关联字段的基本过滤条件。这是基于业务场景�
 
 只读属性：从字段名派生的物理表列名（如 `unitPrice` → `unit_price`）。
 
-`fieldName` 变更时，Softa 默认同步列名。可通过全局 DDL 开关禁用自动表列重命名，以支持通过其他方式提交 DDL 的工作流。
+`fieldName` 变更时列名随之同步——请声明重命名（`renamedFrom`），物理列才会原地改名并携带数据；未声明的重命名会被视为「删旧列 + 加新列」。DDL 是否实际执行取决于运行时姿态：开发环境由启动扫描器的 `scanner-scope` 决定，生产环境走 Studio 发布流程。
 
 ### 2.30 `description`
 

@@ -8,5 +8,4 @@
 
 ## Exception Capture and Monitoring
 
-### Sentry Integration
-Modify the configuration file `sentry.properties`
+Unexpected exceptions logged at ERROR level can be reported to Sentry via the `sentry-starter`, tagged with the request's tenant and trace identity — see [Observability](./observability).

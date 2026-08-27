@@ -88,6 +88,13 @@ ORM. `tenant_id = 0` rows form the **platform tier**, shared by every tenant:
   tables; tenant identity travels inside the message payload
   (`recordId / tenantId / traceId`) and is restored by the consumer.
 
+The overlay also has a **management surface** (mail side):
+
+- `GET /MailTemplate/effectiveList` shows a tenant its own templates PLUS the inherited platform tier, one row per `code`, tagged `INHERITED / CUSTOMIZED / OWN`; `POST /MailTemplate/customize?id=` copies a platform template into the tenant scope under the same code (copy-on-write — the override flow never hand-types a code), and deleting the copy reverts to the inherited template.
+- Platform rows are structurally un-writable from a tenant scope (payload guard, insert stamping, and the tenant-filtered pre-read on update/delete); the mail write endpoints additionally turn that silent no-op into an explanatory `BusinessException`.
+- Two per-row policy flags: `MailTemplate.overridable = false` locks a platform code against tenant customization (send-time resolution then always uses the platform row); `MailSendServerConfig.sharedWithTenants = true` exposes a platform SMTP config to tenant sender pickers and template pinning (`GET /api/mail/senders` lists own + shared-platform configs).
+- Per-send tier policy: `SendMailDTO.scope` / `MailRequestMessage.scope` (`MailScope.OVERLAY` default, `PLATFORM_ONLY` = skip the tenant tier on both the template AND server axes — for billing/security/compliance mail). `MailRequestMessage.tenantId` lets the MQ consumer restore the tenant context, so platform-initiated jobs can opt INTO tenant branding; with no tenant id the render stays platform-tier.
+
 With multi-tenancy disabled, no filtering or stamping occurs and everything
 behaves single-tenant.
 

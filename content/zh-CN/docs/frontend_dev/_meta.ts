@@ -6,4 +6,5 @@ export default {
   fields: "字段 & 控件",
   layout: "布局",
   components: "其它组件",
+  observability: "可观测性",
 }

@@ -340,7 +340,7 @@ System-computed physical type of a TO_ONE FK column (`STRING` / `LONG` / …), m
 
 Delete strategy for a **TO_ONE** foreign key (`ManyToOne` / `OneToOne`): what happens to **referencing** rows when the referenced ("One") row is deleted.
 
-This is an **application-level** policy enforced in `ModelServiceImpl.deleteByIds`. Softa does **not** emit physical database `FOREIGN KEY ... ON DELETE` constraints. Why app-level and never a real DB FK: soft delete is an `UPDATE`, invisible to a DB `ON DELETE` (the FK would simply never fire); a DB cascade bypasses permissions, change logs, audit stamping, soft-delete conversion and tenant scoping; a DB FK cannot express soft-delete-aware RESTRICT / hard-delete-only SET_NULL; and physical FKs clash with never-auto-DROP DDL governance.
+This is an **application-level** policy enforced in `ModelServiceImpl.deleteByIds`. Softa does **not** emit physical database `FOREIGN KEY ... ON DELETE` constraints. Why app-level and never a real DB FK: soft delete is an `UPDATE`, invisible to a DB `ON DELETE` (the FK would simply never fire); a DB cascade bypasses permissions, change logs, audit stamping, soft-delete conversion and tenant scoping; a DB FK cannot express soft-delete-aware RESTRICT / hard-delete-only SET_NULL; and physical FK constraints sit outside the annotation-driven DDL governance (the scanner neither declares nor manages them).
 
 | Value | Behavior |
 | --- | --- |
@@ -386,7 +386,7 @@ Basic filtering conditions for OneToOne/ManyToOne relationship fields. This is a
 
 Read-only attribute: the physical table column name derived from the field name (e.g. `unitPrice` → `unit_price`).
 
-When `fieldName` changes, Softa synchronizes the column name by default. You can disable automatic table column renaming via a global DDL switch to support workflows where DDL is applied by other means.
+When `fieldName` changes, the column name follows — declare the rename (`renamedFrom`) so the physical column is renamed in place with its data; an undeclared rename reads as "drop old + add new". Whether any DDL executes follows the runtime posture: the boot scanner's `scanner-scope` in development, the Studio publish flow in production.
 
 ### 2.30 `description`
 

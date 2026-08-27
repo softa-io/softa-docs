@@ -6,4 +6,5 @@ export default {
   fields: "Field & Widget",
   layout: "Layout",
   components: "Other Components",
+  observability: "Observability",
 }

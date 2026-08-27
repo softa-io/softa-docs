@@ -6,5 +6,6 @@ export default {
   i18n: "多语言翻译",
   cron: "定时任务",
   exception: "异常处理",
+  observability: "可观测性",
   debug: "调试模式",
 }

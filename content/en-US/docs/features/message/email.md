@@ -16,14 +16,20 @@ If multiple records are marked as default, the one with the smallest `sequence`
 is used. Config objects are cached in Redis for 5 minutes; updating a config
 via `MailSendServerConfigService.updateOne` / `deleteById` evicts automatically.
 
+A send declaring `scope = PLATFORM_ONLY` skips step 1 and resolves the platform default only (cached under the platform key, so the tenant's own default cache entry is neither read nor poisoned) — platform mail must not route through tenant-controlled SMTP.
+
 #### Template resolution
 
-Email templates are resolved by `code` with a platform fallback:
+Email templates are resolved by `code` with a platform fallback. Both visible rows of a code (own + platform, `uk(tenantId, code)` guarantees at most one per scope) are fetched in one query and the tier policy picks:
 
 ```text
-tenant template (code + enabled)
-  -> platform template (tenant_id = 0)
-  -> BusinessException
+scope = PLATFORM_ONLY            -> platform template only
+platform template locked          -> platform template (a tenant override
+  (overridable = false)              never fires for a locked code — even
+                                     disabled, the lock holds)
+otherwise                         -> tenant template (code + enabled)
+                                       -> platform template (tenant_id = 0)
+                                       -> BusinessException
 ```
 
 Template placeholders use the unified Softa syntax: `{{ variable }}`.
@@ -112,7 +118,7 @@ SendMailDTO.serverConfigId          (1) explicit call-site override
 MailTemplate.preferredServerConfigId (2) template-level soft preference
   ↓ null
 MailServerDispatcher.resolveSend()   (3) tenant default → platform default
-  ↓ none found
+  ↓ none found                           (PLATFORM_ONLY scope: platform default only)
 BusinessException
 ```
 
@@ -127,7 +133,9 @@ secondary" behaviour. SMTP failure goes through the normal retry policy
 | `MailSendServerConfig.isDefault` | Marks tenant/platform default candidate | Failover (only the first default is ever picked) |
 | `MailSendServerConfig.sequence` | Tie-break among multiple `isDefault=true` rows + UI list order | Failover priority |
 | `MailReceiveServerConfig.sequence` | Cron polling order (all enabled configs polled each tick) + UI list order | Failover priority |
-| `MailTemplate.preferredServerConfigId` | Per-template preferred SMTP (e.g. marketing→SendGrid, transactional→Postmark) | Hard binding — DTO can still override |
+| `MailTemplate.preferredServerConfigId` | Per-template preferred SMTP (e.g. marketing→SendGrid, transactional→Postmark). Scope-checked on write: a config owned by the template's own tenant scope, or a platform config with `sharedWithTenants = true` | Hard binding — DTO can still override |
+| `MailTemplate.overridable` | Platform rows only: `false` locks the code — tenant customization never fires, Customize is refused, and a tenant create with this code is rejected | Anything on tenant rows (ignored there) |
+| `MailSendServerConfig.sharedWithTenants` | Platform rows only: `true` exposes the config to tenant sender pickers (`/api/mail/senders`) and template pinning. Its `dailySendLimit` / `rateLimitPerMinute` stay global across every tenant using it | The implicit dispatcher fallback (platform policy — the flag is ignored there) |
 
 > Naming note: the field is called `sequence` (not `priority`) because the
 > mail side uses the value for UI / default ordering, not a retry chain. The SMS

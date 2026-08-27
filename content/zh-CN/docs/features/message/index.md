@@ -62,6 +62,13 @@
 - 后台任务为跨租户扫描，在每条记录所属租户上下文中执行：定时邮件拉取在每个接收配置的租户内运行，僵尸清扫器在每个卡住记录的租户内恢复。
 - 事务性 outbox 和死信存储为共享基础设施表；租户身份在消息 payload（`recordId / tenantId / traceId`）中传递，由消费者恢复。
 
+叠加模型还提供**管理面**（邮件侧）：
+
+- `GET /MailTemplate/effectiveList` 向租户展示其自有模板加上继承的平台层，每个 `code` 一行，标记为 `INHERITED / CUSTOMIZED / OWN`；`POST /MailTemplate/customize?id=` 将平台模板以相同 code 复制进租户作用域（写时复制——覆盖流程无需手填 code），删除副本即回退到继承的模板。
+- 平台行在租户作用域内结构性不可写（payload 校验、插入盖章、更新/删除的租户过滤预读）；邮件写端点还会把这种静默 no-op 转为带解释的 `BusinessException`。
+- 两个行级策略开关：`MailTemplate.overridable = false` 锁定平台 code，禁止租户定制（发送时解析始终使用平台行）；`MailSendServerConfig.sharedWithTenants = true` 将平台 SMTP 配置暴露给租户的发件人选择器与模板 pin（`GET /api/mail/senders` 列出自有 + 平台共享配置）。
+- 每次发送的层级策略：`SendMailDTO.scope` / `MailRequestMessage.scope`（默认 `MailScope.OVERLAY`，`PLATFORM_ONLY` = 在模板与服务器两条轴上都跳过租户层——用于账单/安全/合规邮件）。`MailRequestMessage.tenantId` 让 MQ 消费者恢复租户上下文，平台发起的任务因此可以选择套用租户品牌；不带租户 id 时渲染保持平台层。
+
 多租户禁用时，无过滤或盖章，一切表现为单租户。
 
 ### 异步投递（唯一投递模型）

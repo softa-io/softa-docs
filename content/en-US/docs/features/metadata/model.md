@@ -94,7 +94,7 @@ Priority for displaying model data names:
 Quick search fields, supporting multiple fields in a single search condition. For example, when quick searching for customers, it supports searching for customer name, customer number, and contact phone.
 
 ### 2.7 `tableName` Table Name
-Read-only field, the database table name corresponding to the model, automatically converted from the model name, such as `product_category`. When the model name changes, the table name is automatically synchronized. The automatic modification of table names can be disabled by configuring the global DDL switch to meet scenarios where DDL is submitted through other means.
+Read-only field, the database table name corresponding to the model, automatically converted from the model name, such as `product_category`. When the model is renamed, the table name follows — declare the rename (`renamedFrom`) so the physical table is renamed in place with its data. Whether any DDL executes follows the runtime posture: the boot scanner's `scanner-scope` in development, the Studio publish flow in production.
 
 ### 2.8 `timeline` Timeline
 

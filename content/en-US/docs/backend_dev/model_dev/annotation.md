@@ -10,7 +10,10 @@
 Softa describes models, fields, option sets, option items, and indexes
 through Java annotations on the entity classes. A boot-time scanner reads
 these annotations, reconciles them with the `sys_*` catalog tables managed
-by `metadata-starter`, and (for packages in `scanner-scope`) applies the matching DDL.
+by `metadata-starter`, and (for packages in `scanner-scope`) **converges the
+physical schema to the annotations** — declared changes and hand-made drift
+alike, so a restart always ends with schema ≡ annotations for everything the
+scope owns.
 
 **Five annotations** — `@Model` / `@Field` / `@Index` live in
 `io.softa.framework.orm.annotation`; `@OptionSet` / `@OptionItem` live in
@@ -154,7 +157,8 @@ physical DB `FOREIGN KEY ... ON DELETE` is ever emitted. Why app-level and never
 delete is an `UPDATE`, invisible to a DB `ON DELETE` (the FK would simply never fire); a DB cascade
 bypasses permissions, change logs, audit stamping, soft-delete conversion and tenant scoping; a DB FK
 cannot express "count only `deleted=false` referrers", "block regardless of tenant", or "null only on
-hard delete"; and physical FKs clash with the never-auto-DROP DDL governance. Strategies:
+hard delete"; and physical FK constraints sit outside the annotation-driven DDL governance (the
+scanner neither declares nor manages them). Strategies:
 
 - `RESTRICT` — block the delete if any live (`deleted=false`) referrer exists.
 - `CASCADE` — delete the referrers in the same transaction (each follows its own soft/hard delete).
@@ -252,9 +256,11 @@ declare such indexes explicitly:
 ## Renames (`renamedFrom`)
 
 The scanner's diff is keyed by `modelName` / `fieldName` / `optionSetCode` /
-`itemCode`, so an *undeclared* rename looks like "drop old + add new": the new
-column is auto-added, dropping the old one is warn-only — and the data stays
-in the orphaned column (**silent data divorce**).
+`itemCode`, so an *undeclared* rename looks like "drop old + add new" — and
+under an active `scanner-scope` the convergence pass executes exactly that: the
+new column is added empty, and the old column, no longer declared by anything,
+is **dropped together with its data** in the same boot. Nothing arrives in the
+new column.
 
 Declare the immediately-prior name instead:
 
@@ -303,15 +309,15 @@ system:
 
 | `system.metadata.scanner-scope` | Scanner runs | DDL execution | Drift detection |
 |---|---|---|---|
-| `["*"]` | Boot-time, eager, all packages | Auto: `CREATE TABLE` / `ADD COLUMN` / `MODIFY COLUMN` / `ADD INDEX`. **Never auto-DROP** | Code-less catalog roots named in a WARN with copy-paste SQL |
-| `["io\\.acme\\.foo.*", …]` | Boot-time, in-scope packages only | Same auto-policy, in-scope models only | n/a |
-| empty / unset (default, prod) | n/a | n/a | `MetadataAnnotationChecker` runs post-boot on a virtual thread; logs WARN if code-vs-DB drift detected |
+| `["*"]` | Boot-time, eager, all packages | **Physical convergence** (see below): every owned table converges to its annotations on every boot — CREATE / ADD / MODIFY (narrowing included) / declared RENAME, plus **DROP of undeclared columns and indexes** | Code-less catalog roots named in a WARN with copy-paste SQL; the drift audit reports the residual (projections, undeclared tables) |
+| `["io\\.acme\\.foo.*", …]` | Boot-time, in-scope packages only | Same convergence, in-scope models only — out-of-scope tables are never touched | n/a |
+| empty / unset (default, prod) | n/a | n/a | `MetadataAnnotationChecker` runs post-boot on a virtual thread; logs WARN if code-vs-DB drift detected — report-only, nothing executes |
 
 On a **shared dev database**, give each developer a narrow scope (their own
-packages) so the scanner only reconciles the Java packages they are actively
-changing. Scope is per-package, not per-class; app identity is still
-`app_code`, and physical table-name collisions remain a database-level
-concern.
+packages) so the scanner only reconciles — and converges — the Java packages
+they are actively changing. Scope is per-package, not per-class; app identity
+is still `app_code`, and physical table-name collisions remain a
+database-level concern.
 
 ### Catalog row policy
 
@@ -323,21 +329,33 @@ The catalog is an aggregate: `sys_model` / `sys_option_set` are the **roots**, `
 | Attribute added / modified / **removed**, on a root whose class is present | ✅ — the annotations own the root's attribute set |
 | **Root removed** (a catalog row with no `@Model` / `@OptionSet` class) | ❌ under **every** scope, `["*"]` included — the root and its attribute rows are left untouched; `["*"]` logs a WARN naming them with copy-paste `DELETE` SQL |
 
-A code-less root is a first-class state: Studio no-code and seed-authored models never have a Java class, and nothing in the catalog records row ownership — so "orphan" and "deliberately code-less" cannot be told apart, and auto-deleting would silently destroy hand-authored definitions on every boot. Same asymmetry as the DDL policy below: grow automatically, destroy only on a human decision.
+A code-less root is a first-class state: Studio no-code and seed-authored models never have a Java class, and nothing in the catalog records row ownership — so "orphan" and "deliberately code-less" cannot be told apart, and auto-deleting would silently destroy hand-authored definitions on every boot. Note the contrast with the physical schema below: an undeclared **column** on a table the scope owns has no legitimate author (the owner's annotations are its single source of truth) and is converged away, while a code-less **root** may be someone's deliberate definition and is only ever named in the WARN.
 
-### DDL auto-execute policy
+### DDL execution policy (physical convergence)
 
-| Operation | Auto-executed |
-|---|---|
-| `CREATE TABLE IF NOT EXISTS` | ✅ |
-| `ADD COLUMN` | ✅ |
-| `MODIFY COLUMN` (type / nullable / length / default) | ✅ |
-| `ADD INDEX` | ✅ |
-| `DROP TABLE` / `DROP COLUMN` / `DROP INDEX` | ❌ — logs WARN with copy-paste SQL |
+With an active `scanner-scope`, the physical table of every in-scope owned model is a pure
+function of the annotations — every boot converges it, declared changes and hand-made drift
+alike:
 
-Rationale: additive DDL doesn't lose data; `DROP` operations are destructive
-and may take minutes on large tables. Even in dev, you should consciously
-choose to drop schema.
+| State (annotation vs physical) | DDL | Executed? |
+|---|---|---|
+| New `@Model` / table physically missing | `CREATE TABLE` (with inline indexes); a pre-existing table is adopted column-by-column instead | ✅ |
+| New `@Field` / declared column physically missing | `ADD COLUMN` | ✅ |
+| Changed `@Field` attribute (type / length / required / default / comment) | `MODIFY COLUMN` to the declared shape | ✅ |
+| Physical type/width mismatch — widen, **narrow**, incomparable | `MODIFY COLUMN` to the declared shape — the declaration is the truth, and a non-empty `scanner-scope` is by definition non-production | ✅ |
+| Removed `@Field` / **undeclared physical column** | `DROP COLUMN` | ✅ |
+| **Undeclared physical index** | `DROP INDEX` (primary-key backing indexes excluded) | ✅ |
+| New `@Index` / declared index physically missing / definition changed | `ADD INDEX` / rebuild (DROP + ADD) | ✅ |
+| Removed `@Model` | `DROP TABLE` | ❌ — the code-less root keeps its rows *and* its table; the `["*"]` WARN prints the cleanup SQL |
+| Bare `tableName` change while the old table physically exists | — | ❌ **boot fails** with instructions — creating the new table would silently divorce the data, and the planner never guesses |
+| Whole undeclared **tables**; anything on a **projection** | — | ❌ untouched — ownership cannot be proven (another `app_code`, a legacy table) / the table belongs to the owner; the drift audit is the reporting channel |
+
+If physical introspection fails, the boot degrades to conservative **metadata-only
+planning**: additive changes and declared renames auto-execute; every destructive verb
+defers to a warn-only copy-paste SQL block — without facts, drift and intent are
+indistinguishable. Destructive convergence can never reach production, because production
+runs the empty scope (checker-only): the gate is the existing `scanner-scope` posture, not
+a separate switch.
 
 **Projection models are outside this table entirely**: a model declared `@Model(projection = true)` (a read-only model over a table it does not own — another model's table, or one created externally, e.g. by a BI pipeline) generates **no DDL for any change**. Its `sys_*` rows still reconcile, but the table's shape belongs to its owning model or the external process. One table has ONE non-projection owner — a second owner fails at boot, which makes a fresh-database bootstrap deterministic (exactly one `CREATE` per table) and turns an accidental `tableName` collision into a boot error instead of a silent table merge. The physical drift audit checks a projection one-way (its declared columns must exist; the owner's other columns/indexes are never reported as undeclared), and a physically missing projection table logs an **ERROR** — never a boot failure, never auto-created. Convention for in-app sharing: repeat the owner's column declarations verbatim for the columns the projection exposes, and declare everything else `dynamic`.
 
@@ -357,7 +375,11 @@ with a non-empty `scanner-scope`, the scanner therefore reconciles them
   (data carried); both old and new present → boot fails with instructions;
 - physically narrower than declared (bounded widths only) → widening
   `MODIFY COLUMN`; anything wider / incomparable / undeclared is left
-  untouched and reported by the physical drift audit.
+  untouched by **this stage** — it runs before the diff exists and possibly
+  under a narrow scope that does not manage the catalog. When the catalog
+  packages are in scope, the main convergence pass later in the same boot
+  eliminates those like any other in-scope drift; otherwise the physical
+  drift audit reports them.
 
 The whole boot DDL window (catalog reconcile → strict read → diff → DDL → row
 writes) is serialized across instances by a database session lock (MySQL
@@ -365,9 +387,9 @@ writes) is serialized across instances by a database session lock (MySQL
 the same database never race their DDL.
 
 What still needs a hand-written migration: backfill `UPDATE`s that give an
-added column real values on rows the scanner does not manage, any `DROP`, and
-environments running with an empty `scanner-scope` — there nothing
-auto-applies, catalog included.
+added column real values on rows the scanner does not manage, destructive
+changes on **out-of-scope** tables, and environments running with an empty
+`scanner-scope` — there nothing auto-applies, catalog included.
 
 ## Metadata identity (`app_code`)
 

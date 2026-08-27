@@ -8,5 +8,4 @@
 
 ## 异常捕获和异常监控
 
-### 集成Sentry
-修改配置文件 `sentry.properties`
+以 ERROR 级别记录的意外异常可经 `sentry-starter` 上报 Sentry，并自动携带请求的租户与 trace 身份标签——见[可观测性](./observability)。

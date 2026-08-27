@@ -14,14 +14,20 @@
 
 若多条记录标记为默认，使用 `sequence` 最小的一条。配置对象在 Redis 中缓存 5 分钟；通过 `MailSendServerConfigService.updateOne` / `deleteById` 更新配置时会自动驱逐。
 
+声明 `scope = PLATFORM_ONLY` 的发送会跳过第 1 步，仅解析平台默认（缓存在平台键下，既不读也不污染租户自己的默认缓存条目）——平台邮件不得经由租户控制的 SMTP 发出。
+
 #### 模板解析
 
-邮件模板按 `code` 解析，带平台回退：
+邮件模板按 `code` 解析，带平台回退。一个 code 的两条可见行（自有 + 平台，`uk(tenantId, code)` 保证每个作用域至多一条）在一次查询中取回，由层级策略裁决：
 
 ```text
-租户模板（code + enabled）
-  -> 平台模板（tenant_id = 0）
-  -> BusinessException
+scope = PLATFORM_ONLY            -> 仅平台模板
+平台模板已锁定                     -> 平台模板（锁定的 code 上租户覆盖
+  （overridable = false）            永不生效——即使平台行被禁用，
+                                     锁依然成立）
+其它情况                          -> 租户模板（code + enabled）
+                                       -> 平台模板（tenant_id = 0）
+                                       -> BusinessException
 ```
 
 模板占位符使用统一的 Softa 语法：`{{ variable }}`。
@@ -80,7 +86,7 @@ SendMailDTO.serverConfigId          (1) 调用点显式覆盖
 MailTemplate.preferredServerConfigId (2) 模板级软偏好
   ↓ null
 MailServerDispatcher.resolveSend()   (3) 租户默认 → 平台默认
-  ↓ 未找到
+  ↓ 未找到                               （PLATFORM_ONLY scope：仅平台默认）
 BusinessException
 ```
 
@@ -93,7 +99,9 @@ BusinessException
 | `MailSendServerConfig.isDefault` | 标记租户/平台默认候选 | 故障转移（仅会选取第一个默认） |
 | `MailSendServerConfig.sequence` | 多条 `isDefault=true` 时的决胜 + UI 列表顺序 | 故障转移优先级 |
 | `MailReceiveServerConfig.sequence` | Cron 轮询顺序（每个 tick 轮询所有启用配置）+ UI 列表顺序 | 故障转移优先级 |
-| `MailTemplate.preferredServerConfigId` | 每模板首选 SMTP（如营销→SendGrid，事务→Postmark） | 硬绑定——DTO 仍可覆盖 |
+| `MailTemplate.preferredServerConfigId` | 每模板首选 SMTP（如营销→SendGrid，事务→Postmark）。写入时做作用域校验：模板自身租户作用域拥有的配置，或 `sharedWithTenants = true` 的平台配置 | 硬绑定——DTO 仍可覆盖 |
+| `MailTemplate.overridable` | 仅平台行有意义：`false` 锁定该 code——租户定制永不生效，定制动作被拒绝，租户以该 code 创建模板也会被拒绝 | 租户行上的任何含义（在租户行上被忽略） |
+| `MailSendServerConfig.sharedWithTenants` | 仅平台行有意义：`true` 将该配置暴露给租户发件人选择器（`/api/mail/senders`）与模板 pin。其 `dailySendLimit` / `rateLimitPerMinute` 对所有使用它的租户全局生效 | 隐式调度回退（平台策略——回退忽略此开关） |
 
 > 命名说明：字段名为 `sequence`（非 `priority`），因为邮件侧将该值用于 UI / 默认排序，而非重试链。SMS 侧保留 `priority`，因为国家路由和模板绑定都将其用作显式提供商选择顺序。
 

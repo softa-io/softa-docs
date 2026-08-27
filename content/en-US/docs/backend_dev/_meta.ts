@@ -6,5 +6,6 @@ export default {
   i18n: "Multi-language",
   cron: "Cron Jobs",
   exception: "Exception Handling",
+  observability: "Observability",
   debug: "Debug",
 }
