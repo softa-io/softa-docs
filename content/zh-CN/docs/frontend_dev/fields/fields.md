@@ -200,6 +200,32 @@ function UserTableView() {
 <Field fieldName="userIds" tableView={UserTableView} />;
 ```
 
+### `RelationTable` 行级 props
+
+`readOnly` 冻结整个表格，元数据 `readonly` 冻结整列。两者都无法表达「这一行是特殊的」——而某些集合恰恰需要这种能力：一行由系统持有、用户只能部分控制的数据。两个可选的谓词 props 补上了这一点：
+
+| Prop             | 类型                                              | 说明                                                                                                                                                     |
+| ---------------- | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `isRowDeletable` | `(row) => boolean`                                | 返回 `false` 时隐藏该行的删除按钮。列本身保留，因此可删除行的按钮位置保持一致。省略 = 每行都可删除。  |
+| `isCellEditable` | `(row, fieldName) => boolean`                     | 返回 `false` 时该单元格渲染为只读；同一行的其余单元格仍可编辑。省略 = 沿用元数据的决定。                              |
+| `seedRows`       | `() => Record<string, unknown>[] \| undefined`    | 表单打开时填入**空**集合的行，效果等同用户手动添加。只应用一次，在 provider 能给出答案后的那次渲染执行。返回 `undefined` 表示「还没准备好」。 |
+
+被冻结的单元格走与非编辑行相同的渲染路径，因此它看起来与普通展示值一致，而不是一个禁用的输入框。两个谓词都只作用于展示侧——服务端必须执行同样的规则，否则调用方仍能提交 UI 拒绝提供的内容。
+
+`seedRows` 之所以存在，是因为关系字段提交的是**补丁**——由用户操作构建的 `{Create, Update, Delete}`——而不是整个数组。用 `setValue` 直接写进表单状态的行能渲染出来，却永远不会进入补丁，于是它会静默地缺席提交载荷，保存时在其中输入的内容全部丢失。`seedRows` 走与「Add new line」相同的路径，因此该行既被渲染*也*被提交。它是函数而不是数组，因为这些行通常依赖某个异步获取的数据，返回 `undefined` 就是调用方等待数据、避免竞态的方式。
+
+租户订阅的免费期就是这三个 props 的设计场景：它随租户创建、删除后会被重建，套餐和开始日期固定，结束日期是运营者限定免费时长的唯一抓手。
+
+```tsx
+<RelationTable
+  isRowDeletable={(row) => !isFreePeriod(row)}
+  isCellEditable={(row, fieldName) =>
+    !isFreePeriod(row) || fieldName === "effectiveEndDate"
+  }
+  seedRows={() => (floorPlan ? [freePeriodFor(floorPlan)] : undefined)}
+>
+```
+
 ## 核心 Props
 
 `Field` 基于元数据驱动，并支持字段级覆盖和运行时条件。
@@ -556,6 +582,7 @@ companyId.cascadedField = "employeeId.department.companyId";
 ### 字符串与文本
 
 - `String`：默认单行文本输入
+- `Text`（fieldType）：无上限长文本（后端为 TEXT 类列）。默认渲染多行 `PlainText` widget；显式声明的 `RichText` / `Markdown` / `Code` / `TemplateEditor` widget 优先。不允许单行装饰类 widget（`URL` / `Email` / ...），它们会被 widget 归一化剔除。表格筛选只提供子串/存在性操作符（`CONTAINS` / `NOT CONTAINS` / `IS SET` / `IS NOT SET`）。
 - `MultiString`：标签式输入；值会在 `Enter`、`,` 或 blur 时提交，并以逗号分隔字符串存入表单状态
 - 常见的 `String` widget 变体：
   - `URL`
@@ -585,6 +612,7 @@ companyId.cascadedField = "employeeId.department.companyId";
   - `Monetary`
   - `Percentage`
   - `Slider`
+- 标识符例外（展示模式 / 表格单元格）：字段名为 `id` 或以 `Id` 结尾的数值字段按纯字符串渲染——不加千分位分组（显示 `1234567` 而非 `1,234,567`），也不经过浮点解析，因此 64 位雪花 id 保持完整精度。显式声明 `formatOptions` 或数值类 widget（`Monetary` / `Percentage` / `Slider`）时，该字段重新进入数值格式化。
 
 ```tsx
 <Field fieldName="amount" widgetType="Monetary" />
@@ -642,6 +670,10 @@ companyId.cascadedField = "employeeId.department.companyId";
   dateOptions={{ min: { fromField: "hireDate" } }}
 />
 ```
+
+`fromField` 指向的是**同级字段**，不是表单路径——在任何嵌套深度都直接写字段名本身。在嵌套编辑器里（`OneToOne` 内联 `formView`、内联编辑行），同级字段以某个前缀注册在父表单上，而边界值通过与 `dependsOn` / `FilterCondition` 依赖相同的 `resolveDependencyPath` 解析，因此 `{ fromField: "effectiveFrom" }` 自己就能找到 `subscriptionId.effectiveFrom`。**不要**手动限定路径——带前缀的名字会被再加一次前缀。
+
+> 无法解析的 `fromField` 是**静默的**：边界值返回 `undefined`，选择器把它读作「没有约束」，于是字段接受任何值且没有任何警告。嵌套场景正因如此长期未被发现，直到回归测试钉住了它——当跨字段边界看起来毫无作用时，先确认引用的字段名是真实存在的同级字段，再去别处排查。
 
 完整的 `DateBound` 语义与 `DateTime` 粒度行为请见 [Widgets — Date / DateTime range bounds](./widgets#date--datetime--range-bounds-dateoptions)。
 

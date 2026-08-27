@@ -202,6 +202,32 @@ function UserTableView() {
 <Field fieldName="userIds" tableView={UserTableView} />;
 ```
 
+### `RelationTable` row-level props
+
+`readOnly` freezes the whole table and metadata `readonly` freezes a whole column. Neither can say "this one row is special", which some collections need — a row the system owns and the user only partly controls. Two optional predicates cover that:
+
+| Prop             | Type                                              | Notes                                                                                                                                                     |
+| ---------------- | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `isRowDeletable` | `(row) => boolean`                                | Returning `false` hides that row's delete button. The column stays, so deletable rows keep their button in the same place. Omitted = every row deletable.  |
+| `isCellEditable` | `(row, fieldName) => boolean`                     | Returning `false` renders that one cell read-only; the rest of the row stays editable. Omitted = metadata decides, as before.                              |
+| `seedRows`       | `() => Record<string, unknown>[] \| undefined`    | Rows to put into an **empty** collection when the form opens, as if the user had added them. Applied once, on the render after the provider can answer. Returning `undefined` means "not yet". |
+
+A frozen cell renders through the same path a non-editing row uses, so it looks like any other displayed value rather than a disabled input. Both predicates are display-side only — the server must enforce the same rule, or a caller can still submit what the UI declined to offer.
+
+`seedRows` exists because the relation field submits a **patch** — `{Create, Update, Delete}` built from the user's actions — not the whole array. A row written straight into form state with `setValue` renders but never enters that patch, so it is silently absent from the payload and anything typed into it is discarded on save. `seedRows` goes through the same path as "Add new line", so the row is rendered *and* submitted. It is a function rather than an array because the rows usually depend on something fetched, and `undefined` is how the caller waits for it without racing.
+
+The tenant subscription's free period is the case all three were built for: it is created with the tenant and re-created if deleted, its plan and start date are fixed, and its end date is the operator's only lever for time-boxing free access.
+
+```tsx
+<RelationTable
+  isRowDeletable={(row) => !isFreePeriod(row)}
+  isCellEditable={(row, fieldName) =>
+    !isFreePeriod(row) || fieldName === "effectiveEndDate"
+  }
+  seedRows={() => (floorPlan ? [freePeriodFor(floorPlan)] : undefined)}
+>
+```
+
 ## Core Props
 
 `Field` is metadata-driven and supports field-level overrides and runtime conditions.
@@ -560,6 +586,7 @@ This section explains the default front-end behavior by `fieldType`. For widget-
 ### String And Text
 
 - `String`: default single-line text input
+- `Text` (fieldType): unbounded long text (TEXT-class column on the backend). Renders the multiline `PlainText` widget by default; explicit `RichText` / `Markdown` / `Code` / `TemplateEditor` widgets win. Single-line decorations (`URL` / `Email` / ...) are not allowed and get stripped by widget normalization. Table filtering offers substring/presence operators only (`CONTAINS` / `NOT CONTAINS` / `IS SET` / `IS NOT SET`).
 - `MultiString`: tag-style input; values are committed by `Enter`, `,`, or blur and stored as a comma-separated string in the form state
 - common `String` widget variants:
   - `URL`
@@ -589,6 +616,7 @@ Examples:
   - `Monetary`
   - `Percentage`
   - `Slider`
+- identifier exception (display mode / table cells): numeric fields named `id` or ending in `Id` render as plain strings — no digit grouping (`1234567`, not `1,234,567`), and no float parsing so 64-bit snowflake ids keep full precision. Declaring explicit `formatOptions` or a numeric widget (`Monetary` / `Percentage` / `Slider`) opts the field back into numeric formatting.
 
 ```tsx
 <Field fieldName="amount" widgetType="Monetary" />
@@ -646,6 +674,10 @@ Range bounds — `Date` and `DateTime` fields accept a `dateOptions={{ min, max 
   dateOptions={{ min: { fromField: "hireDate" } }}
 />
 ```
+
+`fromField` names a **sibling field**, not a form path — write the plain field name at any nesting depth. Inside a nested editor (a `OneToOne` inline `formView`, an inline-edit row) siblings are registered on the parent form under a prefix, and the bound resolves through the same `resolveDependencyPath` that `dependsOn` / `FilterCondition` dependencies use, so `{ fromField: "effectiveFrom" }` finds `subscriptionId.effectiveFrom` on its own. Do **not** hand-qualify the path — a prefixed name would be prefixed twice.
+
+> An unresolvable `fromField` is **silent**: the bound comes back `undefined` and the picker reads that as "no constraint", so the field accepts anything with no warning. Nested usage went unnoticed for exactly this reason until a regression test pinned it — when a cross-field bound appears to do nothing, check that the referenced field name is a real sibling before looking anywhere else.
 
 See [Widgets — Date / DateTime range bounds](./widgets#date--datetime--range-bounds-dateoptions) for the full `DateBound` semantics and `DateTime` granularity behavior.
 
