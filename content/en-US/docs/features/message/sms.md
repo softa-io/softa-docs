@@ -108,7 +108,7 @@ POST /SmsTemplate/createOne
   "code": "VERIFY_CODE",
   "name": "Verification Code",
   "content": "Your verification code is {{ code }}. Valid for {{ minutes }} minutes.",
-  "isEnabled": true
+  "active": true
 }
 ```
 

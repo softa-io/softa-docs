@@ -53,7 +53,7 @@ until save, and Cancel restores the loaded record.
 
 The Preview & Send Test dialog is backed by three id-addressable operations.
 `id` targets the **exact row being edited** — no resolution semantics, no
-`isEnabled` filter, so a disabled template stays fully inspectable and
+active-control filter, so a disabled template stays fully inspectable and
 testable *before* being enabled; `code` resolves within the caller's own
 tier for programmatic callers:
 
@@ -257,7 +257,7 @@ POST /MailTemplate/createOne
   "subject": "Welcome, {{ name }}!",
   "bodyHtml": "<h1>Welcome, {{ name }}</h1><p><a href='{{ activationUrl }}'>Activate</a></p>",
   "bodyMode": "HTML",
-  "isEnabled": true
+  "active": true
 }
 ```
 
@@ -290,7 +290,7 @@ against the send log in a single batched `IN()` query; the matched
 - Scheduled fetch is optional and requires `cron-starter`
 - The current consumer listens to `mq.topics.cron-task.topic`
 - When it receives a cron whose name starts with `mail-fetch`, it polls every
-  receive config with `isEnabled = true` — across all tenants; each config's
+  receive config with `active = true` — across all tenants; each config's
   fetch runs inside that config's tenant context
 - Cadence is governed by a single global `mail-fetch` cron registered in
   `cron-starter`; per-inbox cadence is not supported in this module

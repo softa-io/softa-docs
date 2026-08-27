@@ -43,7 +43,7 @@ scope = PLATFORM      -> 平台层模板（tenant_id = -1）
 
 #### 模板工具（编辑器端点）
 
-Preview & Send Test 弹窗背后是三个可按 id 寻址的操作。`id` 指向**正在编辑的那一行**——无解析语义、无 `isEnabled` 过滤，禁用模板在启用之前即可完整检视与试发；`code` 在调用方自身层级内解析，供程序化调用方使用：
+Preview & Send Test 弹窗背后是三个可按 id 寻址的操作。`id` 指向**正在编辑的那一行**——无解析语义、无 active 控制过滤，禁用模板在启用之前即可完整检视与试发；`code` 在调用方自身层级内解析，供程序化调用方使用：
 
 - `GET /api/mail/templates/variables?id=|code=`——模板的去重输入 token，按首次出现排序并为输入 UI 分类：`VARIABLE`（简单名，含 unicode 与点号路径 → 一行文本输入）、`COLLECTION`（Pebble `{% for %}` 的迭代集合 → JSON 值输入）、`EXPRESSION`（操作数以原始 JSON 提供）、`RESERVED_FIELD`（服务端解析）。模板局部名——循环变量、Pebble 内建 `loop`、`{% set %}` 目标——一律剔除。
 - `POST /api/mail/templates/preview`——按给定变量渲染 subject / bodyHtml / bodyText，不发送。
@@ -200,7 +200,7 @@ POST /MailTemplate/createOne
   "subject": "Welcome, {{ name }}!",
   "bodyHtml": "<h1>Welcome, {{ name }}</h1><p><a href='{{ activationUrl }}'>Activate</a></p>",
   "bodyMode": "HTML",
-  "isEnabled": true
+  "active": true
 }
 ```
 
@@ -229,7 +229,7 @@ mailReceiveService.markAsRead(List.of(id1, id2, id3));
 
 - 定时拉取为可选，需要 `cron-starter`
 - 当前消费者监听 `mq.topics.cron-task.topic`
-- 收到名称以 `mail-fetch` 开头的 cron 时，轮询每个 `isEnabled = true` 的接收配置——跨所有租户；每个配置的拉取在该配置的租户上下文中运行
+- 收到名称以 `mail-fetch` 开头的 cron 时，轮询每个 `active = true` 的接收配置——跨所有租户；每个配置的拉取在该配置的租户上下文中运行
 - 节奏由 `cron-starter` 中注册的单一全局 `mail-fetch` cron 控制；本模块不支持每收件箱独立节奏
 
 ### 邮件状态参考

@@ -70,6 +70,10 @@
 
 多租户禁用时，无过滤或盖章，一切表现为单租户。
 
+### 启用 / 禁用（框架 active 控制）
+
+七个配置/模板模型（`MailTemplate`、`MailSendServerConfig`、`MailReceiveServerConfig`、`SmsTemplate`、`SmsProviderConfig`、`SmsProviderRegion`、`SmsTemplateProviderBinding`）声明 `@Model(activeControl = true)`，使用框架的 `active` 字段——不再有手写的 `isEnabled` 开关，服务层也不再手写 `active = true` 条件：`WhereBuilder` 会把它追加到每一次 FlexQuery 读取上，因此解析、调度与列表界面的过滤保持一致，新写的查询也不可能漏掉它。禁用会让该行从所有读取中退场但**不删除**——这正是被发送记录引用的行所需要的。因此禁用行会离开默认列表视图——七个管理页面都做成了两个页签的 MultiView：**Active**（框架默认）与 **All**（`active IN (true, false)`，因为点名了该字段从而抑制自动追加）；没有第二个页签，禁用一行会让它从自己的管理页面消失。列头对 `active` 的筛选同理，可用于临时查询。必须触达禁用行的读取使用 `FilterControl.bypassActiveControl()`：按 id 的重放（`findVisibleById`，因此禁用配置绝不会把在途重试变成 `CONFIG_NOT_RESOLVABLE`）、编辑器工具（`resolveAny`——模板启用前即可预览与提取变量）、平台行写入探针，以及默认项降级。普通 `getById` 无需绕过：按 id 查找从不携带该过滤。
+
 ### 月度发送配额
 
 `TenantMessageQuota`（刻意**非** `multiTenant`——平台拥有的、关于租户的登记表，只能从平台作用域写入）为每个租户设置月度邮件/短信接受上限。执行点在**接受时**（`MonthlyQuotaGuard`）：超额发送同步拒绝——这是商业上限而非速率控制——投递重试不再触碰计数。计数桶跟随发送的 scope：`PLATFORM` 发送消耗平台自己的 `tenantId = -1` 行（设一个非常大的值即可，它的存在是为了兜住失控或恶意的批量发送）；缺行时回退到 `softa.message.quota.mail-monthly-default` / `sms-monthly-default`（null = 不限——账本仍会累加以便报表）。计数落在**数据库**：每桶每日历月一行 `TenantMessageUsage`，通过 ORM 乐观锁 CAS（`versionLock`，每次尝试独立 `REQUIRES_NEW` 事务）做检查并自增。没有重置任务——新月份自然开新行——行也永不过期，因此每租户的历史消耗就是一次普通模型查询，且每行快照了当时生效的上限。`GET /TenantMessageQuota/usage?tenantId=` 返回某个桶的用量与当前解析上限（租户会话只能查自己的桶）。每配置的 `dailySendLimit` / `rateLimitPerMinute` 属于另一条轴（投递时的基础设施保护），保持不变。
