@@ -21,7 +21,30 @@ logging:
 
 ## 日志采集
 
-softa 应用把日志写到 stdout，采集交给平台。纯 Docker 下可选择本地轮转（`json-file` 驱动配 `max-size`/`max-file`），或把日志驱动指向你的平台（例如 CloudWatch 用 `awslogs` 驱动——主机上零 agent）；Kubernetes 下由集群的日志代理（Fluent Bit DaemonSet 或同类）自动收集 stdout。开启 ECS 格式后，接收方即可按字段查询。
+softa 应用把日志写到 stdout，采集交给平台。Kubernetes 下由集群的日志代理（Fluent Bit DaemonSet 或同类）自动收集 stdout。纯 Docker 下需要自己配置日志驱动，其中两个默认值是值得知道的陷阱：
+
+* **`json-file` 不轮转。** 默认驱动会一直写到磁盘写满。务必为每个容器钉上 `max-size` / `max-file`，本地开发栈同样如此。
+* **远程驱动默认阻塞。** 任何把日志送出主机的驱动（`awslogs`、`gelf`、`fluentd` 等），Docker 的默认投递模式都是 *blocking*：目标端变慢或网络抖动时，容器写 stdout 会被阻塞，进而拖住应用线程。请设置 `mode: non-blocking` 并配 `max-buffer-size`。这个权衡是明确的——缓冲写满时会丢弃日志行——丢几行远好于拖停请求处理。
+
+```yaml
+# Local / development: rotate.
+logging:
+  driver: json-file
+  options: { max-size: "50m", max-file: "5" }
+```
+
+```yaml
+# Shipping off-host (CloudWatch shown; the mode/buffer part applies to any remote driver).
+logging:
+  driver: awslogs
+  options:
+    mode: non-blocking
+    max-buffer-size: 4m
+    awslogs-region: <region>
+    awslogs-group: <group>
+```
+
+开启 ECS 格式后，接收方即可按字段查询。注意容器日志驱动只搬运*容器 stdout*——主机级内容（系统消息、容器运行时自身的日志、内核 OOM killer 输出）需要主机侧 agent；缺了它，恰恰是"容器无声无息地死掉"这类故障的盲区。
 
 ## 错误追踪与链路追踪（sentry-starter）
 

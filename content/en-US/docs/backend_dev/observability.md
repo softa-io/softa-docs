@@ -21,7 +21,30 @@ Multi-line stack traces fold into the `error.stack_trace` field and MDC entries 
 
 ## Log collection
 
-softa applications log to stdout and leave collection to the platform. Under plain Docker, either rotate locally (`json-file` driver with `max-size`/`max-file`) or point the logging driver at your platform (e.g. `awslogs` for CloudWatch — zero agents on the host); on Kubernetes, the cluster's log agent (Fluent Bit DaemonSet or equivalent) picks up stdout automatically. With ECS format enabled, whatever platform receives the stream can query by field.
+softa applications log to stdout and leave collection to the platform. On Kubernetes, the cluster's log agent (Fluent Bit DaemonSet or equivalent) picks up stdout automatically. Under plain Docker, you configure the logging driver — and two defaults there are traps worth knowing:
+
+* **`json-file` does not rotate.** The default driver keeps writing until the disk is full. Always pin `max-size` / `max-file`, on every container, including local development stacks.
+* **Remote drivers block by default.** With any driver that ships off-host (`awslogs`, `gelf`, `fluentd`, ...), Docker's default delivery mode is *blocking*: if the destination slows down or the network hiccups, the container's write to stdout blocks and takes application threads with it. Set `mode: non-blocking` with a `max-buffer-size`. The trade-off is explicit — a full buffer drops log lines — and losing lines is preferable to stalling request handling.
+
+```yaml
+# Local / development: rotate.
+logging:
+  driver: json-file
+  options: { max-size: "50m", max-file: "5" }
+```
+
+```yaml
+# Shipping off-host (CloudWatch shown; the mode/buffer part applies to any remote driver).
+logging:
+  driver: awslogs
+  options:
+    mode: non-blocking
+    max-buffer-size: 4m
+    awslogs-region: <region>
+    awslogs-group: <group>
+```
+
+With ECS format enabled, whatever platform receives the stream can query by field. Note that a container logging driver only ever moves *container stdout* — host-level material (system messages, the container runtime's own log, kernel OOM-killer output) needs a host agent, and its absence is a blind spot for exactly the incidents where a container dies without explaining itself.
 
 ## Error tracking and tracing (sentry-starter)
 

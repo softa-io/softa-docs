@@ -71,12 +71,12 @@ public enum CustomerTier {
 | `displayName` | String[] | `{}` | `displayName` | 列表显示默认值 |
 | `searchName` | String[] | `{}` | `searchName` | 搜索字段默认值 |
 | `defaultOrder` | String[] | `{}` | `defaultOrder` | 如 `"createdTime:desc"` |
-| `softDelete` | boolean | `false` | `softDelete` | |
-| `activeControl` | boolean | `false` | `activeControl` | 添加 `active` 门控列；与 `timeline` 互斥（启动时拒绝） |
+| `softDelete` | boolean | `false` | `softDelete` | 要求类上有 `deleted` 字段；每次读取追加 `deleted = false`（可用 `FilterControl.bypassSoftDelete()` 绕过），起始值 `false` 由元数据层物化进 `sys_field.default_value`，因此列 DDL 带 `DEFAULT FALSE` |
+| `activeControl` | boolean | `false` | `activeControl` | 要求类上有 `active` 字段；每次读取追加 `active = true`——除非调用方自己的 filters 点名了 `active`（或设置了 `FilterControl.bypassActiveControl()`），因此禁用会让行从读取中退场但不删除；起始值 `true` 由元数据层物化进 `sys_field.default_value`，因此列 DDL 带 `DEFAULT TRUE`。与 `timeline` 互斥（启动时拒绝） |
 | `timeline` | boolean | `false` | `timeline` | 生效日期行（见 Timeline Model）；与 `activeControl` 互斥——期间状态建为版本化业务字段，终结走 `setEndDate` |
 | `idStrategy` | `IdStrategy` | `DB_AUTO_ID` | `idStrategy` | |
 | `storageType` | `StorageType` | `RDBMS` | `storageType` | |
-| `versionLock` | boolean | `false` | `versionLock` | 乐观锁列 |
+| `versionLock` | boolean | `false` | `versionLock` | 乐观锁列；要求类上有 `version` 字段，每次插入自动盖章，起始值 `0` 物化进 `sys_field.default_value`，因此列 DDL 带 `DEFAULT 0` |
 | `multiTenant` | boolean | `false` | `multiTenant` | 要求类上有 `tenantId` 字段 |
 | `copyable` | boolean | `true` | `copyable` | `false` ⇒ 复制 API 拒绝该模型；UI 隐藏 Duplicate |
 | `projection` | boolean | `false` | `projection` | `true` ⇒ 只读模型，映射到一张**不归它所有**的表（另一模型的表，或外部创建的表，如 BI 管线产物）。永不生成 DDL；写 API 拒绝；声明 `@Index` 在启动时被拒；仅限 RDBMS。每个非投影 RDBMS 模型独占其表——同一 `tableName` 出现两个 owner 会启动失败 |

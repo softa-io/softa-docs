@@ -85,12 +85,12 @@ public enum CustomerTier {
 | `displayName` | String[] | `{}` | `displayName` | list-display defaults |
 | `searchName` | String[] | `{}` | `searchName` | search-field defaults |
 | `defaultOrder` | String[] | `{}` | `defaultOrder` | e.g. `"createdTime:desc"` |
-| `softDelete` | boolean | `false` | `softDelete` | |
-| `activeControl` | boolean | `false` | `activeControl` | adds `active` gate column; mutually exclusive with `timeline` (boot-rejected) |
+| `softDelete` | boolean | `false` | `softDelete` | requires a `deleted` field; every read appends `deleted = false` (bypass via `FilterControl.bypassSoftDelete()`), and the starting value `false` is materialized into `sys_field.default_value` so the column DDL carries `DEFAULT FALSE` |
+| `activeControl` | boolean | `false` | `activeControl` | requires an `active` field; every read appends `active = true` unless the caller's own filters name `active` (or `FilterControl.bypassActiveControl()` is set), so disabling retires a row from reads without deleting it; the starting value `true` is materialized into `sys_field.default_value` so the column DDL carries `DEFAULT TRUE`. Mutually exclusive with `timeline` (boot-rejected) |
 | `timeline` | boolean | `false` | `timeline` | effective-dated rows (see Timeline Model); mutually exclusive with `activeControl` — express period state as a versioned business field and terminate via `setEndDate` |
 | `idStrategy` | `IdStrategy` | `DB_AUTO_ID` | `idStrategy` | |
 | `storageType` | `StorageType` | `RDBMS` | `storageType` | |
-| `versionLock` | boolean | `false` | `versionLock` | optimistic-lock column |
+| `versionLock` | boolean | `false` | `versionLock` | optimistic-lock column; requires a `version` field, stamped onto every insert, with the starting value `0` materialized into `sys_field.default_value` so the column DDL carries `DEFAULT 0` |
 | `multiTenant` | boolean | `false` | `multiTenant` | requires a `tenantId` field on the class |
 | `copyable` | boolean | `true` | `copyable` | `false` ⇒ copy APIs reject the model; UI hides Duplicate |
 | `projection` | boolean | `false` | `projection` | `true` ⇒ read-only model over a table it does NOT own (another model's table, or one created externally, e.g. by a BI pipeline). No DDL is ever generated for it; write APIs reject it; `@Index` on it is boot-rejected; RDBMS only. Every non-projection RDBMS model owns its table exclusively — two owners on one `tableName` fail at boot |
