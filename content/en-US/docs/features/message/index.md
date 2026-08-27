@@ -75,11 +75,10 @@ via the readiness probe than to silently fan out under partial failure.
 All messaging business tables (`mail_*`, `sms_*`, `inbox_notification`) are
 `multiTenant` models: when the platform's `system.enable-multi-tenancy` is on,
 reads are isolated to the caller's tenant and writes are auto-stamped by the
-ORM. `tenant_id = 0` rows form the **platform tier**, shared by every tenant:
+ORM. `tenant_id = -1` rows (`BaseConstant.PLATFORM_TENANT_ID`) form the **platform tier** — owned by the platform operator and invisible to tenants. The two tiers are fully separate namespaces; there is no overlay:
 
-- Config/template/routing resolution is **overlay-style**: the caller's own
-  rows plus the platform tier (tenant default → platform default; tenant
-  template → platform template; routing = union of both, by priority).
+- **Templates are copied, not shared.** Platform templates flagged `seedToTenants = true` are duplicated into every newly provisioned tenant by `MessageTemplateSeeder` (tenant-provisioned MQ listener, seeder key `message-templates`, idempotent per `(tenant, code)`; a `rebuild` provisioning replaces the copies). From then on the tenant owns and edits its copies freely; platform edits do NOT propagate. Send-time resolution is tier-pure: `scope = TENANT` reads the current scope's own rows only, `scope = PLATFORM` reads the platform tier only.
+- **Server/provider configs are invisible to tenants.** Tenants see and pin only their own configs; the platform tier is reached solely by the dispatchers' silent fallback (`@CrossTenant`) when a tenant has none — mail send/receive fall back to the platform default, and SMS routing falls back **per country** (tiers never interleave within one country).
 - Background jobs are cross-tenant scans that execute per-record in the owning
   tenant's context: the scheduled mail fetch runs each receive config inside
   its config's tenant, and the zombie sweeper revives each stuck record inside
@@ -88,15 +87,17 @@ ORM. `tenant_id = 0` rows form the **platform tier**, shared by every tenant:
   tables; tenant identity travels inside the message payload
   (`recordId / tenantId / traceId`) and is restored by the consumer.
 
-The overlay also has a **management surface** (mail side):
+Two more moving parts round the model out:
 
-- `GET /MailTemplate/effectiveList` shows a tenant its own templates PLUS the inherited platform tier, one row per `code`, tagged `INHERITED / CUSTOMIZED / OWN`; `POST /MailTemplate/customize?id=` copies a platform template into the tenant scope under the same code (copy-on-write — the override flow never hand-types a code), and deleting the copy reverts to the inherited template.
+- Per-send tier policy: `SendMailDTO.scope` / `SendSmsDTO.scope` / `MailRequestMessage.scope` (`MessageScope.TENANT` default, `PLATFORM` = the platform tier for template, server AND quota bucket — for billing/security/compliance messages). `MailRequestMessage.tenantId` lets the MQ consumer restore the tenant context, so a TENANT-scoped render reaches the tenant's own template and the send record lands in the tenant's books.
 - Platform rows are structurally un-writable from a tenant scope (payload guard, insert stamping, and the tenant-filtered pre-read on update/delete); the mail write endpoints additionally turn that silent no-op into an explanatory `BusinessException`.
-- Two per-row policy flags: `MailTemplate.overridable = false` locks a platform code against tenant customization (send-time resolution then always uses the platform row); `MailSendServerConfig.sharedWithTenants = true` exposes a platform SMTP config to tenant sender pickers and template pinning (`GET /api/mail/senders` lists own + shared-platform configs).
-- Per-send tier policy: `SendMailDTO.scope` / `MailRequestMessage.scope` (`MailScope.OVERLAY` default, `PLATFORM_ONLY` = skip the tenant tier on both the template AND server axes — for billing/security/compliance mail). `MailRequestMessage.tenantId` lets the MQ consumer restore the tenant context, so platform-initiated jobs can opt INTO tenant branding; with no tenant id the render stays platform-tier.
 
 With multi-tenancy disabled, no filtering or stamping occurs and everything
 behaves single-tenant.
+
+### Monthly send quotas
+
+`TenantMessageQuota` (deliberately NOT `multiTenant` — a platform-owned registry ABOUT tenants, writable only from the platform scope) sets per-tenant monthly ceilings for accepted mail/SMS sends. Enforcement is at **acceptance** time in `MonthlyQuotaGuard` (atomic Redis counter per `channel + bucket + month`): an over-quota send is rejected synchronously — a commercial ceiling, not rate limiting — and delivery retries never touch the counter. The bucket follows the send's scope: `PLATFORM` sends draw on the platform's own `tenantId = -1` row (set it very large; it exists to cap runaway or malicious mass sending). Missing rows fall back to `softa.message.quota.mail-monthly-default` / `sms-monthly-default` (null = unlimited; the counter still advances for reporting). `GET /TenantMessageQuota/usage?tenantId=` serves current usage vs resolved limits. The per-config `dailySendLimit` / `rateLimitPerMinute` windows are a different axis (delivery-time infrastructure protection) and stay unchanged.
 
 ### Async delivery (the only delivery model)
 

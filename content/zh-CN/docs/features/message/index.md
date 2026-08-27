@@ -56,20 +56,23 @@
 
 ### 多租户
 
-所有消息业务表（`mail_*`、`sms_*`、`inbox_notification`）为 `multiTenant` 模型：当平台 `system.enable-multi-tenancy` 开启时，读取隔离于调用方租户，写入由 ORM 自动盖章。`tenant_id = 0` 行构成**平台层**，由所有租户共享：
+所有消息业务表（`mail_*`、`sms_*`、`inbox_notification`）为 `multiTenant` 模型：当平台 `system.enable-multi-tenancy` 开启时，读取隔离于调用方租户，写入由 ORM 自动盖章。`tenant_id = -1` 行（`BaseConstant.PLATFORM_TENANT_ID`）构成**平台层**——归平台运营方所有，对租户不可见。两个层级是完全分离的命名空间，不存在叠加：
 
-- 配置/模板/路由解析为**叠加式**：调用方自身行 + 平台层（租户默认 → 平台默认；租户模板 → 平台模板；路由 = 两者并集，按 priority）。
+- **模板是复制的，不是共享的。** 标记 `seedToTenants = true` 的平台模板由 `MessageTemplateSeeder`（tenant-provisioned MQ 监听器，seeder key `message-templates`，按 `(tenant, code)` 幂等；`rebuild` 供给会替换副本）复制进每个新开通的租户。此后租户自由拥有并编辑自己的副本；平台的修改**不会**传播。发送时的解析层级纯净：`scope = TENANT` 只读当前作用域自己的行，`scope = PLATFORM` 只读平台层。
+- **服务器/提供商配置对租户不可见。** 租户只能看到并 pin 自己的配置；平台层只通过调度器的静默兜底（`@CrossTenant`）在租户没有配置时被触达——邮件收发兜底到平台默认，短信路由**按国家**兜底（同一国家内两层永不交错）。
 - 后台任务为跨租户扫描，在每条记录所属租户上下文中执行：定时邮件拉取在每个接收配置的租户内运行，僵尸清扫器在每个卡住记录的租户内恢复。
 - 事务性 outbox 和死信存储为共享基础设施表；租户身份在消息 payload（`recordId / tenantId / traceId`）中传递，由消费者恢复。
 
-叠加模型还提供**管理面**（邮件侧）：
+模型还有两个配套件：
 
-- `GET /MailTemplate/effectiveList` 向租户展示其自有模板加上继承的平台层，每个 `code` 一行，标记为 `INHERITED / CUSTOMIZED / OWN`；`POST /MailTemplate/customize?id=` 将平台模板以相同 code 复制进租户作用域（写时复制——覆盖流程无需手填 code），删除副本即回退到继承的模板。
+- 每次发送的层级策略：`SendMailDTO.scope` / `SendSmsDTO.scope` / `MailRequestMessage.scope`（默认 `MessageScope.TENANT`；`PLATFORM` = 模板、服务器与配额桶全部走平台层——用于账单/安全/合规消息）。`MailRequestMessage.tenantId` 让 MQ 消费者恢复租户上下文，TENANT 作用域的渲染因此能命中租户自己的模板，发送记录也落入租户名下。
 - 平台行在租户作用域内结构性不可写（payload 校验、插入盖章、更新/删除的租户过滤预读）；邮件写端点还会把这种静默 no-op 转为带解释的 `BusinessException`。
-- 两个行级策略开关：`MailTemplate.overridable = false` 锁定平台 code，禁止租户定制（发送时解析始终使用平台行）；`MailSendServerConfig.sharedWithTenants = true` 将平台 SMTP 配置暴露给租户的发件人选择器与模板 pin（`GET /api/mail/senders` 列出自有 + 平台共享配置）。
-- 每次发送的层级策略：`SendMailDTO.scope` / `MailRequestMessage.scope`（默认 `MailScope.OVERLAY`，`PLATFORM_ONLY` = 在模板与服务器两条轴上都跳过租户层——用于账单/安全/合规邮件）。`MailRequestMessage.tenantId` 让 MQ 消费者恢复租户上下文，平台发起的任务因此可以选择套用租户品牌；不带租户 id 时渲染保持平台层。
 
 多租户禁用时，无过滤或盖章，一切表现为单租户。
+
+### 月度发送配额
+
+`TenantMessageQuota`（刻意**非** `multiTenant`——平台拥有的、关于租户的登记表，只能从平台作用域写入）为每个租户设置月度邮件/短信接受上限。执行点在**接受时**（`MonthlyQuotaGuard`，按 `channel + 桶 + 月` 的 Redis 原子计数器）：超额发送同步拒绝——这是商业上限而非速率控制——投递重试不再触碰计数器。计数桶跟随发送的 scope：`PLATFORM` 发送消耗平台自己的 `tenantId = -1` 行（设一个非常大的值即可，它的存在是为了兜住失控或恶意的批量发送）。缺行时回退到 `softa.message.quota.mail-monthly-default` / `sms-monthly-default`（null = 不限；计数器仍会累加以便报表）。`GET /TenantMessageQuota/usage?tenantId=` 返回当月用量与解析后的上限。每配置的 `dailySendLimit` / `rateLimitPerMinute` 属于另一条轴（投递时的基础设施保护），保持不变。
 
 ### 异步投递（唯一投递模型）
 

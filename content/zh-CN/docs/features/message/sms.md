@@ -8,7 +8,7 @@
 
 ```text
 1. 当前租户默认 SMS 提供商
-2. 平台默认 SMS 提供商（`tenant_id = 0`）
+2. 平台默认 SMS 提供商（`tenant_id = -1`）——仅当租户没有自己的默认时；两层永不交错
 3. 若均不可用则 BusinessException
 ```
 
@@ -16,12 +16,11 @@
 
 #### 模板解析
 
-短信模板按 `code` 解析，带平台回退：
+短信模板按 `code` 在发送 scope 指定的层级内解析——无跨层回退：
 
 ```text
-租户模板（code + enabled）
-  -> 平台模板（tenant_id = 0）
-  -> BusinessException
+scope = TENANT（默认） -> 当前作用域自己的模板（code + enabled）
+scope = PLATFORM      -> 平台层模板（tenant_id = -1）
 ```
 
 模板占位符使用统一的 Softa 语法：`{{ variable }}`。
@@ -181,7 +180,7 @@ parseRegion(+8613800138000) -> "CN"
 
 #### 租户范围
 
-`sms_provider_region.tenant_id` 与其他租户表相同规则：`0` 为平台级路由（所有租户共享）；`>0` 为每租户覆盖。路由读取为平台叠加：调度器看到平台行与调用方租户行的并集，按 priority 交错。
+`sms_provider_region.tenant_id` 与其他租户表相同规则：`-1` 为平台层路由（对租户不可见）；`>0` 为每租户行。路由读取按国家且租户优先：对收件人所在国家，调度器优先使用租户自己的行；该国家租户未配置时才回退到平台层的行——同一国家内两层永不交错。
 
 #### 模板级提供商绑定
 

@@ -8,7 +8,7 @@ SMS sending uses the following default lookup order:
 
 ```text
 1. Current tenant default SMS provider
-2. Platform default SMS provider (`tenant_id = 0`)
+2. Platform default SMS provider(s) (`tenant_id = -1`) — only when the tenant has none; the tiers never interleave
 3. BusinessException if nothing is available
 ```
 
@@ -21,9 +21,8 @@ is used. Provider configs are cached in Redis (5 min TTL) and evicted on update
 SMS templates are resolved by `code` with a platform fallback:
 
 ```text
-tenant template (code + enabled)
-  -> platform template (tenant_id = 0)
-  -> BusinessException
+scope = TENANT (default) -> the current scope's own template (code + enabled)
+scope = PLATFORM         -> the platform-tier template (tenant_id = -1)
 ```
 
 Template placeholders use the unified Softa syntax: `{{ variable }}`.
@@ -217,10 +216,7 @@ Dispatch behaviour:
 
 #### Tenant scoping
 
-`sms_provider_region.tenant_id` follows the same rule as other tenant tables:
-`0` for platform-level routing (shared by all tenants); `>0` for per-tenant
-overrides. Routing reads are platform-overlay: the dispatcher sees the union
-of platform rows and the caller's own tenant rows, interleaved by priority.
+`sms_provider_region.tenant_id` follows the same rule as other tenant tables: `-1` for platform-tier routing (invisible to tenants); `>0` for per-tenant rows. Routing reads are per-country and tenant-first: for the recipient's country the dispatcher uses the tenant's own rows when any exist, otherwise the platform's rows for that country — the tiers never interleave within one country.
 
 #### Template-level provider bindings
 
