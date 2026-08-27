@@ -48,7 +48,7 @@
 | 依赖 | 使用者 | 失败行为 | 运维期望 |
 |---|---|---|---|
 | Database | 所有路径（记录、outbox、框架 versionLock） | 操作抛出；调用方看到 5xx | HA 数据库（复制 MySQL / 托管 PG）；已应用迁移。 |
-| Redis | `RateLimiter`（每租户 + 每配置配额）、`MailConfigCache`、发送配额计数器 | 操作抛出；调用方看到 5xx | Sentinel 或 Cluster 部署。K8s `readinessProbe` 应包含 `/actuator/health/redis`，以便 Redis 不可达时负载均衡器分流。 |
+| Redis | `RateLimiter`（每配置的投递速率窗口）、`MailConfigCache` | 操作抛出；调用方看到 5xx | Sentinel 或 Cluster 部署。K8s `readinessProbe` 应包含 `/actuator/health/redis`，以便 Redis 不可达时负载均衡器分流。 |
 | Pulsar broker | `OutboxPublisher`（发布）、消费者（订阅） | Outbox 行保持 `NEW`；发布者指数退避重试；最终在 `MAX_PUBLISH_ATTEMPTS=10` 后标记 `DEAD`。 | HA 集群。失败不阻塞业务写入——outbox 吸收间隙。 |
 | SMTP / SMS provider | 外发发送 | 每条记录失败；由 `ErrorClassifier` 分类；指数退避重试（`ExponentialBackoffPolicy`）。 | 将提供商侧速率限制配置在提供商配额以下。 |
 
@@ -58,7 +58,7 @@
 
 所有消息业务表（`mail_*`、`sms_*`、`inbox_notification`）为 `multiTenant` 模型：当平台 `system.enable-multi-tenancy` 开启时，读取隔离于调用方租户，写入由 ORM 自动盖章。`tenant_id = -1` 行（`BaseConstant.PLATFORM_TENANT_ID`）构成**平台层**——归平台运营方所有，对租户不可见。两个层级是完全分离的命名空间，不存在叠加：
 
-- **模板是复制的，不是共享的。** 标记 `seedToTenants = true` 的平台模板由 `MessageTemplateSeeder`（tenant-provisioned MQ 监听器，seeder key `message-templates`，按 `(tenant, code)` 幂等；`rebuild` 供给会替换副本）复制进每个新开通的租户。此后租户自由拥有并编辑自己的副本；平台的修改**不会**传播。发送时的解析层级纯净：`scope = TENANT` 只读当前作用域自己的行，`scope = PLATFORM` 只读平台层。
+- **模板按租户种入，不共享。** 每个租户在开通时由**应用**的逐租户种子文件获得自己的模板行（`SysPreDataService.loadPreTenantData`，由应用的 tenant-provisioned seeder 驱动，SysPreData 台账保证幂等与 rebuild 清理）。此后租户自由拥有并编辑自己的行；种子文件的修改**不会**传播到存量租户。平台层只保存 PLATFORM 作用域发送要渲染的模板（账单、安全）；两层都需要的 code（如公开密码重置兜底）在两份种子里各出现一次。发送时的解析层级纯净：`scope = TENANT` 只读当前作用域自己的行，`scope = PLATFORM` 只读平台层。
 - **服务器/提供商配置对租户不可见。** 租户只能看到并 pin 自己的配置；平台层只通过调度器的静默兜底（`@CrossTenant`）在租户没有配置时被触达——邮件收发兜底到平台默认，短信路由**按国家**兜底（同一国家内两层永不交错）。
 - 后台任务为跨租户扫描，在每条记录所属租户上下文中执行：定时邮件拉取在每个接收配置的租户内运行，僵尸清扫器在每个卡住记录的租户内恢复。
 - 事务性 outbox 和死信存储为共享基础设施表；租户身份在消息 payload（`recordId / tenantId / traceId`）中传递，由消费者恢复。
@@ -72,7 +72,7 @@
 
 ### 月度发送配额
 
-`TenantMessageQuota`（刻意**非** `multiTenant`——平台拥有的、关于租户的登记表，只能从平台作用域写入）为每个租户设置月度邮件/短信接受上限。执行点在**接受时**（`MonthlyQuotaGuard`，按 `channel + 桶 + 月` 的 Redis 原子计数器）：超额发送同步拒绝——这是商业上限而非速率控制——投递重试不再触碰计数器。计数桶跟随发送的 scope：`PLATFORM` 发送消耗平台自己的 `tenantId = -1` 行（设一个非常大的值即可，它的存在是为了兜住失控或恶意的批量发送）。缺行时回退到 `softa.message.quota.mail-monthly-default` / `sms-monthly-default`（null = 不限；计数器仍会累加以便报表）。`GET /TenantMessageQuota/usage?tenantId=` 返回当月用量与解析后的上限。每配置的 `dailySendLimit` / `rateLimitPerMinute` 属于另一条轴（投递时的基础设施保护），保持不变。
+`TenantMessageQuota`（刻意**非** `multiTenant`——平台拥有的、关于租户的登记表，只能从平台作用域写入）为每个租户设置月度邮件/短信接受上限。执行点在**接受时**（`MonthlyQuotaGuard`）：超额发送同步拒绝——这是商业上限而非速率控制——投递重试不再触碰计数。计数桶跟随发送的 scope：`PLATFORM` 发送消耗平台自己的 `tenantId = -1` 行（设一个非常大的值即可，它的存在是为了兜住失控或恶意的批量发送）；缺行时回退到 `softa.message.quota.mail-monthly-default` / `sms-monthly-default`（null = 不限——账本仍会累加以便报表）。计数落在**数据库**：每桶每日历月一行 `TenantMessageUsage`，通过 ORM 乐观锁 CAS（`versionLock`，每次尝试独立 `REQUIRES_NEW` 事务）做检查并自增。没有重置任务——新月份自然开新行——行也永不过期，因此每租户的历史消耗就是一次普通模型查询，且每行快照了当时生效的上限。`GET /TenantMessageQuota/usage?tenantId=` 返回某个桶的用量与当前解析上限（租户会话只能查自己的桶）。每配置的 `dailySendLimit` / `rateLimitPerMinute` 属于另一条轴（投递时的基础设施保护），保持不变。
 
 ### 异步投递（唯一投递模型）
 

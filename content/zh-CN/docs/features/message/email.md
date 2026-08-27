@@ -18,7 +18,7 @@
 
 #### 模板解析
 
-邮件模板按 `code` 在发送 scope 指定的层级内解析——两个层级是分离的命名空间，无任何回退（租户在开通时获得模板副本；标记 `seedToTenants` 的平台模板即复制源）：
+邮件模板按 `code` 在发送 scope 指定的层级内解析——两个层级是分离的命名空间，无任何回退（租户在开通时经应用的逐租户种子文件获得自己的模板行）：
 
 ```text
 scope = TENANT（默认） -> 当前作用域自己的模板（code + enabled）
@@ -96,7 +96,6 @@ BusinessException
 | `MailSendServerConfig.sequence` | 多条 `isDefault=true` 时的决胜 + UI 列表顺序 | 故障转移优先级 |
 | `MailReceiveServerConfig.sequence` | Cron 轮询顺序（每个 tick 轮询所有启用配置）+ UI 列表顺序 | 故障转移优先级 |
 | `MailTemplate.preferredServerConfigId` | 每模板首选 SMTP（如营销→SendGrid，事务→Postmark）。写入时做作用域校验：只能 pin 模板自身租户作用域拥有的配置（平台配置对租户不可见） | 硬绑定——DTO 仍可覆盖 |
-| `MailTemplate.seedToTenants` / `SmsTemplate.seedToTenants` | 仅平台行有意义：由 `MessageTemplateSeeder` 复制进每个新开通的租户；未标记的平台模板只服务 PLATFORM 作用域的发送 | 租户行上的任何含义（在租户行上被忽略） |
 
 > 命名说明：字段名为 `sequence`（非 `priority`），因为邮件侧将该值用于 UI / 默认排序，而非重试链。SMS 侧保留 `priority`，因为国家路由和模板绑定都将其用作显式提供商选择顺序。
 

@@ -20,7 +20,7 @@ A send declaring `scope = PLATFORM` skips step 1 and resolves the platform defau
 
 #### Template resolution
 
-Email templates are resolved by `code` within the tier the send's scope names — the tiers are separate namespaces with no fallback (tenants receive their template copies at provisioning; platform templates flagged `seedToTenants` are the copy source):
+Email templates are resolved by `code` within the tier the send's scope names — the tiers are separate namespaces with no fallback (tenants receive their template rows at provisioning from the application's per-tenant seed files):
 
 ```text
 scope = TENANT (default) -> the current scope's own template (code + enabled)
@@ -130,7 +130,6 @@ secondary" behaviour. SMTP failure goes through the normal retry policy
 | `MailSendServerConfig.sequence` | Tie-break among multiple `isDefault=true` rows + UI list order | Failover priority |
 | `MailReceiveServerConfig.sequence` | Cron polling order (all enabled configs polled each tick) + UI list order | Failover priority |
 | `MailTemplate.preferredServerConfigId` | Per-template preferred SMTP (e.g. marketing→SendGrid, transactional→Postmark). Scope-checked on write: only a config owned by the template's own tenant scope (platform configs are invisible to tenants) | Hard binding — DTO can still override |
-| `MailTemplate.seedToTenants` / `SmsTemplate.seedToTenants` | Platform rows only: copied into every newly provisioned tenant by `MessageTemplateSeeder`; unflagged platform templates serve PLATFORM-scoped sends only | Anything on tenant rows (ignored there) |
 
 > Naming note: the field is called `sequence` (not `priority`) because the
 > mail side uses the value for UI / default ordering, not a retry chain. The SMS
