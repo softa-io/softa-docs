@@ -51,12 +51,24 @@ mq:
 ### OSS Configuration
 ```yml
 oss:
-  type: minio
-  endpoint: http://minio:9000
+  type: minio                            # minio | aliyun. A MinIO client also talks to AWS S3.
+  endpoint: http://minio:9000            # the address THIS PROCESS connects to
+  presign-endpoint: http://localhost:9000 # the address the BROWSER resolves; blank falls back to endpoint
   access-key: minioadmin
   secret-key: minioadmin
-  bucket: dev-demo
+  bucket-name: dev-demo
+  region:                                # blank falls back to us-east-1; REQUIRED when pointing at AWS S3
+  sub-dir:                               # optional prefix inside the bucket
+  url-expire-seconds:                    # pre-signed URL lifetime; blank falls back to 300
 ```
+
+The bucket is never created for you — the client uploads straight to it, so a missing bucket surfaces as a `NoSuchBucket` failure on the first upload. Create it as a deployment prerequisite.
+
+#### `endpoint` vs `presign-endpoint`
+
+A pre-signed URL is fetched by the **browser**, so it must carry a host the browser can resolve — which is not always the address the server connects over. A server reaching MinIO at the docker-network hostname `http://minio:9000`, or Aliyun OSS at an ECS-internal `oss-<region>-internal.aliyuncs.com`, would hand the client a URL pointing at that private address; the download then fails in the browser with nothing in the server log.
+
+The host is part of the SigV4 canonical request (`X-Amz-SignedHeaders=host`), so the URL **cannot be rewritten after signing** without invalidating the signature — it has to be signed against the public address from the start. That is what `presign-endpoint` is for: `endpoint` is used to connect, `presign-endpoint` to sign. Leave it blank whenever `endpoint` is already publicly reachable (AWS S3, a public Aliyun endpoint), which is the common case.
 
 ### Storage Policy
 - General path: `modelName/uuid/fileName`

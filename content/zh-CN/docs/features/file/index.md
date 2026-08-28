@@ -55,12 +55,24 @@ mq:
 
 ```yml
 oss:
-  type: minio
-  endpoint: http://minio:9000
+  type: minio                            # minio | aliyun。MinIO 客户端同样可以对接 AWS S3
+  endpoint: http://minio:9000            # 服务端连接用的地址
+  presign-endpoint: http://localhost:9000 # 浏览器解析用的地址；留空则回落 endpoint
   access-key: minioadmin
   secret-key: minioadmin
-  bucket: dev-demo
+  bucket-name: dev-demo
+  region:                                # 留空回落 us-east-1；指向 AWS S3 时必填
+  sub-dir:                               # 可选，桶内再套一层前缀
+  url-expire-seconds:                    # 预签名 URL 有效期；留空回落 300 秒
 ```
+
+桶不会被自动创建 —— 客户端直接向桶上传，桶不存在时表现为第一次上传抛 `NoSuchBucket`。建桶属于部署的前置步骤。
+
+#### `endpoint` 与 `presign-endpoint`
+
+预签名 URL 是交给**浏览器**去取的，因此它携带的 host 必须是浏览器能解析的地址，而这未必是服务端连接用的那个。服务端通过容器网络 hostname `http://minio:9000` 连 MinIO、或通过 ECS 内网端点 `oss-<region>-internal.aliyuncs.com` 连阿里云 OSS 时，交给前端的链接会指向这些内网地址，下载在浏览器侧失败，服务端日志里什么都看不到。
+
+host 参与 SigV4 签名（`X-Amz-SignedHeaders=host`），所以**签完再改域名会让签名失效** —— 必须一开始就按对外地址签。`presign-endpoint` 正是为此而设：`endpoint` 负责连接，`presign-endpoint` 负责签名。`endpoint` 本身已是公网地址时（AWS S3、公网阿里云端点）留空即可，这也是多数情况。
 
 ### 存储路径策略
 
