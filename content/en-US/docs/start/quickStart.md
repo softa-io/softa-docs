@@ -96,13 +96,16 @@ If connecting to an existing ElasticSearch, Pulsar and OSS, modify the environme
       - SPRING_ELASTICSEARCH_INDEX_CHANGELOG=demo_dev_changelog
       - OSS_TYPE=minio
       - OSS_ENDPOINT=http://host.docker.internal:9000
+      - OSS_PRESIGN_ENDPOINT=http://localhost:9000
       - OSS_ACCESS_KEY=minioadmin
       - OSS_SECRET_KEY=minioadmin
-      - OSS_BUCKET=demo-app
+      - OSS_BUCKET_NAME=demo-app
     depends_on:
       - redis
       - mysql
 ```
+
+`OSS_ENDPOINT` is what the **container** connects to Minio with; `OSS_PRESIGN_ENDPOINT` is what the **browser** downloads from — `host.docker.internal` resolves inside containers only, never in the host's browser, so pre-signed URLs have to be signed against `localhost:9000`. See [File Service](../features/file). The `demo-app` bucket is not created for you either — create it in the Minio console first.
 
 #### 3.2.2 Run the Demo Application with Docker Compose
 ```bash

@@ -93,13 +93,16 @@ docker-compose -f deploy/minio/docker-compose.yml up -d
       - SPRING_ELASTICSEARCH_INDEX_CHANGELOG=demo_dev_changelog
       - OSS_TYPE=minio
       - OSS_ENDPOINT=http://host.docker.internal:9000
+      - OSS_PRESIGN_ENDPOINT=http://localhost:9000
       - OSS_ACCESS_KEY=minioadmin
       - OSS_SECRET_KEY=minioadmin
-      - OSS_BUCKET=demo-app
+      - OSS_BUCKET_NAME=demo-app
     depends_on:
       - redis
       - mysql
 ```
+
+`OSS_ENDPOINT` 是**容器**连 Minio 用的，`OSS_PRESIGN_ENDPOINT` 是**浏览器**下载时用的 —— `host.docker.internal` 只在容器内解析得到，宿主机浏览器打不开，所以预签名链接必须按 `localhost:9000` 来签。详见[文件服务](../features/file)。另外 `demo-app` 这个 Bucket 不会自动创建，先在 Minio 控制台建好。
 
 #### 3.2.2 Docker Compose 运行 Demo 应用
 ```bash
