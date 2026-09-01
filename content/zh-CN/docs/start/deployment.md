@@ -95,3 +95,11 @@ docker-compose -f ./deploy/demo-app/docker-compose.yml up -d
 
 # 7. 生产环境
 强烈建议生产环境通过流水线，并使用 Kubernetes 进行容器化部署。
+
+## 7.1 可观测性
+
+Softa 附带的 compose 文件是**开发用编排**：每个都钉了 `json-file` 驱动并配了轮转——Docker 的默认行为是不轮转的，本地栈长跑会把磁盘写满。
+
+服务器上则**不要**按服务钉死驱动。Docker 按驱动校验 option 键名，一个 `logging:` 块无法同时服务开发机和日志平台；要让它条件化就只能再加一个 overlay 文件，而它必须在每次手工 `up` 时被记得——忘掉一次，整个栈就静默退回本地日志。改配 `/etc/docker/daemon.json`：每台主机一处设置，覆盖其上所有容器，没有可忘的东西。任何把日志送出主机的驱动还必须设 `mode: non-blocking` 并配 `max-buffer-size`——默认是 *blocking*，目标端变慢时会阻塞容器的写入，进而拖住应用线程。
+
+应用侧的部分——ECS 结构化 JSON 日志、框架写入 MDC 的 `traceId` / `tenantId` / `userId` 字段、以及经 `sentry-starter` 的错误追踪与链路追踪——见[可观测性](../backend_dev/observability)，那里也给出了两份 `daemon.json` 配方。

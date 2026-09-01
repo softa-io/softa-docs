@@ -23,26 +23,33 @@ logging:
 
 softa 应用把日志写到 stdout，采集交给平台。Kubernetes 下由集群的日志代理（Fluent Bit DaemonSet 或同类）自动收集 stdout。纯 Docker 下需要自己配置日志驱动，其中两个默认值是值得知道的陷阱：
 
-* **`json-file` 不轮转。** 默认驱动会一直写到磁盘写满。务必为每个容器钉上 `max-size` / `max-file`，本地开发栈同样如此。
-* **远程驱动默认阻塞。** 任何把日志送出主机的驱动（`awslogs`、`gelf`、`fluentd` 等），Docker 的默认投递模式都是 *blocking*：目标端变慢或网络抖动时，容器写 stdout 会被阻塞，进而拖住应用线程。请设置 `mode: non-blocking` 并配 `max-buffer-size`。这个权衡是明确的——缓冲写满时会丢弃日志行——丢几行远好于拖停请求处理。
+* **`json-file` 不轮转。** 默认驱动会一直写到磁盘写满。务必钉上 `max-size` / `max-file`，本地开发栈同样如此。
+* **远程驱动默认阻塞。** 任何把日志送出主机的驱动（`awslogs`、`gelf`、`fluentd` 等），Docker 的投递模式都是 *blocking*：目标端变慢或网络抖动时，容器写 stdout 会被阻塞，进而拖住应用线程。请设置 `mode: non-blocking` 并配 `max-buffer-size`。这个权衡是明确的——缓冲写满时会丢弃日志行——丢几行远好于拖停请求处理。
 
-```yaml
-# Local / development: rotate.
-logging:
-  driver: json-file
-  options: { max-size: "50m", max-file: "5" }
+**驱动本身建议配在 daemon 而非 compose 文件里。** 按服务钉死的驱动无法条件化：Docker 按驱动校验 option 键名，`json-file` 的 `max-size` 与 `awslogs` 的 `awslogs-group` 不能共存于同一个 `logging:` 块。要让一份 compose 同时服务开发机和服务器，就只能再加一个 overlay 文件，而它必须在每次手工 `up` 时被记得——忘掉一次，整个栈就静默退回本地日志。改配 `/etc/docker/daemon.json` 则是每台主机一处设置，覆盖其上所有容器（应用、数据库、消息队列），没有可忘的东西：
+
+```json
+{
+  "log-driver": "json-file",
+  "log-opts": { "max-size": "50m", "max-file": "5" }
+}
 ```
 
-```yaml
-# Shipping off-host (CloudWatch shown; the mode/buffer part applies to any remote driver).
-logging:
-  driver: awslogs
-  options:
-    mode: non-blocking
-    max-buffer-size: 4m
-    awslogs-region: <region>
-    awslogs-group: <group>
+```json
+{
+  "log-driver": "awslogs",
+  "log-opts": {
+    "awslogs-region": "<region>",
+    "awslogs-group": "<group>",
+    "awslogs-create-group": "true",
+    "mode": "non-blocking",
+    "max-buffer-size": "4m",
+    "tag": "{{.Name}}"
+  }
+}
 ```
+
+该设置对 daemon 重启**之后新建**的容器生效；compose 里显式的 `logging:` 块仍然会覆盖它——这正是要点所在：由主机决定时就让 compose 不带日志配置，只有永远不离开开发机的栈才把它钉在 compose 里。
 
 开启 ECS 格式后，接收方即可按字段查询。注意容器日志驱动只搬运*容器 stdout*——主机级内容（系统消息、容器运行时自身的日志、内核 OOM killer 输出）需要主机侧 agent；缺了它，恰恰是"容器无声无息地死掉"这类故障的盲区。
 
@@ -130,9 +137,25 @@ softa:
 
 `send-default-pii` 默认 `false`，持有个人数据的应用应保持如此。异常*消息*仍会进入 Sentry——不要把个人数据写进异常消息（这本来也是好的日志习惯）。sentry.io 服务端的脱敏规则是第二道防线。
 
-### JDBC 追踪的开销
+### JDBC 追踪
 
-开关关闭时不做任何包装——零开销。开启后每次 JDBC 调用多一次代理调用（微秒级；只在循环内打出成千上万条小语句的热点路径才需要关注），且只有被 `traces-sample-rate` 选中的请求才会分配 span 对象。测试环境可放心开启；生产环境视采样率与语句量决定。
+`softa.sentry.jdbc-tracing.enabled=true` 会把每个 `DataSource` bean 包进 P6Spy 代理，代理的语句在执行时向注册的监听器发事件，sentry-jdbc 注册的监听器为每条语句开一个子 span。因为包装点在 `DataSource` bean 上，凡是经 Spring 访问数据库的路径都被覆盖——`JdbcTemplate`、框架内部、以及路由型 `DataSource`（只在最外层包一次，语句不会被记录两遍）。
+
+**只产生 span，不产生日志。** P6Spy 默认启用自带的语句日志模块，会把每条语句追加到 `spy.log` **文件**里。starter 把它关掉（模块列表收窄为核心工厂）：容器内的文件对任何基于 stdout 的日志管道都不可见、不轮转，而且与 ORM 已有的 SQL 日志重复。Sentry 的监听器不受影响——P6Spy 的模块监听器与 ServiceLoader 监听器来自两条独立路径。应用自己配置了 `p6spy.config.modulelist` 时，以应用的配置为准。
+
+**与 ORM 自带 SQL 日志的关系。** softa-orm 经 `ExecuteSqlAspect` 打印 SQL，按请求由 `Context.isDebug()`（`X-Debug` 头）门控。两者互补而非重复：
+
+| | ORM 调试日志 | Sentry JDBC span |
+| --- | --- | --- |
+| 触发 | 每请求，`X-Debug` | 全局开关 + 链路采样 |
+| 层次 | AOP 切 `@ExecuteSql` 方法 | JDBC 驱动层代理 |
+| 内容 | SQL + **参数值** + 耗时 + 执行结果 | SQL 描述 + 耗时，位于请求的 span 树中 |
+| 去向 | SLF4J（WARN）→ stdout | Sentry 事务 |
+| 回答 | "这个请求发了什么 SQL、参数是什么" | "这个请求慢在哪条语句上" |
+
+⚠️ ORM 的日志是 WARN 级，因此不会成为 Sentry **事件**，但会成为同一请求后续错误事件上的**面包屑**——并带着参数值一起。某个请求若带了 `X-Debug`，参数里的个人数据就会这样进入 Sentry，而 `send-default-pii: false` 管不到（该设置只管 cookie、IP 和请求体）。`X-Debug` 是人工排障时才带的头、不是常态，这才是暴露面窄的原因。
+
+**开销。** 开关关闭时不做任何包装——零开销。开启后每次 JDBC 调用多一次代理调用（微秒级；只在循环内打出成千上万条小语句的热点路径才需要关注），且只有被采样选中的请求才会分配 span 对象。测试环境可放心开启；生产环境视采样率与语句量决定。
 
 ### 与前端的分布式链路
 

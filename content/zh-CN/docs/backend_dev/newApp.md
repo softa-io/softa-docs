@@ -89,6 +89,13 @@ Softa 的框架采用分层设计，内核由 `base`、`orm`、`web` 三个模�
 - 统计记录定时任务执行日志和耗时统计
 - 支持 Leader 选举和集群部署
 
+### 2.8 `sentry-starter` 错误追踪与链路追踪模块
+将异常与性能数据上报到 [Sentry](https://sentry.io)：
+- 每个事件和事务自动带上该请求的 `trace_id` / `tenant_id` / `user_id` 标签，问题可按租户过滤，并能与对应的日志行互查。
+- 以 ERROR 级别记录且带异常的日志会成为 Sentry 事件——这是与 `WebExceptionHandler` 配合的捕获通道（它自己兜住了所有异常）。
+- 可选的按语句 JDBC span，默认关闭，关闭时零开销。
+- 未配置 DSN 时 SDK 完全禁用，不使用 Sentry 的环境引入该依赖没有任何代价。详见[可观测性](./observability)。
+
 ## 3 创建一个新应用
 通过组合不同的 starter，可以快速创建一个功能丰富的新应用，只需要在 `pom.xml` 文件中添加相应的依赖即可。如以下内容为`demo-app`的依赖项，它依赖了元数据模块、ES 模块和文件处理模块。
 ```xml

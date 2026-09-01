@@ -92,6 +92,13 @@ Provides the ability to define and schedule tasks:
 - Logs execution details and time statistics for tasks.
 - Supports leader election and cluster deployments.
 
+### 2.8 `sentry-starter` Error Tracking and Tracing Module
+Reports exceptions and performance data to [Sentry](https://sentry.io):
+- Every event and transaction is tagged with the request's `trace_id` / `tenant_id` / `user_id`, so issues can be filtered per tenant and cross-referenced with the matching log lines.
+- ERROR-level logs carrying a throwable become Sentry events — the capture channel that works with `WebExceptionHandler`, which handles every exception itself.
+- Optional per-statement JDBC spans, off by default and free when off.
+- Fully disabled until a DSN is configured, so the dependency costs nothing in environments that do not use Sentry. See [Observability](./observability).
+
 ## 3 Creating a New Application
 
 By combining different starters, you can quickly create a feature-rich application. Simply add the required dependencies in the `pom.xml` file. Below is an example for the `demo-app` that depends on the metadata, ES, and file handling modules:

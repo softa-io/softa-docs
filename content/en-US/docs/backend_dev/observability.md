@@ -21,30 +21,37 @@ Multi-line stack traces fold into the `error.stack_trace` field and MDC entries 
 
 ## Log collection
 
-softa applications log to stdout and leave collection to the platform. On Kubernetes, the cluster's log agent (Fluent Bit DaemonSet or equivalent) picks up stdout automatically. Under plain Docker, you configure the logging driver — and two defaults there are traps worth knowing:
+softa applications log to stdout and leave collection to the platform. On Kubernetes, the cluster's log agent (Fluent Bit DaemonSet or equivalent) picks up stdout automatically. Under plain Docker you configure the log driver yourself, and two of its defaults are traps worth knowing:
 
-* **`json-file` does not rotate.** The default driver keeps writing until the disk is full. Always pin `max-size` / `max-file`, on every container, including local development stacks.
-* **Remote drivers block by default.** With any driver that ships off-host (`awslogs`, `gelf`, `fluentd`, ...), Docker's default delivery mode is *blocking*: if the destination slows down or the network hiccups, the container's write to stdout blocks and takes application threads with it. Set `mode: non-blocking` with a `max-buffer-size`. The trade-off is explicit — a full buffer drops log lines — and losing lines is preferable to stalling request handling.
+* **`json-file` does not rotate.** The default driver keeps writing until the disk is full. Always pin `max-size` / `max-file` — local development stacks included.
+* **Remote drivers block by default.** With any driver that ships off-host (`awslogs`, `gelf`, `fluentd`, ...), Docker's delivery mode is *blocking*: if the destination slows down or the network hiccups, the container's write to stdout blocks and takes application threads with it. Set `mode: non-blocking` with a `max-buffer-size`. The trade-off is explicit — a full buffer drops log lines — and losing lines is preferable to stalling request handling.
 
-```yaml
-# Local / development: rotate.
-logging:
-  driver: json-file
-  options: { max-size: "50m", max-file: "5" }
+**Prefer the daemon over the compose file for the driver itself.** A driver pinned per service cannot be conditional: Docker validates option keys per driver, so `json-file`'s `max-size` and `awslogs`'s `awslogs-group` cannot coexist in one `logging:` block. Making one compose file serve both a laptop and a server therefore forces an overlay file that has to be remembered on every manual `up`, and forgetting it silently drops a stack back to local logging. Configuring `/etc/docker/daemon.json` instead gives one setting per host that covers every container on it — application, database, message broker — with nothing to forget:
+
+```json
+{
+  "log-driver": "json-file",
+  "log-opts": { "max-size": "50m", "max-file": "5" }
+}
 ```
 
-```yaml
-# Shipping off-host (CloudWatch shown; the mode/buffer part applies to any remote driver).
-logging:
-  driver: awslogs
-  options:
-    mode: non-blocking
-    max-buffer-size: 4m
-    awslogs-region: <region>
-    awslogs-group: <group>
+```json
+{
+  "log-driver": "awslogs",
+  "log-opts": {
+    "awslogs-region": "<region>",
+    "awslogs-group": "<group>",
+    "awslogs-create-group": "true",
+    "mode": "non-blocking",
+    "max-buffer-size": "4m",
+    "tag": "{{.Name}}"
+  }
+}
 ```
 
-With ECS format enabled, whatever platform receives the stream can query by field. Note that a container logging driver only ever moves *container stdout* — host-level material (system messages, the container runtime's own log, kernel OOM-killer output) needs a host agent, and its absence is a blind spot for exactly the incidents where a container dies without explaining itself.
+The setting applies to containers **created after** a daemon restart, and an explicit `logging:` block in a compose file still overrides it — which is the point: keep compose free of logging config when the host decides, and pin it in compose only for a stack that never leaves a developer's machine.
+
+With ECS format enabled, whatever platform receives the stream can query by field. Note that a container log driver only ever moves *container stdout* — host-level material (system messages, the container runtime's own log, kernel OOM-killer output) needs a host agent, and its absence is a blind spot for exactly the incidents where a container dies without explaining itself.
 
 ## Error tracking and tracing (sentry-starter)
 
@@ -130,9 +137,25 @@ Troubleshooting: set `SENTRY_DEBUG=true` and the SDK logs why events are (or are
 
 `send-default-pii` defaults to `false` and should stay that way for applications holding personal data. Exception *messages* still travel to Sentry — keep personal data out of them (good logging hygiene regardless). Server-side scrubbing rules on sentry.io are the second line of defense.
 
-### JDBC tracing overhead
+### JDBC tracing
 
-With the switch off, nothing is wrapped — zero overhead. With it on, every JDBC call goes through one extra proxy invocation (microseconds; relevant only in hot loops issuing thousands of tiny statements), and span objects are allocated only for requests selected by `traces-sample-rate`. Enable it freely on test environments; on production, decide based on the sample rate and statement volume.
+`softa.sentry.jdbc-tracing.enabled=true` wraps every `DataSource` bean in a P6Spy proxy, whose proxied statements fire events to registered listeners; sentry-jdbc registers one that opens a child span per statement. Because the wrap sits on the `DataSource` bean, it covers everything reaching the database through Spring — `JdbcTemplate`, framework internals, and a routing `DataSource` alike (wrapped once, on the outside, so no statement is recorded twice).
+
+**Spans only, never logs.** P6Spy enables a statement-logging module of its own by default, appending every statement to a `spy.log` FILE. The starter switches it off (the module list is narrowed to the core factory): a file inside the container is invisible to any stdout-based log pipeline, unrotated, and would duplicate SQL the ORM already logs. Sentry's listener is unaffected — P6Spy composes module listeners and ServiceLoader listeners from two independent sources. An application that configures `p6spy.config.modulelist` itself keeps its own setup.
+
+**Relationship to the ORM's own SQL logging.** softa-orm logs SQL through `ExecuteSqlAspect`, gated per request on `Context.isDebug()` (the `X-Debug` header). The two are complementary, not redundant:
+
+| | ORM debug logging | Sentry JDBC spans |
+| --- | --- | --- |
+| Trigger | per request, `X-Debug` | global switch + trace sampling |
+| Layer | AOP around `@ExecuteSql` methods | JDBC driver proxy |
+| Content | SQL + **parameter values** + timing + result | SQL description + timing, in the request's span tree |
+| Destination | SLF4J (WARN) → stdout | Sentry transaction |
+| Answers | "what SQL did this request run, with what values" | "which statement is this request slow in" |
+
+⚠️ Because the ORM's log is WARN it never becomes a Sentry *event*, but it does become a **breadcrumb** on any error event later in the same request — carrying its parameter values along. On a request that ran with `X-Debug`, personal data in those parameters reaches Sentry that way, and `send-default-pii: false` does not cover it (that setting governs cookies, IP and request bodies). `X-Debug` being a deliberate per-request tool rather than a steady state is what keeps the exposure narrow.
+
+**Overhead.** With the switch off, nothing is wrapped — zero cost. With it on, every JDBC call goes through one extra proxy invocation (microseconds; relevant only in hot loops issuing thousands of tiny statements), and span objects are allocated only for requests the sampler selected. Enable it freely on test environments; on production, decide based on the sample rate and statement volume.
 
 ### Distributed tracing with a frontend
 
