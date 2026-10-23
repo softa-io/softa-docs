@@ -372,6 +372,8 @@ Supported trigger sources (`TriggerSource` sealed sub-types):
 - `Subflow`
 - `FieldChange` (COMPUTE scenario only)
 
+`EntityChange` is fired from the change log, so a model declared `@Model(enableAuditLog = false)` never triggers it, synchronously or asynchronously — see [Audit log switch](../backend_dev/model_dev/annotation#audit-log-switch-enableauditlog).
+
 Pulsar-connected components are conditionally registered:
 
 | Property | Component | Purpose |

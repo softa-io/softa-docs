@@ -92,7 +92,10 @@ public enum CustomerTier {
 | `storageType` | `StorageType` | `RDBMS` | `storageType` | |
 | `versionLock` | boolean | `false` | `versionLock` | optimistic-lock column; requires a `version` field, stamped onto every insert, with the starting value `0` materialized into `sys_field.default_value` so the column DDL carries `DEFAULT 0` |
 | `multiTenant` | boolean | `false` | `multiTenant` | requires a `tenantId` field on the class |
+| `multiCountry` | boolean | `false` | `multiCountry` | rows are partitioned by country; requires a `country` field (to-one onto `CountryRegion`), and every read narrows to the countries the caller works in. See "Country and company axes" below |
+| `multiCompany` | boolean | `false` | `multiCompany` | rows belong to one company; requires a `companyId` field (to-one onto `Company`), the anchor the permission grant bounds every read by. See "Country and company axes" below |
 | `copyable` | boolean | `true` | `copyable` | `false` ⇒ copy APIs reject the model; UI hides Duplicate |
+| `enableAuditLog` | boolean | `true` | `enableAuditLog` | `false` ⇒ creates / updates / deletes build no change log — for derived / report models rewritten in bulk, whose source data carries the audit trail. Also means no Audit Log history for the model, no change-triggered flows on it (sync or async), and its rows missing from a parent's history; the update's stored-row read stays. `system.enable-change-log` still gates MQ delivery for models that keep it on. A NULL column reads as enabled. See "Audit log switch" below |
 | `projection` | boolean | `false` | `projection` | `true` ⇒ read-only model over a table it does NOT own (another model's table, or one created externally, e.g. by a BI pipeline). No DDL is ever generated for it; write APIs reject it; `@Index` on it is boot-rejected; RDBMS only. Every non-projection RDBMS model owns its table exclusively — two owners on one `tableName` fail at boot |
 | `dataSource` | String | `""` | `dataSource` | empty → primary datasource |
 | `businessKey` | String[] | `{}` | `businessKey` | composite supported |
@@ -104,6 +107,41 @@ Audit fields (`createdTime` / `createdBy` / `createdId` / `updatedTime` /
 `updatedBy` / `updatedId`) come from `AuditableModel` and are **not** declared
 via `@Field` — they are auto-injected by `DdlGenerator` when the class
 extends `AuditableModel`.
+
+#### Country and company axes (`multiCountry` / `multiCompany`)
+
+Tenant isolation is not the only read narrowing the framework applies on its own. `@Model(multiCountry = true)` marks a model whose rows are partitioned by country — one independent set per country, such as a code table whose allowed values differ from country to country — and every read of it (list, page, count, reference lookup) is narrowed to the countries the caller works in. `@Model(multiCompany = true)` marks a model whose rows each belong to exactly one company; the ORM does not narrow it by itself, but with `permission-starter` every read of it is bounded by the role's company grant, so a role limited to some companies sees only their rows.
+
+The anchor field is fixed by name and checked at boot:
+
+| Declaration | Required anchor field |
+|---|---|
+| `multiCountry = true` | `country` — a `MANY_TO_ONE` / `ONE_TO_ONE` onto `CountryRegion` (shipped with `reference-data-starter`) |
+| `multiCompany = true` | `companyId` — a `MANY_TO_ONE` / `ONE_TO_ONE` onto `Company` (the application's company model, addressed by that name) |
+
+The boot fails when the anchor is missing, when a field of that name is not a to-one onto the target model, and when the `Company` model itself is declared `multiCompany`. Only the reserved name puts a model on an axis: a model may reference a country or a company for other reasons — the country that issued a document, the countries a bank serves, a company that pays rather than owns — and such fields stay plain attributes. A model that reaches its company (or country) only through another model, such as a per-department statistic, declares the anchor as a `dynamic` cascaded field: it takes no column, a condition on it is joined at query time along the cascade path, and it can still be filtered, sorted and displayed like any other field.
+
+```java
+@Field(label = "Company", cascadedField = "deptId.companyId", dynamic = true,
+        fieldType = FieldType.MANY_TO_ONE, relatedModel = Company.class)
+private Long companyId;
+```
+
+Both answers come from the caller's permissions, never from the request: no header selects a company or a country. The company grant is the role's ordinary data scope on the `Company` model — none configured means unrestricted, an explicitly empty one reaches no company. The countries the caller works in are the countries of the companies their roles reach, carried on the request context as `Context.grantedCountries`; two companies in the same country share that country's rows. A caller whose roles reach no company, such as a self-service employee, falls back to the country of their own company. When nothing is known — public endpoints, service-to-service calls, scheduled jobs, MQ consumers, import jobs — reads are not narrowed, and code on those paths that needs a country passes it in its own filters.
+
+The country narrowing is a default, not a constraint, and it steps aside silently, because an over-eager condition empties a list the user needs: a read whose filters name `id` (a by-id read, or a stored reference expanded for display) is not narrowed, and a caller that already filters on `country` keeps its own condition — which is how a form scopes a dropdown by the company picked in the form, and how an import resolves a row against that row's own country.
+
+Declare a flag only when the rows really belong to one country or one company. A field that merely records a country, such as an address's country, does not make a model `multiCountry`, and data shared across companies, such as a tenant-wide code table, must not be `multiCompany`: either mistake silently hides every other country's or company's rows. The opposite change has a trap too: with `permission-starter`, a `multiCountry` model that is not `multiTenant` is a country value domain whose reads skip row-level scope (writes stay gated by endpoint permissions), so removing `multiCountry` from such a table can leave every dropdown it feeds empty.
+
+#### Audit log switch (`enableAuditLog`)
+
+By default every create / update / delete builds a change log: the record history behind the form's Audit Log panel, and the event that data-change flows are triggered from. `@Model(enableAuditLog = false)` turns it off for one model. It is meant for derived / report models whose rows are recomputed and rewritten in bulk: their history is not worth keeping, because the source data's own change log is the audit trail. Skipping the log also drops the transaction-bound buffer that holds every written row's before / after until commit.
+
+With the switch off, the model has no Audit Log history, its rows no longer appear in a parent record's history, and no change-triggered flow fires on it, synchronous or asynchronous — check that no flow is bound to the model before turning it off. The audit fields above are still stamped, and an update still reads the stored rows it needs for the diff, computed fields and the version check. The flag decides per model whether a log is built at all; for the models that keep it on, `system.enable-change-log` still gates what leaves the process (MQ persistence, asynchronous flows).
+
+The metadata API (`/metadata/getMetaModel`) serves the flag as the model's `enableAuditLog`, and the frontend Form view renders no Audit Log panel when it is `false` — see [Form](../../frontend_dev/views/form#built-in-behavior).
+
+**Upgrading an existing database**: the flag is stored in `sys_model.enable_audit_log` (Studio mirrors it in `design_model.enable_audit_log`). A fresh database needs nothing, and with a non-empty `scanner-scope` the boot adds the column on its own (see [Catalog self-bootstrap](#catalog-self-bootstrap-the-sys_-tables-own-schema)). Only an environment that runs with an empty `scanner-scope`, as production does, applies migration V41 by hand: `deploy/migrations/mysql/V41__add_enable_audit_log_to_sys_model.sql`, with the PostgreSQL variant in its header comment; a deployment without `studio-starter` skips its `design_model` part. The migration is safe on either side of the deploy, but run it before the new version boots: without the column the runtime still starts and every model keeps its audit log, yet the flag cannot be switched off, and `MetadataAnnotationChecker` reports the missing column as drift.
 
 ### `@Field` ↔ `SysField`
 

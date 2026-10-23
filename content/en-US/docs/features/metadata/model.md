@@ -44,8 +44,11 @@ Model metadata describes and defines the data model, including the storage, stru
 | 16 | businessKey | MultiString | Business Key (Field List) |  |  |
 | 17 | partitionField | String | Partition field technical name |  |  |
 | 18 | projection | Boolean | Read-only model over a table another model owns | false | `true` ⇒ no DDL is ever generated; write APIs reject the model; UI hides create/edit/delete |
-| 18 | description | String | Model description |  |  |
-| 19 | modelFields | OneToMany | Model fields |  |  |
+| 19 | enableAuditLog | Boolean | Whether writes to this model build change logs | true | `false` ⇒ no Audit Log history, no data-change flows; UI hides the Audit Log panel |
+| 20 | multiCountry | Boolean | Rows are partitioned by country | false | Reads narrow to the caller's countries; requires a `country` field onto `CountryRegion` |
+| 21 | multiCompany | Boolean | Each row belongs to one company | false | Reads are bounded by the role's company grant; requires a `companyId` field onto `Company` |
+| 22 | description | String | Model description |  |  |
+| 23 | modelFields | OneToMany | Model fields |  |  |
 
 ### 2.1 `label` Model Label
 
@@ -162,6 +165,22 @@ A list of the model's fields. For more details, see `Field Metadata`.
 ### 2.18 `projection` Read-only Projection
 
 Marks a read-only model over a physical table it does **not** own — either another model's table (e.g. a report exposing a subset of `Employee`'s columns plus its own computed fields) or a table created outside the metadata scanner (e.g. by a BI pipeline). A projection model reconciles its metadata rows like any model, but never generates DDL, rejects every write API (create / update / delete / copy), may not declare indexes, and forces the UI into read-only. Every non-projection RDBMS model owns its table exclusively: declaring two owners for one `tableName` fails at boot.
+
+### 2.19 `enableAuditLog` Enable Audit Log
+
+Whether creates / updates / deletes on this model build change logs — the record history shown in the form's Audit Log panel, which data-change flows are also triggered from. Defaults to `true`; a missing value (a NULL column, or a backend that predates the switch) counts as enabled.
+
+Set it to `false` on reports and derived data that are rewritten in bulk: their rows have no history worth keeping, because the source data's own change log is the audit trail. The model then has no Audit Log history, its rows no longer appear in a parent record's history, and no data-change flow fires on it, so check that no flow is bound to the model first. In the frontend, the Form view renders no Audit Log panel for such a model (see [Form](../../frontend_dev/views/form#built-in-behavior)).
+
+Upgrading an existing database: an environment that runs with an empty `scanner-scope` adds the column by hand with migration V41; see [Audit log switch](../../backend_dev/model_dev/annotation#audit-log-switch-enableauditlog).
+
+### 2.20 `multiCountry` Multi-country
+
+Marks a model whose rows are partitioned by country, one independent set per country — for example a code table whose allowed values differ from country to country. Every read is narrowed to the countries the caller works in (the countries of the companies their roles reach), and the model must carry a `country` field referencing `CountryRegion`. Declare it only when the rows really are per country: a model that merely records a country would hide every other country's rows. See [Country and company axes](../../backend_dev/model_dev/annotation#country-and-company-axes-multicountry--multicompany).
+
+### 2.21 `multiCompany` Multi-company
+
+Marks a model whose rows each belong to exactly one company, through a `companyId` field referencing `Company`. With `permission-starter`, every read is bounded by the companies the caller's roles are granted; a role without a company grant sees every company's rows. Do not set it on data shared across companies. See [Country and company axes](../../backend_dev/model_dev/annotation#country-and-company-axes-multicountry--multicompany).
 
 ## 3. Model Definition
 

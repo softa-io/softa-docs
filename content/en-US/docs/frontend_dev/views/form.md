@@ -242,7 +242,7 @@ Examples of using `widgetType` to drive renderer behavior:
 <Field
   fieldName="gallery"
   widgetType="MultiImage"
-  widgetProps={{ maxCount: 6, columns: 3, aspectRatio: "4 / 3", helperText: "Recommended 1200x900" }}
+  widgetProps={{ maxFiles: 6, columns: 3, aspectRatio: "4 / 3", helperText: "Recommended 1200x900" }}
 />
 
 <Field
@@ -310,7 +310,7 @@ Current supported examples:
   fieldName="photos"
   widgetType="MultiImage"
   widgetProps={{
-    maxCount: 8,
+    maxFiles: 8,
     columns: 4,
     aspectRatio: "16 / 9",
     uploadText: "Upload gallery",
@@ -616,7 +616,7 @@ ManyToMany view binding example:
 ```tsx
 import { Field, RelationTable } from "@/components/fields";
 
-function UserRoleUserIdsTableView() {
+function RoleUsersTableView() {
   return (
     <RelationTable orders={["username", "ASC"]} pageSize={10}>
       <Field fieldName="username" />
@@ -628,7 +628,7 @@ function UserRoleUserIdsTableView() {
   );
 }
 
-function UserRoleUserIdsFormView() {
+function RoleUsersFormView() {
   return (
     <ModelDialog title="User Detail">
       <FormSection label="General" hideHeader>
@@ -642,9 +642,9 @@ function UserRoleUserIdsFormView() {
   );
 }
 
-export default function UserRoleFormPage() {
+export default function RoleFormPage() {
   return (
-    <ModelForm modelName="UserRole">
+    <ModelForm modelName="Role">
       <FormHeader />
       <FormToolbar />
 
@@ -657,9 +657,9 @@ export default function UserRoleFormPage() {
         </FormSection>
         <FormSection>
           <Field
-            fieldName="userIds"
-            tableView={UserRoleUserIdsTableView}
-            formView={UserRoleUserIdsFormView}
+            fieldName="users"
+            tableView={RoleUsersTableView}
+            formView={RoleUsersFormView}
           />
         </FormSection>
       </FormBody>
@@ -764,6 +764,26 @@ When `formView` is **not** provided, `OneToOne` behaves identically to `ManyToOn
 Backend still supports full submit for XToMany fields.
 Frontend `ModelForm` defaults to incremental submit (`PatchType` map) to avoid full-list overwrite risk in paginated relation editing.
 
+## Validation order
+
+The resolver ModelForm hands to react-hook-form is three layers, innermost first:
+
+1. **Field-level schema** — `buildZodObjectFromMetaModel`: type shape, the column's own `required`, `length` / `scale`, and the value domain from `constraints` (`min` / `max` / `pattern`); `.pick(displayedFieldNames)` keeps only what is on screen; then the page's `schemaBuilder` wraps it.
+2. **`withFieldConstraintsResolver`** — the metadata conditions over the whole row: `requiredWhen` / `invalidWhen`, and the rows of a OneToMany field judged by the related model's constraints (`relatedMetaModelsByPath`). A field the schema already rejected keeps the schema's message.
+3. **`withFieldConditionResolver`** — prunes errors on fields a page-level `hidden` condition removed.
+
+The browser's own validation is off (`noValidate` on the `<form>`, and on `DialogForm` / `WizardDialog`): a number field renders its `min` / `max` on the input for the spinner, and native validation would otherwise block the submit with a browser bubble before the resolver runs, so the rejection toast and the field focus never happen.
+
+Relation dialogs (`ModelDialog` → `DialogForm`) run the same three layers on the row they edit, judging only the fields the dialog displays.
+
+Layer 2 gets `relatedMetaModelsByPath` from the compiled form plan, which learns a form's nested models by walking `children` statically. A page that renders a relation through a component of its own is opaque to that walk, so the map comes back empty and the rows inside are judged by nothing — such a page passes the map itself through the prop of the same name.
+
+`requiredWhen` belongs to layer 2 even in its unconditional `true` form, because the backend's rule for it is "may omit, may not clear": on update it fires only when the write names the field, so a row saved before the rule existed stays editable. Only layer 2 can tell those apart — it is given the values the form started from (`initialValues`). Layer 1 owns the column's own `required` and nothing conditional.
+
+The resolver's context (`@mode`, `USER_ID`, the declared field types) is read **when the resolver runs**, not when it is built: react-hook-form captures the resolver on the first render, and the signed-in user is filled in by an effect after it.
+
+A write the server refuses per field (`ApiError.fieldErrors`, from field constraints or a `ModelWriteValidator`) is placed on the fields with `form.setError(field, { type: "server" })` — only for names this form renders, so a server-only column cannot park an invisible error that blocks submit — next to the toast the API client already shows.
+
 ## Page Structure
 
 Recommended default layout:
@@ -774,6 +794,10 @@ Recommended default layout:
   - right: business actions area (custom actions + built-in Duplicate/Delete + More Actions)
 - Body: `FormBody` renders either stacked sections or true tabs, plus the built-in audit panel layout
 - Audit: `FormBody(enableAuditLog)` controls audit panel; right on large screens and bottom on small screens
+
+## Record-level access
+
+In edit mode the form asks the server what the caller may do with the record (`POST /{model}/getRecordAccess`); in create mode, which sensitive sets a new record may show (`GET /{model}/getCreateAccess`). The answer is provided through `RecordAccessContext` and used three ways: `Edit` / `Delete` follow the actions available on the record (overriding a permission the user holds through another role); a `FormSection` whose `sensitiveFieldSet` is hidden on the record does not render; one that is visible but granted only by roles that cannot edit the record renders its fields read-only (`ReadonlyFieldScope`). The answer also comes by field (`hiddenFields` / `readonlyFields`, keyed by the field's own model): any `Field` the record hides shows its label and a lock instead of an input or value (`NoAccessLock`, the same mark list cells use), and one it keeps read-only renders read-only — inside a section that names its set or not, and for a one-to-one child's field shown on the parent's form as for the form's own. The form submits changed fields only, so a hidden field's empty value is never written back. While the answer is loading, `Edit` and `Delete` stay hidden and so do sections gated by a `sensitiveFieldSet` (the form itself is not locked), so nothing the record denies flashes on screen; once the request settles without an answer (no record, or it failed), the user-level gates apply as before. The form re-asks whenever the record is reloaded (a save may change what it allows); while that answer loads the previous one for the same record stays in effect, so buttons and sections do not unmount and remount — only opening a different record waits again. The query key carries a reload counter, never the record's values. A component that also renders outside ModelForm can tell the two kinds of `null` apart with `useHasRecordAccessProvider()`: inside the form it reads the form's answer (and falls back to the user-level gates when that failed) instead of fetching one of its own.
 
 ## Props
 
@@ -788,12 +812,16 @@ Recommended default layout:
 | `defaultValues` | `Record<string, unknown>` | No       | -                                     | Extra default values merged into metadata defaults. Useful for injecting parent context such as `relatedField` values. |
 | `copyFromId`    | `string \| null`          | No       | -                                     | New mode only: prefill the form with the copyable field values (`getCopyableFields`) of this source record (duplicate flow). Full-page forms normally use the `?copyFrom=<id>` search param instead; embedded forms pass this prop. Explicit context (`defaultValues`, search params, related field) wins over copied values. |
 | `enableWorkflow`       | `boolean`                 | No       | `false`                               | Show workflow action group in toolbar left area (edit mode only). |
-| `enableCreate`         | `boolean`                 | No       | auto                                  | Built-in `Create New` action switch. `false` disables. Omitted follows default behavior (read-only forms hide unless explicitly `true`). |
-| `enableDuplicate`      | `boolean`                 | No       | auto                                  | Built-in duplicate action switch. `false` disables. Omitted follows default behavior (read-only forms hide unless explicitly `true`). |
-| `enableDelete`         | `boolean`                 | No       | auto                                  | Built-in delete action switch. `false` disables. Omitted follows default behavior (read-only forms hide unless explicitly `true`). |
+| `enableCreate`         | `boolean`                 | No       | auto                                  | Built-in `Create New` action switch. Three-state, see "Three-state `enable*` resolution" below: `false` hides, `true` shows even on a read-only form, omitted shows only while the form is not read-only. |
+| `enableDuplicate`      | `boolean`                 | No       | auto                                  | Built-in duplicate action switch. Same three-state resolution as `enableCreate`. Also requires `MetaModel.copyable === true`. |
+| `enableDelete`         | `boolean`                 | No       | auto                                  | Built-in delete action switch. Same three-state resolution as `enableCreate`. |
+| `enableUpdate`         | `boolean`                 | No       | auto                                  | Toolbar `Edit` button switch for route read-mode. `false` hides it; the form's own read-only state is unaffected. Gated on `update` (or `updatePermissionId`). |
+| `updatePermissionId`   | `string`                  | No       | -                                     | Permission id authorizing edit on this page, overriding the `MODEL_PERMISSIONS` model-keyed `update` lookup. For pages managed by a `customPermission` on a different model (workflow draft pages). |
 | `confirmDeleteMessage` | `string`                  | No       | `Delete this {modelLabel}? This action cannot be undone.` | Confirm text for built-in delete action. |
 | `timeline`      | `ModelFormTimelineConfig` | No       | -                                     | Timeline-model behavior toggles (`enableAddVersion` / `enableVersionPanel` / `versionSummaryFields`, all optional). Only consulted when `metaModel.timeline` is true; see "Timeline Models" below. |
 | `sliceId`       | `string \| null`          | No       | `?sliceId=` search param              | Timeline models, edit mode only: load this specific version (slice) instead of the as-of row (`searchList` by `sliceId` across the timeline). Full-page forms normally use the `?sliceId=<x>` search param (ignored in dialog mode); embedded forms pass the prop. |
+| `relatedMetaModelsByPath` | `Record<string, MetaModel>` | No | - | Metadata for related models the form plan cannot reach, keyed by the field path that holds them (`employeeProfileId`, not `EmployeeProfile`). The plan learns a form's nested models by walking `children` statically, so a relation rendered through a page's own component is invisible to it: the nested rows are then not validated against their own model's field rules, and the widgets inside them get no metadata to take a star or a bound from. A page in that position (a wizard step, a bespoke inline view) usually already holds the metadata for its submit payload and can state it here. Merged under what the plan found, so a path the walker did reach wins. |
+| `beforeSubmit`  | `(values, savedRecord, recordAccess) => boolean \| Promise<boolean>` | No | - | Asked after validation passes and before the write; resolve `false` to cancel the save (e.g. a declined confirmation). `savedRecord` is the loaded row in edit mode, `null` in create mode. `recordAccess` is the form's own record-level access answer (see "Record-level access"): `null` when there is none to consult, `undefined` while loading — read it here rather than querying it again in the page. |
 | `children`      | `ReactNode`               | Yes      | -                                     | Form page layout content (`FormHeader/FormToolbar/FormBody`).                               |
 
 Runtime field conditions:
@@ -815,6 +843,7 @@ Remote `Field.onChange` in `ModelForm`:
 - `with: "all"`: sends current form submit shape
 - top-level registered XToMany fields are serialized as relation patch payloads, not raw UI rows
 - response `values` patch only returned keys; `null` clears a field
+- response `readonly` / `required` are field-name lists naming every field in that state; a field declared in `update` but left out of the list is reset to its metadata and local conditions
 - response `readonly` / `required` override local effective state until reset, cancel, reload, or a later response
 - this remote linkage runtime is implemented for `ModelForm`; it is not automatically available in standalone `DialogForm`
 
@@ -843,7 +872,8 @@ Remote `Field.onChange` in `ModelForm`:
 | Prop             | Type                                        | Required | Default      | Notes                                                                    |
 | ---------------- | ------------------------------------------- | -------- | ------------ | ------------------------------------------------------------------------ |
 | `sectionNav`     | `boolean`                                   | No       | `false`      | Enables sidebar section nav. When `true`, nav renders when the section/tab has at least 2 sections. |
-| `enableAuditLog` | `boolean`                                   | No       | `true`       | Toggle audit panel (only renders in edit mode).                          |
+| `enableAuditLog` | `boolean`                                   | No       | `true`       | Toggle audit panel (only renders in edit mode). The panel also stays hidden when the model's own `MetaModel.enableAuditLog` is `false`, whatever this prop says. |
+| `enableVersionPanel` | `boolean`                               | No       | `true`       | Toggle the Versions panel of a timeline model (still also gated by `timeline.enableVersionPanel`). Turn it off in a dialog that edits one row of a relation table: the table already lists the versions, and the row is local form state until the parent saves. |
 | `children`       | `ReactNode`                                 | Yes      | -            | Content nodes. `FormSection`/`Field` nodes at root level render as shared content above tabs; root `FormTab` nodes activate tabs mode. `FormTab` cannot be nested inside another `FormTab`. |
 
 `FormBody` infers layout mode from its root children. Any root `FormTab` activates tabs mode; `FormSection` and `Field` nodes placed outside `FormTab` are rendered above the tab strip as shared content visible across all tabs.
@@ -873,10 +903,13 @@ Remote `Field.onChange` in `ModelForm`:
 | `hideHeader`  | `boolean`             | No       | `false`  | Hides the visual section header, but the section can still participate in nav.        |
 | `divided`     | `boolean`             | No       | `false`  | Adds a top border between sections. Suppressed on the first section (`:first-child`). |
 | `children`    | `ReactNode`           | No       | -        | Usually `Field` nodes plus optional section-scoped `Action` nodes.                    |
+| `permission`  | `string`              | No       | -        | Section-level permission gate keyed on the enclosing form's model; the whole section is omitted when the user lacks `(modelName, permission)`. An unmanaged / ambiguous pair (`undefined` status) passes through. |
+| `permissionId` | `string`             | No       | -        | Explicit permission id gate; wins over `permission` when both are set. Use for cross-model gates (e.g. a Banking section on Employee). |
+| `sensitiveFieldSet` | `string \| string[]` | No | -        | Sensitive field set gate: shown when the caller holds ANY of the ids. Inside a form with a record-level answer it follows that answer (hidden while it loads, read-only when only non-editing roles grant the set; on a record that hides the set while the caller holds it on other records it is still drawn and its fields show a lock, as list cells do); otherwise the user-level map decides, admins always pass. ANDed with `permission*`. |
 
 Notes:
 
-- `FormSection` registers itself to the nearest `FormBody` section registry automatically.
+- `FormSection` registers itself to the nearest `FormBody` section registry automatically — unless it is gated out by `permission` / `permissionId` / `sensitiveFieldSet`: a section that does not render does not appear in the section nav either, and it registers once the gate opens (e.g. when the record-level answer arrives).
 - Nav label falls back to `"Section"` when `label` is omitted.
 - Generic labels (`"Section"`) are auto-renamed in nav as `Section 1`, `Section 2`, and so on.
 - `hideHeader` only affects the rendered header; it does not disable section-nav registration.
@@ -894,6 +927,7 @@ Behavior:
 - Nav renders only when the current view has at least 2 registered sections.
 - In tabs mode, `FormTab`'s own `sectionNav` takes priority over `FormBody`'s setting for that tab. Omitting it on `FormTab` inherits `FormBody`'s value.
 - Clicking a nav item smoothly scrolls the form's own scroll container, not the browser window.
+- The nav never grows past the visible part of the form's scroll container: its height is capped to that (re-measured on resize) and the list scrolls on its own, without moving the form when it reaches its end. The highlighted section is kept in view inside the list as the content scrolls. Without the cap, a nav taller than a short window scrolled away with the content and the later sections only appeared once the content reached its end.
 - In stacked mode, sidebar nav is desktop-oriented: it appears from `xl` layout when there is no right audit column, and from `2xl` when audit log is rendered on the right.
 
 Stacked example:
@@ -950,6 +984,9 @@ import { FormBody, FormTab } from "@/components/views/form/components/FormBody";
 | ----------- | ----------- | -------- | ------- | ---------------------------------------------------- |
 | `children`  | `ReactNode` | No       | -       | Custom actions. Recommended: `<Action type="..." />`. |
 | `className` | `string`    | No       | -       | Extra wrapper class for toolbar container.           |
+| `leading`   | `ReactNode` | No       | -       | Fills the left zone, e.g. a compact record summary. Toolbar-placed actions then move to the right zone, after Edit / Save and before Create New / More. |
+
+An empty toolbar is not drawn. When nothing inside it rendered — no button, no add-version date input, no edit-status pill — the frame (border, padding, sticky bar) is hidden too, so a reader with no action on the page sees the title run straight into the content instead of an empty box. Each control still decides its own visibility (Edit by the update permission, Create New / More Actions by theirs, Save / Cancel by the mode); the toolbar asks what actually rendered, through the `[data-form-toolbar]` rule in `src/styles/globals.css`, rather than recomputing those conditions. Anything new placed in the toolbar is covered as long as it renders a `button` or `input`; a purely textual item would need the same `data-form-edit-status` marker to keep the toolbar visible. Content passed as `leading` (e.g. a record summary) keeps it visible too, so a reader with no action still sees it.
 
 ### Actions In `ModelForm`
 
@@ -1090,9 +1127,25 @@ Status semantics match `ModelTable`:
 
 - **Granted** → control / action stays visible.
 - **Denied** → control / action hidden; form is forced read-only when `update` is denied (even if the URL is `?mode=edit`, the user lands in read mode — server enforces this independently, this is UX).
-- **Unmanaged** → `(modelName, action)` not in `MODEL_PERMISSIONS` (ambiguous across pages). Auto-gate has no opinion; page can pass explicit `readOnly` / `enable*` props instead.
+- **Unmanaged** → `(modelName, action)` not in `MODEL_PERMISSIONS` (ambiguous across pages). Auto-gate has no opinion, so the control follows the form's mode: shown while editable, hidden once the form is hard read-only. Page can still pass explicit `readOnly` / `enable*` props.
 
 Business props still win when set to `false` (page explicitly hides Edit even for SUPER_ADMIN). SUPER_ADMIN short-circuits permission lookups internally.
+
+### Three-state `enable*` resolution
+
+`enableCreate` / `enableDuplicate` / `enableDelete` / `enableUpdate` and `timeline.enableAddVersion` are resolved from the page prop plus the permission status, and the resolved value stays **three-state** all the way to the toolbar. The three values are not two — each means something different:
+
+| Resolved | Meaning | Not read-only | Hard read-only (`readOnly` prop forced) |
+| --- | --- | --- | --- |
+| `false` | Closed — page opted out, or the permission is denied, or the model is a projection | hidden | hidden |
+| `undefined` | Nobody objected — no page prop, and the permission is either granted or not declared for this `(model, action)` | shown | **hidden** |
+| `true` | The page asked for this control explicitly | shown | shown |
+
+Only a real page prop of `true` produces `true`. A *granted* permission resolves to `undefined`, not `true` — holding `create` is not a request to override a read-only decision the page made. Denial order is page opt-out, then permission, so `enableCreate={true}` can never hand a control to a user the grant map denies.
+
+"Hard read-only" means the `readOnly` prop forced the form read-only. Route read-mode (`?mode=read` on an editable record, where the user can click Edit to resume) is *not* hard read-only, so `undefined` still shows there — that is the normal detail-page toolbar.
+
+**Read-only detail pages therefore need no `enable*` props at all.** `<ModelForm modelName="X" readOnly={true}>` closes Create New / Duplicate / Delete / Add Version on its own. Pass `enable*={false}` only to close a control that would otherwise be available, and `enable*={true}` only when a read-only form genuinely must keep a write affordance.
 
 **Projection models** (`MetaModel.projection === true`, from `@Model(projection = true)` — a read-only model over a table another model owns): the form is forced into read-only in every mode (create included) and Edit / Create New / Duplicate / Delete / Add Version and the timeline version panel's Correct / Delete all close, on top of permissions — the backend rejects every write on such a model. Structural, not a permission: SUPER_ADMIN gets the same read-only form.
 
@@ -1130,15 +1183,18 @@ Example:
   - edit / create mode: `Cancel` button lives in the toolbar next to `Save` (`FormPrimaryActions`); confirms when dirty, resets to the latest loaded snapshot, returns to read-only mode
   - read mode: `Back` button lives in the page header right side (`FormBackButton`, hidden inside `ModelSideForm`); navigates to the route derived from the breadcrumb (`resolveBackRoute` = navigation manifest + pathname). MultiView `linkTo` detail routes (`/list/<tab>/<id>`) resolve to the tab crumb `/list?tab=<tab>` instead of the route-less `/list/<tab>`, so Back never 404s and lands on the originating tab — no carried query state, refresh / deep-link resolve identically
 - Save/create mutation handling with toasts.
+- A **rejected** Save is reported too, never silent: `describeSubmitBlock` turns the resolver's errors into an error toast naming the first invalid field and its message (`Cannot save — ID Type: This field is required`), plus a count of the other invalid fields, and the form then scrolls that control into view. The control is located by `fieldControlSelector` — `[name]`, `[id]` or the `data-field-path` every `FormItem` and relation widget publishes — because most widgets (combobox, date picker, tree picker) put no `name` on the DOM, and a focus attempt that finds nothing used to be the *only* response to an invalid submit.
 - Audit query is built in via `useGetChangeLogQuery(modelName, id)` with:
   - `pageNumber=1`
   - `pageSize=50`
   - `order=DESC`
   - `includeCreation=true`
   - `dataMask=true`
+- **Timeline models get the audit log of the version** — `useGetSliceChangeLogQuery(modelName, sliceId)`, slice read off the loaded record, same paging (`includeCreation` is spelled `getCreate` here). Works on both routes into the form: the Versions panel's `?sliceId=` link and a list's as-of read. The entity-level `getChangeLog` is refused for a timeline model, so it is never issued for one.
 - Global audit API switch:
-  - `configs.env.enableChangeLog` (`NEXT_PUBLIC_ENABLE_CHANGE_LOG`, default `true`)
+  - `configs.env.enableChangeLog` (`NEXT_PUBLIC_ENABLE_CHANGE_LOG`, default `true`) — read at runtime through `/runtime-env.js` (`src/lib/runtime-env.ts`), not baked into the bundle; a deployment sets it from the same value as the backend's `system.enable-change-log` (`SYSTEM_ENABLECHANGELOG`), so the panel follows the backend's own switch
   - when disabled, `FormAuditPanel` does not issue change-log API requests and shows a disabled hint text
+- Model-level audit switch: a model declared `@Model(enableAuditLog = false)` (reports, derived data rewritten in bulk) builds no change log, and its metadata says `enableAuditLog: false`. `FormBody` then renders no Audit Log panel at all — no side column, no request — instead of a list that would always be empty. Only an explicit `false` counts: a backend that predates the switch omits the field, and the panel stays on.
 - `FormWorkflowActions` + `WorkflowActionGroup` supports workflow states:
   - `draft`: submit
   - `pending`: withdraw/approve/reject
@@ -1149,6 +1205,10 @@ Example:
   - `update`: `<=5` expanded, `>5` show first 5 + `Show all fields (N)`
   - `create`: collapsed by default
   - `delete`: operation info only
+- **An `update` entry lists the columns the write TOUCHED, not every column the row has.** The two payloads on a change log are not symmetrical: `dataBeforeChange` is the whole original row, `dataAfterChange` holds only the changed columns (the backend publisher strips the primary key and the audit columns from it). The diff is therefore driven by the keys of `dataAfterChange`, with `dataBeforeChange` consulted only for what each of those columns used to hold. Unioning the two key sets — which this panel used to do — reports every untouched column as `value → —`, and buries the one field that changed among them.
+- **Standalone use, and several records in one list.** `FormAuditPanel` renders outside a form context when given `modelName` + `recordId`, under the same `Audit Log` heading it carries inside one — a host that shows the framework's audit log calls it what the rest of the product calls it. `sources` (`AuditSource[]` = `{ modelName, recordId?, label?, kind?, referencing?, rowLabel? }`) replaces the pair with several records merged into one list, newest first across all of them, each entry tagged with its `label` (the tag is suppressed when the list has one source, where it would be a column of the same word). A source with no `recordId` is skipped — an unsaved row has no history and asking for one is a request the backend rejects. A source can instead name a set of rows by `referencing: { model, id, field }` — every row of its model whose many-to-one `field` points at record `id` of `model`, the rows since deleted included — asked through `getRecordChangeLog`'s `referencing` parameter, which matches the reference each log carries; the record's own entries come back with them and are listed under `referencing.label`, or left out without one. For rows the record's own model has no relation field to reach. A model whose display name cannot name its rows (a plain id column) names them with `rowLabel(row)`, fed everything the row's logs recorded of it; the pointing field, and any reference left as an id, are dropped from a row's details. Not for timeline models: a slice's history is asked for by `sliceId` on a different endpoint and the two cannot be interleaved. A host that must first work out WHICH records to ask about passes `sourcesLoading` / `sourcesError` while it does: until the sources are known, the empty state would be a confident wrong answer, so the panel shows loading or a failed read instead.
+- **A record kept across several models.** Inside a form the panel lists, beside the record's own history, the history of the rows its relations hold — on by default (`relatedFields="auto"`). A change log is kept per model and per row, so an edit to a satellite — an employee's Preferred Name on the person's profile, a family-member row — is logged against the satellite and is otherwise missing from the record's audit list. `"auto"` takes every one-to-one and one-to-many field the form renders (from the form's read plan): a relation the page edits in place belongs to the record, while one it does not show — the departments an employee manages — is another record's history, which the metadata alone cannot tell apart. Many-to-one fields never count. `excludeRelatedFields` leaves named relations out of `"auto"`; an explicit array names them by hand, and `relatedFields={[]}` keeps the record's own history only. Ignored when `sources` is given. The whole history is one request to `GET /ChangeLog/getRecordChangeLog`, which gathers the rows and pages them as one list on the backend: a one-to-one by the row it points at now, a one-to-many by the reference each log carries — so a deleted child row's history is listed too — and by the current rows' ids for logs written before logs carried references. Only the history of a child row deleted before then is out of reach. Fields the reader's sensitive field sets hide are removed by the backend, and an update that touched only those is not listed or counted.
+- **How entries read.** Log entries sharing a trace id are one save and are shown as one entry, each line tagged with the record it came from (the tag moves onto the entry when a single record is behind it). A child row (`AuditSource.kind: "child"`) added or removed is one line naming the row by its model's display name, not its every column. A satellite created in the same save as the record joins the record's initial snapshot; created later, its values read as fields set from nothing. Computed fields are dropped — they change only because a field they are derived from did — and an update left with no lines is not shown.
 
 ## Timeline Models
 

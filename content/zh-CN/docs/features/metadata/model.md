@@ -43,9 +43,12 @@
 | 15 | dataSource | String | 数据源键 |  | 模型级多数据源 |
 | 16 | businessKey | MultiString | 业务键（字段列表） |  |  |
 | 17 | partitionField | String | 分区字段技术名 |  |  |
-| 18 | description | String | 模型描述 |  |  |
-| 19 | modelFields | OneToMany | 模型字段 |  |  |
-| 20 | projection | Boolean | 只读模型，映射到另一模型所有的表 | false | `true` ⇒ 永不生成 DDL；写 API 拒绝该模型；UI 隐藏新建/编辑/删除 |
+| 18 | projection | Boolean | 只读模型，映射到另一模型所有的表 | false | `true` ⇒ 永不生成 DDL；写 API 拒绝该模型；UI 隐藏新建/编辑/删除 |
+| 19 | enableAuditLog | Boolean | 写入此模型时是否生成变更日志 | true | `false` ⇒ 无审计日志历史、不触发数据变更流程；UI 隐藏审计日志面板 |
+| 20 | multiCountry | Boolean | 行按国家分区 | false | 读取收窄到调用方所在的国家；要求有指向 `CountryRegion` 的 `country` 字段 |
+| 21 | multiCompany | Boolean | 每行属于一家公司 | false | 读取受角色的公司授权约束；要求有指向 `Company` 的 `companyId` 字段 |
+| 22 | description | String | 模型描述 |  |  |
+| 23 | modelFields | OneToMany | 模型字段 |  |  |
 
 ### 2.1 `label` 模型标签
 
@@ -162,6 +165,22 @@
 ### 2.18 `projection` 只读投影
 
 标记一个只读模型，它映射到一张**不归它所有**的物理表——另一模型的表（例如某报表暴露 `Employee` 表的部分列并附加自己的计算字段），或元数据扫描器之外创建的表（例如 BI 管线产物）。投影模型的元数据行照常对账，但永不生成 DDL、拒绝全部写 API（新建/更新/删除/复制）、不允许声明索引，UI 强制只读。每个非投影 RDBMS 模型独占其表：同一 `tableName` 声明两个 owner 会启动失败。
+
+### 2.19 `enableAuditLog` 启用审计日志
+
+对此模型的新增 / 更新 / 删除是否生成变更日志——即表单审计日志面板中展示的记录历史，数据变更流程也由它触发。默认 `true`；值缺失（列为 NULL，或后端早于该开关）视为开启。
+
+报表和批量重写的派生数据应设为 `false`：这类数据的行没有保留历史的价值，因为源数据自身的变更日志就是审计轨迹。关闭后，该模型没有审计日志历史，其行不再出现在父记录的历史中，也不会触发任何数据变更流程，因此关闭前先确认没有流程绑定在该模型上。前端 Form 视图不会为这类模型渲染审计日志面板（见 [Form](../../frontend_dev/views/form#内置行为)）。
+
+存量数据库升级：`scanner-scope` 为空的环境需用迁移 V41 手动补列，见[审计日志开关](../../backend_dev/model_dev/annotation#审计日志开关enableauditlog)。
+
+### 2.20 `multiCountry` 多国家
+
+标记行按国家分区的模型，每个国家一套独立的行——例如允许值因国家而异的代码表。每次读取都收窄到调用方所在的国家（其角色可访问的那些公司所在的国家），且模型必须带有指向 `CountryRegion` 的 `country` 字段。只有行确实按国家划分时才声明：仅仅记录国家的模型一旦声明，就会隐藏其他国家的所有行。见[国家轴与公司轴](../../backend_dev/model_dev/annotation#国家轴与公司轴multicountry--multicompany)。
+
+### 2.21 `multiCompany` 多公司
+
+标记每一行只属于一家公司的模型，归属由指向 `Company` 的 `companyId` 字段表达。引入 `permission-starter` 后，每次读取都受调用方角色被授权的公司约束；没有公司授权的角色可以看到所有公司的行。不要在跨公司共享的数据上设置它。见[国家轴与公司轴](../../backend_dev/model_dev/annotation#国家轴与公司轴multicountry--multicompany)。
 
 ## 3. 模型定义
 

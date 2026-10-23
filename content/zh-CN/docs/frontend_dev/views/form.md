@@ -242,7 +242,7 @@ import { dependsOn, Field } from "@/components/fields";
 <Field
   fieldName="gallery"
   widgetType="MultiImage"
-  widgetProps={{ maxCount: 6, columns: 3, aspectRatio: "4 / 3", helperText: "Recommended 1200x900" }}
+  widgetProps={{ maxFiles: 6, columns: 3, aspectRatio: "4 / 3", helperText: "Recommended 1200x900" }}
 />
 
 <Field
@@ -310,7 +310,7 @@ import { dependsOn, Field } from "@/components/fields";
   fieldName="photos"
   widgetType="MultiImage"
   widgetProps={{
-    maxCount: 8,
+    maxFiles: 8,
     columns: 4,
     aspectRatio: "16 / 9",
     uploadText: "Upload gallery",
@@ -616,7 +616,7 @@ ManyToMany 视图绑定示例：
 ```tsx
 import { Field, RelationTable } from "@/components/fields";
 
-function UserRoleUserIdsTableView() {
+function RoleUsersTableView() {
   return (
     <RelationTable orders={["username", "ASC"]} pageSize={10}>
       <Field fieldName="username" />
@@ -628,7 +628,7 @@ function UserRoleUserIdsTableView() {
   );
 }
 
-function UserRoleUserIdsFormView() {
+function RoleUsersFormView() {
   return (
     <ModelDialog title="User Detail">
       <FormSection label="General" hideHeader>
@@ -642,9 +642,9 @@ function UserRoleUserIdsFormView() {
   );
 }
 
-export default function UserRoleFormPage() {
+export default function RoleFormPage() {
   return (
-    <ModelForm modelName="UserRole">
+    <ModelForm modelName="Role">
       <FormHeader />
       <FormToolbar />
 
@@ -657,9 +657,9 @@ export default function UserRoleFormPage() {
         </FormSection>
         <FormSection>
           <Field
-            fieldName="userIds"
-            tableView={UserRoleUserIdsTableView}
-            formView={UserRoleUserIdsFormView}
+            fieldName="users"
+            tableView={RoleUsersTableView}
+            formView={RoleUsersFormView}
           />
         </FormSection>
       </FormBody>
@@ -764,6 +764,26 @@ export default function UserProfileFormPage() {
 后端仍支持 XToMany 字段的全量提交。
 前端 `ModelForm` 默认增量提交（`PatchType` map），以避免分页关联编辑中的全列表覆盖风险。
 
+## 校验顺序
+
+ModelForm 交给 react-hook-form 的 resolver 由三层组成，从内到外依次为：
+
+1. **字段级 schema** —— `buildZodObjectFromMetaModel`：类型结构、列自身的 `required`、`length` / `scale`，以及来自 `constraints` 的值域（`min` / `max` / `pattern`）；`.pick(displayedFieldNames)` 只保留屏幕上展示的字段；最后由页面的 `schemaBuilder` 包装。
+2. **`withFieldConstraintsResolver`** —— 作用于整行的元数据条件：`requiredWhen` / `invalidWhen`，以及按关联模型的约束（`relatedMetaModelsByPath`）校验 OneToMany 字段中的各行。已被 schema 拒绝的字段保留 schema 的错误信息。
+3. **`withFieldConditionResolver`** —— 剔除被页面级 `hidden` 条件移除的字段上的错误。
+
+浏览器自带的校验已关闭（`<form>` 以及 `DialogForm` / `WizardDialog` 上设置了 `noValidate`）：数字字段会把 `min` / `max` 渲染到 input 上供步进按钮使用，若不关闭，原生校验会在 resolver 运行前用浏览器气泡拦下提交，拒绝提示 toast 和字段聚焦就都不会发生。
+
+关联对话框（`ModelDialog` → `DialogForm`）对所编辑的行运行同样的三层，只校验对话框中展示的字段。
+
+第 2 层从编译后的表单计划（form plan）获取 `relatedMetaModelsByPath`，表单计划通过静态遍历 `children` 获知表单的嵌套模型。页面若通过自己的组件渲染关联，这次遍历就看不进去，映射返回为空，其中的行也就不受任何校验——这样的页面要通过同名 prop 自行传入该映射。
+
+`requiredWhen` 即使是无条件的 `true` 形式也归第 2 层，因为后端对它的规则是"可以省略，不能清空"：更新时只有写入点名了该字段才会触发，因此规则出现之前保存的行仍然可以编辑。只有第 2 层能区分这两种情况——它拿得到表单的初始值（`initialValues`）。第 1 层只负责列自身的 `required`，不涉及任何条件。
+
+resolver 的上下文（`@mode`、`USER_ID`、声明的字段类型）在 **resolver 运行时**读取，而非构建时：react-hook-form 在首次渲染时就捕获了 resolver，而当前登录用户要到之后的 effect 中才填入。
+
+服务端按字段拒绝的写入（`ApiError.fieldErrors`，来自字段约束或 `ModelWriteValidator`）通过 `form.setError(field, { type: "server" })` 标到对应字段上——仅限本表单渲染的字段名，避免只存在于服务端的列留下一个看不见却阻止提交的错误——同时保留 API 客户端已弹出的 toast。
+
 ## 页面结构
 
 推荐默认布局：
@@ -774,6 +794,10 @@ export default function UserProfileFormPage() {
   - 右侧：业务动作区（自定义动作 + 内置 Duplicate/Delete + More Actions）
 - Body：`FormBody` 渲染堆叠 section 或真正的 tabs，以及内置审计面板布局
 - Audit：`FormBody(enableAuditLog)` 控制审计面板；大屏右侧、小屏底部
+
+## 记录级访问
+
+编辑模式下，表单向服务端询问调用方能对该记录做什么（`POST /{model}/getRecordAccess`）；新建模式下，询问新记录可以展示哪些敏感字段集（`GET /{model}/getCreateAccess`）。答复经 `RecordAccessContext` 提供，有三种用途：`Edit` / `Delete` 跟随该记录上可用的动作（覆盖用户经由其他角色持有的权限）；`sensitiveFieldSet` 在该记录上被隐藏的 `FormSection` 不渲染；可见、但仅由不能编辑该记录的角色授予的 section，其字段以只读渲染（`ReadonlyFieldScope`）。答复也按字段给出（`hiddenFields` / `readonlyFields`，以字段自身所属的模型为键）：记录隐藏的任何 `Field` 显示其标签和一把锁，而不是输入框或值（`NoAccessLock`，与列表单元格使用的标记相同）；记录保持只读的字段以只读渲染——无论所在 section 是否声明了字段集，父表单上展示的一对一子记录字段也与表单自身字段同样处理。表单只提交变更过的字段，因此被隐藏字段的空值永远不会被写回。答复加载期间，`Edit` 与 `Delete` 保持隐藏，由 `sensitiveFieldSet` 门控的 section 也保持隐藏（表单本身不锁定），因此记录拒绝的内容不会在屏幕上闪现；请求结束却没有答复（无记录或请求失败）时，照旧采用用户级门控。每次重新加载记录时表单都会重新询问（一次保存可能改变它允许的操作）；新答复加载期间，同一记录的上一个答复继续生效，按钮与 section 不会卸载再挂载——只有打开另一条记录时才会再次等待。query key 携带的是重载计数器，从不包含记录的值。同样会在 ModelForm 之外渲染的组件，可以用 `useHasRecordAccessProvider()` 区分两种 `null`：在表单内，它读取表单的答复（失败时回退到用户级门控），而不是自己再请求一次。
 
 ## Props
 
@@ -788,12 +812,16 @@ export default function UserProfileFormPage() {
 | `defaultValues` | `Record<string, unknown>` | No       | -                                     | 合并进元数据默认值的额外默认值。适用于注入父上下文，如 `relatedField` 值。 |
 | `copyFromId`    | `string \| null`          | No       | -                                     | 仅新建模式：用此源记录的可复制字段值（`getCopyableFields`）预填表单（复制流程）。全页表单通常用 `?copyFrom=<id>` 查询参数；嵌入式表单传此 prop。显式上下文（`defaultValues`、查询参数、关联字段）优先于复制值。 |
 | `enableWorkflow`       | `boolean`                 | No       | `false`                               | 在工具栏左侧显示工作流动作组（仅编辑模式）。 |
-| `enableCreate`         | `boolean`                 | No       | auto                                  | 内置 `Create New` 动作开关。`false` 禁用。省略则遵循默认（只读表单隐藏，除非显式 `true`）。 |
-| `enableDuplicate`      | `boolean`                 | No       | auto                                  | 内置复制动作开关。`false` 禁用。省略则遵循默认（只读表单隐藏，除非显式 `true`）。 |
-| `enableDelete`         | `boolean`                 | No       | auto                                  | 内置删除动作开关。`false` 禁用。省略则遵循默认（只读表单隐藏，除非显式 `true`）。 |
+| `enableCreate`         | `boolean`                 | No       | auto                                  | 内置 `Create New` 动作开关。三态，见下文「`enable*` 的三态解析」：`false` 隐藏，`true` 即使在只读表单上也显示，省略时仅在表单非只读时显示。 |
+| `enableDuplicate`      | `boolean`                 | No       | auto                                  | 内置复制动作开关。三态解析与 `enableCreate` 相同。另需 `MetaModel.copyable === true`。 |
+| `enableDelete`         | `boolean`                 | No       | auto                                  | 内置删除动作开关。三态解析与 `enableCreate` 相同。 |
+| `enableUpdate`         | `boolean`                 | No       | auto                                  | 路由只读模式下工具栏 `Edit` 按钮的开关。`false` 隐藏该按钮；不影响表单自身的只读状态。受 `update`（或 `updatePermissionId`）门控。 |
+| `updatePermissionId`   | `string`                  | No       | -                                     | 授权在本页编辑的权限 id，覆盖 `MODEL_PERMISSIONS` 中按模型查找的 `update`。用于由另一模型上的 `customPermission` 管理的页面（工作流草稿页）。 |
 | `confirmDeleteMessage` | `string`                  | No       | `Delete this {modelLabel}? This action cannot be undone.` | 内置删除动作的确认文案。 |
 | `timeline`      | `ModelFormTimelineConfig` | No       | -                                     | 时间轴模型行为开关（`enableAddVersion` / `enableVersionPanel` / `versionSummaryFields`，均可选）。仅当 `metaModel.timeline` 为 true 时生效；见下文「时间轴模型」。 |
 | `sliceId`       | `string \| null`          | No       | `?sliceId=` 搜索参数                  | 仅时间轴模型的编辑模式：加载指定版本（切片）而非 as-of 行（按 `sliceId` 跨时间轴 `searchList`）。整页表单通常用 `?sliceId=<x>` 搜索参数（对话框模式忽略）；嵌入式表单直接传该 prop。 |
+| `relatedMetaModelsByPath` | `Record<string, MetaModel>` | No | - | 表单计划触达不到的关联模型元数据，以持有它们的字段路径为键（`employeeProfileId`，而非 `EmployeeProfile`）。表单计划通过静态遍历 `children` 获知表单的嵌套模型，因此经由页面自有组件渲染的关联对它不可见：嵌套行不会按其自身模型的字段规则校验，其中的 widget 也拿不到元数据来显示必填星号或取值边界。处于这种情况的页面（向导步骤、定制的行内视图）通常已为提交载荷持有这些元数据，可以在这里声明。合并时优先级低于表单计划的结果：遍历确实触达的路径以计划为准。 |
+| `beforeSubmit`  | `(values, savedRecord, recordAccess) => boolean \| Promise<boolean>` | No | - | 校验通过后、写入之前调用；resolve 为 `false` 即取消保存（如用户拒绝了确认）。`savedRecord` 在编辑模式下是已加载的行，新建模式下为 `null`。`recordAccess` 是表单自身的记录级访问答复（见「记录级访问」）：没有可参考的答复时为 `null`，加载中为 `undefined`——在这里读取，不要在页面里再查一次。 |
 | `children`      | `ReactNode`               | Yes      | -                                     | 表单页面布局内容（`FormHeader/FormToolbar/FormBody`）。                               |
 
 运行时字段条件：
@@ -815,6 +843,7 @@ export default function UserProfileFormPage() {
 - `with: "all"`：发送当前表单 submit 形状
 - 顶层注册的 XToMany 字段序列化为关联 patch 载荷，而非原始 UI 行
 - 响应 `values` 仅 patch 返回的键；`null` 清空字段
+- 响应 `readonly` / `required` 是字段名列表，列出处于该状态的全部字段；在 `update` 中声明但未出现在列表中的字段，重置为其元数据与本地条件决定的状态
 - 响应 `readonly` / `required` 覆盖本地生效状态，直至 reset、cancel、reload 或后续响应
 - 此远程联动运行时针对 `ModelForm` 实现；独立 `DialogForm` 不自动可用
 
@@ -843,7 +872,8 @@ export default function UserProfileFormPage() {
 | Prop             | Type                                        | Required | Default      | Notes                                                                    |
 | ---------------- | ------------------------------------------- | -------- | ------------ | ------------------------------------------------------------------------ |
 | `sectionNav`     | `boolean`                                   | No       | `false`      | 启用侧边 section 导航。为 `true` 时，section/tab 至少有 2 个 section 才渲染导航。 |
-| `enableAuditLog` | `boolean`                                   | No       | `true`       | 切换审计面板（仅编辑模式渲染）。                          |
+| `enableAuditLog` | `boolean`                                   | No       | `true`       | 切换审计面板（仅编辑模式渲染）。模型自身的 `MetaModel.enableAuditLog` 为 `false` 时，无论此 prop 取何值，面板都保持隐藏。 |
+| `enableVersionPanel` | `boolean`                               | No       | `true`       | 切换时间轴模型的 Versions 面板（同时仍受 `timeline.enableVersionPanel` 门控）。在编辑关联表格某一行的对话框中应关闭：表格已经列出各个版本，且在父记录保存前该行只是表单本地状态。 |
 | `children`       | `ReactNode`                                 | Yes      | -            | 内容节点。根级 `FormSection`/`Field` 作为 tabs 上方共享内容渲染；根级 `FormTab` 激活 tabs 模式。`FormTab` 不能嵌套在另一个 `FormTab` 内。 |
 
 `FormBody` 从根子节点推断布局模式。任意根级 `FormTab` 激活 tabs 模式；放在 `FormTab` 外的 `FormSection` 与 `Field` 渲染在 tab 条上方，作为所有 tab 可见的共享内容。
@@ -873,10 +903,13 @@ export default function UserProfileFormPage() {
 | `hideHeader`  | `boolean`             | No       | `false`  | 隐藏视觉 section header，section 仍可参与导航。        |
 | `divided`     | `boolean`             | No       | `false`  | section 之间添加上边框。第一个 section 上 suppressed（`:first-child`）。 |
 | `children`    | `ReactNode`           | No       | -        | 通常为 `Field` 节点，以及可选的 section 作用域 `Action` 节点。                    |
+| `permission`  | `string`              | No       | -        | section 级权限门控，以所在表单的模型为键；用户缺少 `(modelName, permission)` 时整个 section 被省略。未纳管 / 有歧义的组合（状态为 `undefined`）直接放行。 |
+| `permissionId` | `string`             | No       | -        | 显式权限 id 门控；与 `permission` 同时设置时以此为准。用于跨模型门控（如 Employee 上的 Banking section）。 |
+| `sensitiveFieldSet` | `string \| string[]` | No | -        | 敏感字段集门控：调用方持有其中任一 id 即显示。在带有记录级答复的表单内跟随该答复（加载中隐藏；仅由不能编辑的角色授予该字段集时只读；记录隐藏了该字段集、而调用方在其他记录上持有它时，section 仍会绘制，其字段显示锁，与列表单元格一致）；否则由用户级映射决定，管理员始终放行。与 `permission*` 是"且"的关系。 |
 
 说明：
 
-- `FormSection` 自动向最近的 `FormBody` section 注册表注册自身。
+- `FormSection` 自动向最近的 `FormBody` section 注册表注册自身——被 `permission` / `permissionId` / `sensitiveFieldSet` 门控掉时除外：不渲染的 section 也不会出现在 section 导航中，门控放开后（如记录级答复到达时）才注册。
 - 省略 `label` 时，导航标签回退为 `"Section"`。
 - 通用标签（`"Section"`）在导航中自动重命名为 `Section 1`、`Section 2` 等。
 - `hideHeader` 仅影响渲染的 header；不禁用 section-nav 注册。
@@ -894,6 +927,7 @@ export default function UserProfileFormPage() {
 - 仅当前视图至少有 2 个已注册 section 时渲染导航。
 - tabs 模式下，`FormTab` 自身的 `sectionNav` 优先于该 tab 的 `FormBody` 设置。`FormTab` 上省略则继承 `FormBody` 的值。
 - 点击导航项平滑滚动表单自身滚动容器，而非浏览器窗口。
+- 导航高度不会超过表单滚动容器的可见部分：高度以此为上限（窗口尺寸变化时重新测量），列表自行滚动，滚到尽头也不会带动表单。内容滚动时，高亮的 section 始终保持在列表可见范围内。若没有这个上限，比矮窗口还高的导航会随内容一起滚走，后面的 section 要等内容滚到底才会出现。
 - 堆叠模式下，侧边导航面向桌面：无右侧审计列时从 `xl` 布局显示；审计日志在右侧时从 `2xl` 显示。
 
 堆叠示例：
@@ -950,6 +984,9 @@ import { FormBody, FormTab } from "@/components/views/form/components/FormBody";
 | ----------- | ----------- | -------- | ------- | ---------------------------------------------------- |
 | `children`  | `ReactNode` | No       | -       | 自定义动作。推荐：`<Action type="..." />`。 |
 | `className` | `string`    | No       | -       | 工具栏容器的额外 wrapper class。           |
+| `leading`   | `ReactNode` | No       | -       | 填充左侧区域，如紧凑的记录摘要。此时放在工具栏的动作移到右侧区域，位于 Edit / Save 之后、Create New / More 之前。 |
+
+空工具栏不绘制。工具栏内什么都没渲染时——没有按钮、没有新增版本的日期输入框、没有编辑状态标签——外框（边框、内边距、粘性栏）也一并隐藏，这样页面上没有任何可用动作的读者看到的是标题直接衔接内容，而不是一个空框。每个控件仍各自决定可见性（Edit 取决于 update 权限，Create New / More Actions 取决于各自的权限，Save / Cancel 取决于模式）；工具栏通过 `src/styles/globals.css` 中的 `[data-form-toolbar]` 规则检查实际渲染出了什么，而不是重新计算这些条件。新放进工具栏的内容只要渲染出 `button` 或 `input` 就自动适用；纯文本项需要加上同样的 `data-form-edit-status` 标记才能让工具栏保持可见。以 `leading` 传入的内容（如记录摘要）同样会让工具栏保持可见，因此没有可用动作的读者仍能看到它。
 
 ### ModelForm 中的 Actions
 
@@ -1090,9 +1127,25 @@ function UnlockDialog() {
 
 - **Granted** → 控件 / 动作保持可见。
 - **Denied** → 控件 / 动作隐藏；拒绝 `update` 时表单强制只读（即使 URL 为 `?mode=edit`，用户也会进入只读 —— 服务端独立强制，此为 UX）。
-- **Unmanaged** → `(modelName, action)` 不在 `MODEL_PERMISSIONS`（跨页面歧义）。自动门控无意见；页面可传显式 `readOnly` / `enable*` props。
+- **Unmanaged** → `(modelName, action)` 不在 `MODEL_PERMISSIONS`（跨页面歧义）。自动门控无意见，因此控件跟随表单模式：可编辑时显示，表单硬只读后隐藏。页面仍可传显式 `readOnly` / `enable*` props。
 
 业务 props 设为 `false` 时仍优先（页面显式隐藏 Edit，即使 SUPER_ADMIN）。SUPER_ADMIN 在内部短路权限查找。
+
+### `enable*` 的三态解析
+
+`enableCreate` / `enableDuplicate` / `enableDelete` / `enableUpdate` 与 `timeline.enableAddVersion` 由页面 prop 加上权限状态解析得出，解析结果一路保持**三态**直到工具栏。这三个值不能简化为两个——各自含义不同：
+
+| 解析结果 | 含义 | 非只读 | 硬只读（`readOnly` prop 强制） |
+| --- | --- | --- | --- |
+| `false` | 关闭——页面主动关闭，或权限被拒绝，或模型是投影模型 | 隐藏 | 隐藏 |
+| `undefined` | 无人反对——页面未传 prop，且该 `(model, action)` 的权限已授予或未声明 | 显示 | **隐藏** |
+| `true` | 页面显式要求显示该控件 | 显示 | 显示 |
+
+只有页面真正传入 `true` 才会得到 `true`。*已授予*的权限解析为 `undefined` 而不是 `true`——持有 `create` 并不意味着要推翻页面做出的只读决定。拒绝的判定顺序是先看页面是否关闭、再看权限，因此 `enableCreate={true}` 永远不会把控件交给授权映射拒绝的用户。
+
+"硬只读"指 `readOnly` prop 强制表单只读。路由只读模式（可编辑记录上的 `?mode=read`，用户可点击 Edit 继续编辑）*不是*硬只读，因此 `undefined` 在那里仍然显示——这就是常规的详情页工具栏。
+
+**因此只读详情页完全不需要 `enable*` props。** `<ModelForm modelName="X" readOnly={true}>` 会自行关闭 Create New / Duplicate / Delete / Add Version。只有在要关闭一个本来可用的控件时才传 `enable*={false}`，只有在只读表单确实必须保留写入入口时才传 `enable*={true}`。
 
 **投影模型**（`MetaModel.projection === true`，来自 `@Model(projection = true)`——只读模型，映射到另一模型所有的表）：表单在所有模式下强制只读（包括 create），Edit / Create New / Duplicate / Delete / Add Version 以及时间线版本面板的 Correct / Delete 全部关闭，叠加在权限之上——后端会拒绝此类模型的一切写入。这是结构属性而非权限：SUPER_ADMIN 得到同样的只读表单。
 
@@ -1130,15 +1183,18 @@ function UnlockDialog() {
   - 编辑 / 创建模式：`Cancel` 按钮在工具栏 `Save` 旁（`FormPrimaryActions`）；dirty 时确认，reset 到最新加载快照，返回只读模式
   - 只读模式：`Back` 按钮在页面 header 右侧（`FormBackButton`，`ModelSideForm` 内隐藏）；导航到 breadcrumb 推导的路由（`resolveBackRoute` = navigation manifest + pathname）。MultiView `linkTo` 详情路由（`/list/<tab>/<id>`）解析为 tab crumb `/list?tab=<tab>` 而非无路由的 `/list/<tab>`，Back 不会 404 且回到来源 tab —— 无携带查询状态，刷新 / 深链解析一致
 - Save/create mutation 处理与 toast。
+- **被拒绝**的 Save 同样会给出提示，绝不静默：`describeSubmitBlock` 把 resolver 的错误转换为一条错误 toast，点出第一个无效字段及其信息（`Cannot save — ID Type: This field is required`），并附上其余无效字段的数量，然后表单把该控件滚动到可视区域。控件由 `fieldControlSelector` 定位——`[name]`、`[id]`，或每个 `FormItem` 与关联 widget 都会发布的 `data-field-path`——因为大多数 widget（combobox、日期选择器、树选择器）不会在 DOM 上放置 `name`，而过去对无效提交的*唯一*响应，就是一次什么也没找到的聚焦尝试。
 - 审计查询内建 `useGetChangeLogQuery(modelName, id)`：
   - `pageNumber=1`
   - `pageSize=50`
   - `order=DESC`
   - `includeCreation=true`
   - `dataMask=true`
+- **时间轴模型取该版本的审计日志**——`useGetSliceChangeLogQuery(modelName, sliceId)`，切片取自已加载的记录，分页参数相同（这里 `includeCreation` 写作 `getCreate`）。进入表单的两条路径都适用：Versions 面板的 `?sliceId=` 链接，以及列表的 as-of 读取。实体级 `getChangeLog` 对时间轴模型会被拒绝，因此从不为其发起。
 - 全局审计 API 开关：
-  - `configs.env.enableChangeLog`（`NEXT_PUBLIC_ENABLE_CHANGE_LOG`，默认 `true`）
+  - `configs.env.enableChangeLog`（`NEXT_PUBLIC_ENABLE_CHANGE_LOG`，默认 `true`）——经 `/runtime-env.js`（`src/lib/runtime-env.ts`）在运行时读取，不打进 bundle；部署时与后端的 `system.enable-change-log`（`SYSTEM_ENABLECHANGELOG`）取同一个值，面板跟随后端自己的开关
   - 禁用时 `FormAuditPanel` 不发起 change-log API 请求，显示禁用提示
+- 模型级审计开关：声明为 `@Model(enableAuditLog = false)` 的模型（报表、批量重写的派生数据）不生成变更日志，其元数据为 `enableAuditLog: false`。此时 `FormBody` 完全不渲染审计日志面板——不占侧栏，也不发请求——而不是显示一个永远为空的列表。只有显式的 `false` 才算关闭：早于该开关的后端不返回此字段，面板保持开启。
 - `FormWorkflowActions` + `WorkflowActionGroup` 支持工作流状态：
   - `draft`：submit
   - `pending`：withdraw/approve/reject
@@ -1149,6 +1205,10 @@ function UnlockDialog() {
   - `update`：`<=5` 展开，`>5` 显示前 5 个 + `Show all fields (N)`
   - `create`：默认折叠
   - `delete`：仅操作信息
+- **`update` 条目列出的是该次写入触及的列，而不是该行的全部列。** 变更日志上的两份载荷并不对称：`dataBeforeChange` 是完整的原始行，`dataAfterChange` 只包含变更过的列（后端发布方会从中剥离主键与审计列）。因此差异由 `dataAfterChange` 的键驱动，`dataBeforeChange` 只用来查这些列原来的值。把两组键取并集——此面板过去的做法——会把每个未触及的列报告为 `value → —`，把唯一真正变化的字段淹没其中。
+- **独立使用，以及多条记录合并为一个列表。** 给定 `modelName` + `recordId` 时，`FormAuditPanel` 可在表单上下文之外渲染，标题与在表单内相同，都是 `Audit Log`——展示框架审计日志的宿主，沿用产品其他地方对它的叫法。`sources`（`AuditSource[]` = `{ modelName, recordId?, label?, kind?, referencing?, rowLabel? }`）取代这一对参数，把多条记录合并成一个列表，所有记录统一按最新在前排序，每个条目标注其 `label`（列表只有一个来源时不显示标注，否则就成了一整列同样的词）。没有 `recordId` 的来源会被跳过——未保存的行没有历史，为它发起请求会被后端拒绝。来源也可以改用 `referencing: { model, id, field }` 指定一组行——其模型中多对一字段 `field` 指向 `model` 的记录 `id` 的每一行，包括之后已删除的行——通过 `getRecordChangeLog` 的 `referencing` 参数查询，该参数匹配每条日志携带的引用；记录自身的条目会一并返回，列在 `referencing.label` 之下，没有该 label 时则略去。适用于记录自身模型没有关联字段可以触达的行。显示名称无法为其行命名的模型（只有一个普通 id 列）用 `rowLabel(row)` 命名行，该函数接收该行各条日志记录下的全部内容；指向字段以及仍以 id 形式保留的引用，会从行的详情中去掉。不适用于时间轴模型：切片的历史通过另一个端点按 `sliceId` 查询，两者无法交错合并。需要先确定查询哪些记录的宿主，在确定期间传入 `sourcesLoading` / `sourcesError`：来源确定之前，空状态会是一个自信的错误答案，因此面板改为显示加载中或读取失败。
+- **分布在多个模型中的记录。** 在表单内，面板除列出记录自身的历史外，还列出其关联所持有的行的历史——默认开启（`relatedFields="auto"`）。变更日志按模型、按行保存，因此对附属记录的编辑——如员工在个人档案上的 Preferred Name、某个家庭成员行——记在该附属记录名下，否则就不会出现在该记录的审计列表中。`"auto"` 取表单渲染的每个一对一与一对多字段（来自表单的读取计划）：页面就地编辑的关联属于该记录，而页面不展示的关联——如员工所管理的部门——是另一条记录的历史，仅凭元数据无法区分。多对一字段从不计入。`excludeRelatedFields` 把指定关联排除在 `"auto"` 之外；显式数组则手动指定关联，`relatedFields={[]}` 只保留记录自身的历史。给定 `sources` 时忽略。全部历史只发一次请求 `GET /ChangeLog/getRecordChangeLog`，由后端收集各行并作为一个列表分页：一对一按其当前指向的行，一对多按每条日志携带的引用——因此已删除子行的历史也会列出——对日志开始携带引用之前写入的日志，则按当前各行的 id 查找。只有在那之前就被删除的子行，其历史无法取回。读者的敏感字段集所隐藏的字段由后端移除，只触及这些字段的更新既不列出也不计数。
+- **条目如何呈现。** 共享同一 trace id 的日志条目属于同一次保存，显示为一个条目，其中每一行标注来源记录（条目背后只有一条记录时，标注移到条目上）。新增或移除的子行（`AuditSource.kind: "child"`）显示为一行，以其模型的显示名称指代该行，而不是列出它的每一列。与记录在同一次保存中创建的附属记录并入记录的初始快照；之后才创建的，其值显示为从空值设置。计算字段会被略去——它们变化只是因为其来源字段变了——没有剩余行的更新不显示。
 
 ## 时间轴模型
 

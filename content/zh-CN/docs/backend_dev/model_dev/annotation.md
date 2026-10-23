@@ -78,7 +78,10 @@ public enum CustomerTier {
 | `storageType` | `StorageType` | `RDBMS` | `storageType` | |
 | `versionLock` | boolean | `false` | `versionLock` | 乐观锁列；要求类上有 `version` 字段，每次插入自动盖章，起始值 `0` 物化进 `sys_field.default_value`，因此列 DDL 带 `DEFAULT 0` |
 | `multiTenant` | boolean | `false` | `multiTenant` | 要求类上有 `tenantId` 字段 |
+| `multiCountry` | boolean | `false` | `multiCountry` | 行按国家分区；要求类上有 `country` 字段（指向 `CountryRegion` 的 to-one 关联），每次读取都收窄到调用方所在的国家。见下文「国家轴与公司轴」 |
+| `multiCompany` | boolean | `false` | `multiCompany` | 行属于一家公司；要求类上有 `companyId` 字段（指向 `Company` 的 to-one 关联），权限授权以它为锚点约束每次读取。见下文「国家轴与公司轴」 |
 | `copyable` | boolean | `true` | `copyable` | `false` ⇒ 复制 API 拒绝该模型；UI 隐藏 Duplicate |
+| `enableAuditLog` | boolean | `true` | `enableAuditLog` | `false` ⇒ 增删改不生成变更日志——用于批量重写的派生 / 报表模型，审计轨迹由其源数据承载。这也意味着该模型没有审计日志历史，不触发任何数据变更流程（同步或异步），其行也不出现在父记录的历史中；更新时对已存储行的读取保留。对仍开启的模型，`system.enable-change-log` 依旧控制 MQ 投递。列值为 NULL 视为开启。见下文「审计日志开关」 |
 | `projection` | boolean | `false` | `projection` | `true` ⇒ 只读模型，映射到一张**不归它所有**的表（另一模型的表，或外部创建的表，如 BI 管线产物）。永不生成 DDL；写 API 拒绝；声明 `@Index` 在启动时被拒；仅限 RDBMS。每个非投影 RDBMS 模型独占其表——同一 `tableName` 出现两个 owner 会启动失败 |
 | `dataSource` | String | `""` | `dataSource` | 空 → 主数据源 |
 | `businessKey` | String[] | `{}` | `businessKey` | 支持组合 |
@@ -87,6 +90,41 @@ public enum CustomerTier {
 | （DB 自动） | — | — | `id` | 主键 |
 
 审计字段（`createdTime` / `createdBy` / `createdId` / `updatedTime` / `updatedBy` / `updatedId`）来自 `AuditableModel`，**不**通过 `@Field` 声明——当类继承 `AuditableModel` 时由 `DdlGenerator` 自动注入。
+
+#### 国家轴与公司轴（`multiCountry` / `multiCompany`）
+
+租户隔离并不是框架自动施加的唯一一种读取收窄。`@Model(multiCountry = true)` 标记行按国家分区的模型——每个国家一套独立的行，例如允许值因国家而异的代码表——对它的每次读取（列表、分页、计数、引用查找）都会收窄到调用方所在的国家。`@Model(multiCompany = true)` 标记每一行只属于一家公司的模型；ORM 本身不会收窄它，但引入 `permission-starter` 后，对它的每次读取都受角色的公司授权约束，因此只被授权部分公司的角色只能看到这些公司的行。
+
+锚点字段按名称固定，并在启动时校验：
+
+| 声明 | 必需的锚点字段 |
+|---|---|
+| `multiCountry = true` | `country`——指向 `CountryRegion` 的 `MANY_TO_ONE` / `ONE_TO_ONE`（由 `reference-data-starter` 提供） |
+| `multiCompany = true` | `companyId`——指向 `Company` 的 `MANY_TO_ONE` / `ONE_TO_ONE`（应用自己的公司模型，按这个名称定位） |
+
+以下情况启动失败：缺少锚点字段；同名字段不是指向目标模型的 to-one 关联；`Company` 模型自身声明了 `multiCompany`。只有这个保留名称才会把模型放到某个轴上：模型可能出于其他原因引用国家或公司——签发证件的国家、银行服务的国家、只付款而不拥有记录的公司——这类字段仍是普通属性。只能经由另一个模型才能到达其公司（或国家）的模型，例如按部门统计的数据，把锚点声明为 `dynamic` 级联字段：它不占用列，针对它的条件在查询时沿级联路径关联，它也仍可像其他字段一样过滤、排序和显示。
+
+```java
+@Field(label = "Company", cascadedField = "deptId.companyId", dynamic = true,
+        fieldType = FieldType.MANY_TO_ONE, relatedModel = Company.class)
+private Long companyId;
+```
+
+两者都取自调用方的权限，从不取自请求：没有任何请求头用来选择公司或国家。公司授权就是角色在 `Company` 模型上的普通数据范围——未配置表示不受限，显式配置为空则不能访问任何公司。调用方所在的国家，是其角色可访问的那些公司所在的国家，以 `Context.grantedCountries` 放在请求上下文中；同一国家的两家公司共享该国家的行。角色不能访问任何公司的调用方（如自助服务的员工）回退到其所属公司的国家。无从得知时——公开端点、服务间调用、定时任务、MQ 消费者、导入任务——读取不收窄，这些路径上需要按国家过滤的代码自行在 filters 中传入。
+
+国家收窄是默认值而非约束，并且会静默让步，因为过度的条件会清空用户需要的列表：filters 中点名 `id` 的读取（按 id 读取，或为显示而展开已存储的引用）不收窄；调用方已对 `country` 设置条件时保留其自身条件——表单正是借此按表单中选定的公司限定下拉选项，导入也借此按该行自身的国家解析行。
+
+只有当行确实属于某一个国家或某一家公司时才声明这些开关。仅仅记录国家的字段（如地址中的国家）不会让模型成为 `multiCountry`；跨公司共享的数据（如租户级代码表）不得声明 `multiCompany`：任一错误都会静默隐藏其他国家或公司的行。反向改动同样有陷阱：引入 `permission-starter` 后，不是 `multiTenant` 的 `multiCountry` 模型属于国家值域，其读取跳过行级数据范围（写入仍受端点权限控制），因此从这类表上移除 `multiCountry`，可能让它供数的所有下拉框变空。
+
+#### 审计日志开关（`enableAuditLog`）
+
+默认情况下，每次新增 / 更新 / 删除都会生成变更日志：它是表单审计日志面板背后的记录历史，也是数据变更流程的触发事件。`@Model(enableAuditLog = false)` 为单个模型关闭它，适用于行数据被批量重算、整体重写的派生 / 报表模型：这类模型的历史没有保留价值，因为源数据自身的变更日志就是审计轨迹。不生成日志还省掉了事务内的缓冲——它会把每条写入行的变更前 / 变更后数据一直保留到提交。
+
+关闭后，该模型没有审计日志历史，其行不再出现在父记录的历史中，也不会触发任何数据变更流程，同步、异步都不会——关闭前先确认没有流程绑定在该模型上。上文的审计字段照常盖章，更新时也照常读取 diff、计算字段与版本校验所需的已存储行。该开关按模型决定是否生成日志；对仍开启的模型，`system.enable-change-log` 依旧控制哪些内容离开进程（MQ 持久化、异步流程）。
+
+元数据 API（`/metadata/getMetaModel`）以模型的 `enableAuditLog` 返回该开关，值为 `false` 时前端 Form 视图不渲染审计日志面板——见 [Form](../../frontend_dev/views/form#内置行为)。
+
+**存量数据库升级**：该开关存放在 `sys_model.enable_audit_log`（Studio 在 `design_model.enable_audit_log` 中镜像）。全新数据库无需任何操作；`scanner-scope` 非空时，启动会自动补上该列（见[目录表自举](#目录表自举sys_-表自身的结构)）。只有 `scanner-scope` 为空的环境（生产环境即是如此）需要手动执行迁移 V41：`deploy/migrations/mysql/V41__add_enable_audit_log_to_sys_model.sql`，PostgreSQL 版本写在其头部注释中；未部署 `studio-starter` 的环境跳过其中的 `design_model` 部分。该迁移在发版前后执行都安全，但应在新版本启动前执行：缺少该列时运行时照常启动、所有模型保留审计日志，但无法关闭该开关，且 `MetadataAnnotationChecker` 会把缺失的列报告为漂移。
 
 ### `@Field` ↔ `SysField`
 

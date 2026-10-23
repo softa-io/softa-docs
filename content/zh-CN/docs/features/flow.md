@@ -339,6 +339,8 @@ Flow > BP = Workflow > BPMN
 - `Subflow`
 - `FieldChange`（仅 COMPUTE 场景）
 
+`EntityChange` 由变更日志触发，因此声明为 `@Model(enableAuditLog = false)` 的模型永远不会触发它，同步、异步都不会——见[审计日志开关](../backend_dev/model_dev/annotation#审计日志开关enableauditlog)。
+
 Pulsar 相关组件按条件注册：
 
 | 属性 | 组件 | 用途 |
