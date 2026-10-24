@@ -169,6 +169,27 @@ import {
 | `reduce` | `"first" \| "all"` | 单条或列表。见下文。 |
 | `limitSize` | `number?` | 覆盖拉取上限。 |
 | `inheritWorkspaceFilter` | `boolean?` | 宿主视图应用 workspace 过滤时（`<ModelBoard sidecars>` / `<ModelTable sidecars>` / `<ModelCard sidecars>` 默认行为），设为 `false` 可退出 —— 适用于跨 workspace 查找（系统参考数据等）。直接使用 `<ModelSidecarProvider>` 时忽略此字段。 |
+| `fetchRows` | `(primaryIds: string[]) => Promise<Record<string, unknown>[]>?` | 从接口读取行，而不是对 `model` 做 `searchList`。见[自定义数据源](#自定义数据源fetchrows)。 |
+
+#### 自定义数据源（`fetchRows`）
+
+有些逐行数据并不是某个模型里存的行：由服务按主 id 现算（状态汇总、跨多张表的计数），从它自己的接口返回。`fetchRows` 让这类接口给 sidecar 供数：每批调用一次，传入屏幕上的主 id；返回的每一行都必须带 `joinField` —— 这些行的归并与分发和 `searchList` 返回的行完全一样。
+
+```ts
+const seedSummary: SidecarConfig = {
+  id: "seedSummary",
+  // Keys the cache: name the model whose writes change the answer, so invalidateModelQueries refreshes it.
+  model: "SeedLoadRecord",
+  joinField: "tenantId",
+  reduce: "first",
+  inheritWorkspaceFilter: false,
+  // A typed DTO (an interface, no index signature) is not assignable to Record<string, unknown>, so it is cast.
+  fetchRows: async (tenantIds) =>
+    (await seedDataService.getTenantSummaries(tenantIds)) as unknown as Record<string, unknown>[],
+};
+```
+
+`filters`、`orders`、`limitSize` 与 workspace 过滤描述的是一次 `searchList`，对自定义数据源不生效 —— 返回什么、给谁，由接口决定。`model` 仍是查询 key 的前缀（`[model, "sidecar", { ..., source: id }]`），所以写入后 `invalidateModelQueries(queryClient, model)` 会刷新这个 sidecar。`fetchRows` 要调用 service 时，在 hook 里构建 config，页面本身就不必 import 这个 service。
 
 #### `reduce` 语义
 
@@ -245,7 +266,7 @@ useOptionalModelSidecarRegistry(): ModelSidecarRegistry | null
 ## 陷阱
 
 - **变更后刷新。** Sidecar 查询以 sidecar 模型名作为 key（如 `["DesignActivity", …]`）。动作变更主模型时，框架失效仅触及 `[primaryModel, …]` —— sidecar 不会自动重拉。Board / Card 工具栏 Refresh（设置 `sidecars` 时自动渲染）可处理；异步动作更新 sidecar 状态后请使用。ModelTable 工具栏 Refresh 尚未接入 —— 需要时请手动 invalidate。
-- **形态不一致。** Sidecar 上 join 字段若为 `ModelReference`（`{id, displayName}`），框架的 `getModelRefId` 会处理。若后端对部分 sidecar 返回裸 string id、部分返回对象，请在 API 层归一 —— 不要让框架猜测。
+- **形态不一致。** join 值可以是 `ModelReference`（`{id, displayName}`，模型的 ManyToOne 返回这种形态），也可以是裸 id（字符串或数字，`fetchRows` 数据源通常这样返回）；两者都解析为同一个主 id。其他形态会被丢弃，所以特殊形态请在 API 层归一 —— 不要让框架猜测。
 - **加载闪烁。** Sidecar 查询在主记录到达后才触发。卡片首屏 sidecar 为空；数据到达后徽章填充。需要骨架屏时用 `useSidecarLoading(slotId)`。
 - **直接使用 `<ModelSidecarProvider>`。** 绕过宿主集成（少见）时，你负责 `primaryIds` 引用稳定 —— 请 memoize：`useMemo(() => records.map(r => r.id), [records])`。宿主视图已替你处理。
 

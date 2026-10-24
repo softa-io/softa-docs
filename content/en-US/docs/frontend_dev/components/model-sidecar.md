@@ -169,6 +169,27 @@ The standalone provider exists for cases where the view doesn't own the records 
 | `reduce` | `"first" \| "all"` | Singleton or list. See below. |
 | `limitSize` | `number?` | Override fetch limit. |
 | `inheritWorkspaceFilter` | `boolean?` | When the host view applies the workspace filter (the default behaviour of `<ModelBoard sidecars>` / `<ModelTable sidecars>` / `<ModelCard sidecars>`), set `false` to opt out — useful for cross-workspace lookups (system reference data, etc.). Direct uses of `<ModelSidecarProvider>` ignore this field. |
+| `fetchRows` | `(primaryIds: string[]) => Promise<Record<string, unknown>[]>?` | Read the rows from an endpoint instead of `searchList` on `model`. See [Custom source](#custom-source-fetchrows). |
+
+#### Custom source (`fetchRows`)
+
+Some per-row data is not stored as rows of any model: a service computes it per primary id (a status summary, a count across several tables) and serves it from its own endpoint. `fetchRows` lets such an endpoint feed a sidecar: it is called once per batch with the primary ids on screen, and each row it returns must carry `joinField` — the rows are reduced and dispatched exactly like `searchList` rows.
+
+```ts
+const seedSummary: SidecarConfig = {
+  id: "seedSummary",
+  // Keys the cache: name the model whose writes change the answer, so invalidateModelQueries refreshes it.
+  model: "SeedLoadRecord",
+  joinField: "tenantId",
+  reduce: "first",
+  inheritWorkspaceFilter: false,
+  // A typed DTO (an interface, no index signature) is not assignable to Record<string, unknown>, so it is cast.
+  fetchRows: async (tenantIds) =>
+    (await seedDataService.getTenantSummaries(tenantIds)) as unknown as Record<string, unknown>[],
+};
+```
+
+`filters`, `orders`, `limitSize` and the workspace filter describe a `searchList` and are not applied to a custom source — the endpoint decides what it returns and for whom. `model` still prefixes the query key (`[model, "sidecar", { ..., source: id }]`), so `invalidateModelQueries(queryClient, model)` refreshes the sidecar after a write. Build the config in a hook when `fetchRows` calls a service, so the page itself does not import the service.
 
 #### `reduce` semantics
 
@@ -245,7 +266,7 @@ Notes:
 ## Pitfalls
 
 - **Refresh after mutation.** Sidecar queries are keyed on the sidecar model's name (e.g. `["DesignActivity", …]`). When an action mutates the primary model, the framework's invalidation only touches `[primaryModel, …]` — sidecars don't auto-refetch. The Refresh button on the Board / Card toolbar (auto-rendered when `sidecars` is set) handles this; use it after async actions that update sidecar state. ModelTable's toolbar refresh is not yet wired up — invalidate manually if you need it.
-- **Shape mismatch.** If the join field on the sidecar comes back as a `ModelReference` (`{id, displayName}`) the framework's `getModelRefId` handles it. If your backend returns a bare string id on some sidecars and an object on others, normalize at the API layer — don't make the framework guess.
+- **Shape mismatch.** The join value may be a `ModelReference` (`{id, displayName}`, what a model's ManyToOne returns) or a bare id (a string or number, what a `fetchRows` source usually sends); both resolve to the same primary id. Anything else is dropped, so normalize an unusual shape at the API layer — don't make the framework guess.
 - **Loading flicker.** Sidecar queries fire after the host view's primary records arrive. The first paint of cards will show empty sidecar values; once data arrives, badges fill in. Use `useSidecarLoading(slotId)` if you need to render skeletons.
 - **Direct `<ModelSidecarProvider>` use.** When you bypass the host-view integration (rare), you own `primaryIds` referential stability — memoize the array: `useMemo(() => records.map(r => r.id), [records])`. The host views do this for you.
 
