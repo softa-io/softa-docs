@@ -8,7 +8,7 @@
 // Editor page (always the SSR-safe lazy entry — xyflow measures the DOM):
 import { FlowDesignerLazy } from "@/components/flow/flow-designer-lazy";
 
-<FlowDesignerLazy designId={designId} toolbarExtra={<BackButton />} />
+<FlowDesignerLazy flowId={flowId} toolbarExtra={<BackButton />} />
 
 // Read-only render of a published snapshot with a run-state overlay:
 import { FlowViewer, useInstanceOverlay } from "@/components/flow";
@@ -21,7 +21,7 @@ const { overlay, trace } = useInstanceOverlay(instanceId);
 
 | 导出 | 用途 |
 | --- | --- |
-| `FlowDesigner` / `FlowDesignerLazy` | 自包含的设计器：组件面板、画布、属性面板、工具栏、自动保存、470 冲突对话框、校验诊断、发布对话框、版本历史、调试运行。`FlowDesignerProps = { designId, readOnly?, toolbarExtra?, className? }`。在 Next.js 页面中始终挂载 lazy 入口。 |
+| `FlowDesigner` / `FlowDesignerLazy` | 自包含的设计器：组件面板、画布、属性面板、工具栏、自动保存、470 冲突对话框、校验诊断、发布对话框、版本历史、调试运行。`FlowDesignerProps = { flowId, readOnly?, toolbarExtra?, className? }`。在 Next.js 页面中始终挂载 lazy 入口。 |
 | `FlowViewer` | 只读画布：`{ definition, overlay?, onNodeClick?, fitView?, className? }`。渲染历史/实例时使用 bundle 的 `?include=design` 快照——编译后的图会丢弃 `width`/`height`/`data`/`label`，无法忠实重绘。 |
 | `useInstanceOverlay(instanceId, { intervalMs?, enabled? })` | 运行时轮询循环：overlay 刷新（默认 2.5s）加经 `sinceSequence` 的增量 trace 累积；实例进入终态后二者自动停止。 |
 | `registerConfigControl(type, component)` | 属性面板控件注册表的应用级扩展缝（见下文）。 |

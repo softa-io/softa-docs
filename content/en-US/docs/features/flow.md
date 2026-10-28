@@ -21,8 +21,8 @@ Example scenarios:
 
 - design-time graph documents for a visual editor
 - compile-time validation and transformation into runtime bundles
-- published bundle revisions by `designId`
-- runtime execution for process, validation, and compute flows
+- published bundle revisions by `flowId`
+- runtime execution for approval, automation, validation, and compute flows
 - persistent projections for instances, approval tasks, approval records, delegations, CC rules, and trigger events
 - optional Pulsar-based trigger and async-task integration
 
@@ -40,29 +40,41 @@ This page documents the current backend contract implemented in `flow-starter`.
 
 ### Flow Identity And Revisions
 
-- `FlowDesign` is the draft working copy.
-- `FlowBundle` is the compiled published snapshot.
-- Published revisions are keyed by `designId`, not by `flowCode`.
+- `FlowDesign` is the draft working copy. Its `id` (a distributed string id) is the flow's identity everywhere: bundles, instances, tasks, approval records, events, delegations and CC rules reference it as `flowId`, and lists show the flow's name through that reference.
+- `flowName` is unique within a tenant; there is no separate flow code.
+- `FlowBundle` is the compiled published snapshot; published revisions are keyed by `flowId`.
 - `FlowStartRequest` resolves bundles in this order:
   1. `bundleId` — pin to an exact published revision
-  2. `designId` — start the current active revision
+  2. `flowId` — start the current active revision
 - To start a specific historical revision, look up its `bundleId` via the revisions listing endpoint and pass that as `bundleId`.
 - `FlowBundle.designJson` keeps the design snapshot used at publish time so the editor can restore a historical canvas.
 
 ### Flow Scenarios
 
-The module now uses a single `FlowScenario` enum instead of the old `FlowKind + FlowPurpose` split.
+A single `FlowScenario` enum declares what a flow is. It is chosen when the flow is created and fixed from then on (`FlowDesign.scenario` is readonly on update; the design document follows the column).
 
-| Scenario | Meaning |
+| Scenario | Meaning | Triggers it may declare |
+|---|---|---|
+| `APPROVAL` | A record's approval: started by submitting the record, approval steps, the outcome written back to the record. Persisted instances, kept as the record's approval history | `Submit` |
+| `AUTOMATION` | Started by a change, a cron, an explicit start or a parent flow; no approval steps. Persisted runs, purged after their retention period | `EntityChange`, `Cron`, `Api`, `Subflow` |
+| `VALIDATION` | Stateless synchronous validation flow — evaluated transiently: no instance row, no trace, no event log | `EntityChange`, `Cron` |
+| `COMPUTE` | Stateless synchronous compute/onchange flow — evaluated transiently, same zero-footprint rules | `FieldChange`, `EntityChange`, `Cron` |
+
+The scenario decides the execution strategy: `APPROVAL` / `AUTOMATION` flows go through `FlowRuntimeEngine.start` (persisted, resumable); `VALIDATION` / `COMPUTE` flows go through `evaluate` — the same traversal with zero flow footprint. Business writes made by task nodes still join the caller's transaction, so a failed evaluation rolls them back.
+
+Every flow declares a trigger, and **the trigger is the flow's start contract** — one way in each:
+
+| Trigger | How the flow starts |
 |---|---|
-| `PROCESS` | Stateful runtime flow with persisted instances; covers both approval-style and automation-style flows |
-| `VALIDATION` | Stateless synchronous validation flow — evaluated transiently: no instance row, no trace, no event log |
-| `COMPUTE` | Stateless synchronous compute/onchange flow — evaluated transiently, same zero-footprint rules |
+| `Submit` | Only by submitting a record (`FlowClient.submitRecord`) |
+| `EntityChange` / `FieldChange` | Only by their events |
+| `Cron` | Only on its own schedule: the trigger's Quartz `cronExpression` |
+| `Api` | Only explicitly, by id: `POST /flow/instances/start`, `FlowClient.start` / `publishAndStart` |
+| `Subflow` | Only from a parent flow's Subflow node |
 
-The scenario decides the execution strategy: `PROCESS` flows go through `FlowRuntimeEngine.start`
-(persisted, resumable); `VALIDATION` / `COMPUTE` flows go through `evaluate` — the same traversal
-with zero flow footprint. Business writes made by task nodes still join the caller's transaction,
-so a failed evaluation rolls them back.
+An explicit start and a Subflow call both run an Automation flow, so `Api` and `Subflow` belong to Automation alone. Debug runs of a draft ignore the trigger.
+
+Settings belong to one scenario too: `allowInitiatorWithdraw` and `approverDedup` to Approval flows; `sync` / `rollbackOnFail` to Automation flows, and a sync flow — which runs inside the writer's transaction — may not contain a Timer, AsyncTask or Approval node. The compiler rejects a flow that breaks any of these rules.
 
 ### Node Types
 
@@ -79,11 +91,17 @@ Current `FlowNodeType` values:
 from the node palette and rejected at compile time (`UNSUPPORTED_NODE_TYPE`), so a flow
 containing them cannot publish.
 
+Each `FlowNodeType` declares the scenarios that may use it (`FlowNodeType.getScenarios()`); the palette and the compiler (`INVALID_SCENARIO_NODE`) both read it:
+
+| Node types | Scenarios |
+|---|---|
+| `Start`, `End`, `Script`, `ReturnValue`, `CreateRecord`, `GetRecord`, `UpdateRecord`, `DeleteRecord`, `QueryRecords`, `CallService`, `CallWebhook` | all four |
+| `Timer`, the gateways, `Subflow`, `ValidateData`, `Transform`, `SendEmail`, `SendSms`, `SendInboxNotification`, `QueryAI`, `AsyncTask`, `GenerateFile`, `ForEach` | Approval, Automation |
+| `Approval`, `HumanTask` | Approval |
+
 Node-behavior invariants:
 
-- **`Subflow` is synchronous-only**: the orchestrator fails the parent if a child
-  enters a waiting state (`WAITING_APPROVAL` / `TIMER` / `ASYNC`), and recursive
-  subflow invocation is rejected. Model human steps in the parent flow, not a child.
+- **`Subflow` is synchronous-only**: the orchestrator fails the parent if a child enters a waiting state (`TIMER` / `ASYNC`), and recursive subflow invocation is rejected. The child must be an Automation flow with a `Subflow` trigger, else the parent fails. Model human steps in an Approval flow, not a child.
 - **`ParallelFork` branches execute serially** (deterministic order), not
   wall-clock-parallel — the gateway models routing topology, not concurrency.
 
@@ -108,7 +126,9 @@ Defined `FlowExecutionStatus` values:
 Host applications embedding the engine in-process should integrate through the
 `FlowClient` facade (`io.softa.starter.flow.api`) rather than looping back over
 REST — actor / initiator / tenant identity is always resolved server-side from the
-context, never passed as call parameters. See the in-module integration guide under `starters/flow-starter/docs/integration-guide.md` in the Softa source repository.
+context, never passed as call parameters. `FlowAutoConfiguration` registers the default
+`InProcessFlowClient` only when the application defines no `FlowClient` bean of its own.
+See the in-module integration guide under `starters/flow-starter/docs/integration-guide.md` in the Softa source repository.
 
 ### Design APIs (flow editor)
 
@@ -124,7 +144,7 @@ data plane and is intentionally not intercepted.
 | `GET` | `/flow/designs/{id}` | Load one draft (canvas + optimistic-lock version) |
 | `POST` | `/flow/designs/{id}/save` | Auto-save the canvas; stale versions are rejected |
 | `POST` | `/flow/designs/{id}/delete` | Delete a draft if it has never been published |
-| `POST` | `/flow/designs/{id}/duplicate` | Copy a draft under a fresh flow code |
+| `POST` | `/flow/designs/{id}/duplicate` | Copy a draft under a fresh name (`"<name> (copy)"` when `newFlowName` is omitted) |
 | `POST` | `/flow/designs/validate` | Validate the posted document; diagnostics returned as a success payload |
 | `POST` | `/flow/designs/{id}/publish` | Publish the saved draft as a new active revision |
 | `POST` | `/flow/designs/{id}/restore?bundleId=` | Restore the draft canvas from a historical bundle snapshot |
@@ -139,9 +159,9 @@ Base path: `/flow/bundles`
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/flow/bundles?designId=` | Revision list of one design (or every design's active bundle without `designId`) |
+| `GET` | `/flow/bundles?flowId=` | Revision list of one flow (or every flow's active bundle without `flowId`) |
 | `GET` | `/flow/bundles/{bundleId}?include=design` | One revision's summary, optionally with the canvas-complete design snapshot |
-| `POST` | `/flow/bundles/{bundleId}/activate` | Make this revision the design's effective one (rollback = roll-forward) |
+| `POST` | `/flow/bundles/{bundleId}/activate` | Make this revision the flow's effective one (rollback = roll-forward) |
 
 ### Node Descriptor APIs
 
@@ -150,43 +170,54 @@ Base path: `/flow/nodeDescriptors`
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/flow/nodeDescriptors` | List all node descriptors for the editor palette |
-| `GET` | `/flow/nodeDescriptors?scenario=PROCESS` | Filter descriptors by `FlowScenario` |
+| `GET` | `/flow/nodeDescriptors?scenario=Approval` | Filter descriptors by `FlowScenario` |
 
-### Runtime APIs
+### Instance APIs
 
-Base path: `/flow/runtime`
+Base path: `/flow/instances` — launch, reads and approval actions on runtime instances.
 
 | Method | Path | Description |
 |---|---|---|
-| `POST` | `/flow/runtime/instances/start` | Start a flow instance |
-| `GET` | `/flow/runtime/instances/{instanceId}?includeTrace=` | Get one runtime instance (trace excluded by default) |
-| `GET` | `/flow/runtime/instances/{instanceId}/overlay` | Per-node run state for canvas painting |
-| `GET` | `/flow/runtime/instances/{instanceId}/trace?sinceSequence=` | Incremental trace rows for polling |
-| `POST` | `/flow/runtime/instances/search` | Paged summaries of the caller's own instances — the initiator filter is always the authenticated user (filters: flowCode/designId/status/model/row/createdFrom/createdTo) |
-| `POST` | `/flow/runtime/instances/approve` | Approve a pending approval |
-| `POST` | `/flow/runtime/instances/reject` | Reject a pending approval |
-| `POST` | `/flow/runtime/instances/transfer` | Transfer a pending approval task |
-| `POST` | `/flow/runtime/instances/delegate` | Delegate a pending approval task |
-| `POST` | `/flow/runtime/instances/add-sign-before` | Insert a prerequisite signer |
-| `POST` | `/flow/runtime/instances/add-sign-after` | Insert a follow-up signer |
-| `POST` | `/flow/runtime/instances/cc` | Send a CC notification |
-| `POST` | `/flow/runtime/instances/cc/read` | Mark a CC as read |
-| `POST` | `/flow/runtime/instances/return` | Return a pending approval |
-| `POST` | `/flow/runtime/instances/resubmit` | Resubmit a returned instance |
-| `POST` | `/flow/runtime/instances/withdraw` | Withdraw a flow instance |
-| `POST` | `/flow/runtime/instances/urge` | Urge pending approvers |
-| `POST` | `/flow/runtime/instances/comment` | Add a comment audit entry |
-| `GET` | `/flow/runtime/instances/{instanceId}/nodes/{nodeId}/formPermissions` | Get field-level form permissions |
-| `POST` | `/flow/runtime/trigger` | Fire a trigger event and start matching flows |
-| `POST` | `/flow/runtime/onchange` | Run `COMPUTE` flows transiently and return variable diffs |
-| `POST` | `/flow/runtime/validate` | Run `VALIDATION` flows transiently against candidate row data; returns each flow's declared outputs keyed by flow code |
+| `POST` | `/flow/instances/start` | Start an Automation flow whose trigger is `Api`, by `flowId` or a pinned `bundleId`; any other flow is refused |
+| `GET` | `/flow/instances/{instanceId}?includeTrace=` | Get one runtime instance (trace excluded by default) |
+| `GET` | `/flow/instances/{instanceId}/overlay` | Per-node run state for canvas painting |
+| `GET` | `/flow/instances/{instanceId}/trace?sinceSequence=` | Incremental trace rows for polling |
+| `POST` | `/flow/instances/search` | Paged summaries of the caller's own record approvals — the initiator filter is always the authenticated user, and automation runs their writes triggered are left out (filters: flowId/status/model/row/createdFrom/createdTo) |
+| `POST` | `/flow/instances/approve` | Approve a pending approval |
+| `POST` | `/flow/instances/reject` | Reject a pending approval |
+| `POST` | `/flow/instances/transfer` | Transfer a pending approval task |
+| `POST` | `/flow/instances/delegate` | Delegate a pending approval task |
+| `POST` | `/flow/instances/add-sign-before` | Insert a prerequisite signer |
+| `POST` | `/flow/instances/add-sign-after` | Insert a follow-up signer |
+| `POST` | `/flow/instances/cc` | Send a CC notification |
+| `POST` | `/flow/instances/cc/read` | Mark a CC as read |
+| `POST` | `/flow/instances/return` | Return a pending approval |
+| `POST` | `/flow/instances/resubmit` | Resubmit a returned instance |
+| `POST` | `/flow/instances/withdraw` | Withdraw an Approval instance (its initiator, when the flow allows it) |
+| `POST` | `/flow/instances/urge` | Urge pending approvers |
+| `POST` | `/flow/instances/comment` | Add a comment audit entry |
+| `GET` | `/flow/instances/{instanceId}/nodes/{nodeId}/formPermissions` | Get field-level form permissions |
 
-Engine-internal resume callbacks live on `/internal/flow/runtime/instances/{resumeAsync|resumeTimer}`
-(INTERNAL identity scope) — they are not part of the user-facing surface.
+### Automation APIs
+
+Base path: `/flow/automation` — trigger firing and transient runs; none of these reads or
+acts on an existing instance.
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/flow/automation/trigger` | Fire a trigger event and start matching flows. `Submit`, `Cron`, `Api` and `Subflow` events are refused: those flows start by record submission, on their own schedule, by id, or from a parent flow |
+| `POST` | `/flow/automation/onchange` | Run `COMPUTE` flows transiently and return variable diffs |
+| `POST` | `/flow/automation/validate` | Run `VALIDATION` flows transiently against candidate row data; returns each flow's declared outputs keyed by `flowId` |
+
+Async-task and timer resumes have no REST endpoint: `FlowAsyncTaskConsumer`,
+`FlowTimerConsumer` and the due-timer sweep of the maintenance cron call
+`FlowRuntimeEngine` in-process.
 
 `actorId` / `initiatorId` / `tenantId` are **never** sent by clients: every action
 request stamps them server-side from the login context (`@JsonProperty(READ_ONLY)`),
-and all query endpoints resolve the current actor from the context.
+and all query endpoints resolve the current actor from the context. The in-process
+`FlowClient` resolves the actor the same way and calls the same services as these
+endpoints.
 
 ## Approval Projection APIs
 
@@ -197,10 +228,10 @@ Base path: `/flow/approvalTasks`
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/flow/approvalTasks/counts` | Inbox badge counts for the current actor (`{pendingApprovals, unreadCc}` — same filter definitions as the paged `/pending` and `/cc?read=false` queries) |
-| `GET` | `/flow/approvalTasks/pending?flowCode=&instanceId=&nodeId=&pageNumber=&pageSize=` | Pending tasks for the current actor (paged: returns `Page`) |
-| `GET` | `/flow/approvalTasks/completed?flowCode=&instanceId=&nodeId=&pageNumber=&pageSize=` | Completed tasks for the current actor (paged) |
-| `GET` | `/flow/approvalTasks/cc?read=&flowCode=&instanceId=&nodeId=&pageNumber=&pageSize=` | CC tasks for the current actor (paged; `read=false` unread, `read=true` acknowledged, omit `read` for both) |
-| `GET` | `/flow/approvalTasks/inbox?flowCode=&instanceId=&nodeId=&includeCompletedApprovals=&pageNumber=&pageSize=` | Unified inbox view (pending approvals + CC; optional completed approvals) |
+| `GET` | `/flow/approvalTasks/pending?flowId=&instanceId=&nodeId=&pageNumber=&pageSize=` | Pending tasks for the current actor (paged: returns `Page`) |
+| `GET` | `/flow/approvalTasks/completed?flowId=&instanceId=&nodeId=&pageNumber=&pageSize=` | Completed tasks for the current actor (paged) |
+| `GET` | `/flow/approvalTasks/cc?read=&flowId=&instanceId=&nodeId=&pageNumber=&pageSize=` | CC tasks for the current actor (paged; `read=false` unread, `read=true` acknowledged, omit `read` for both) |
+| `GET` | `/flow/approvalTasks/inbox?flowId=&instanceId=&nodeId=&includeCompletedApprovals=&pageNumber=&pageSize=` | Unified inbox view (pending approvals + CC; optional completed approvals) |
 | `GET` | `/flow/approvalTasks/instance/{instanceId}` | All tasks for one runtime instance (participants / initiator only) |
 
 ### Approval Records
@@ -220,7 +251,7 @@ Base path: `/flow/ccConfigs`
 | Method | Path | Description |
 |---|---|---|
 | `POST` | `/flow/ccConfigs` | Create a CC rule |
-| `GET` | `/flow/ccConfigs?flowCode=` | List CC rules by `flowCode` |
+| `GET` | `/flow/ccConfigs?flowId=` | List CC rules by `flowId` |
 | `POST` | `/flow/ccConfigs/{id}/deactivate` | Deactivate a CC rule |
 
 ### Delegation
@@ -249,7 +280,7 @@ Base path: `/flow/events`
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/flow/events?flowCode=&sourceModel=&sourceRowId=&instanceId=&success=&eventTimeFrom=&eventTimeTo=&pageNumber=&pageSize=` | Paged event log, newest first (filters combine with AND; list rows exclude the parameters payload) |
+| `GET` | `/flow/events?flowId=&sourceModel=&sourceRowId=&instanceId=&success=&eventTimeFrom=&eventTimeTo=&pageNumber=&pageSize=` | Paged event log, newest first (filters combine with AND; list rows exclude the parameters payload) |
 | `GET` | `/flow/events/{id}` | Single event including the raw trigger-parameters payload |
 
 ## Approval Model
@@ -364,13 +395,14 @@ Current module notes:
 
 ## Trigger And Messaging Integration
 
-Supported trigger sources (`TriggerSource` sealed sub-types):
+Supported trigger sources (`TriggerSource` sealed sub-types), each the start contract of the flows that declare it (see [Flow Scenarios](#flow-scenarios) for which scenario takes which):
 
-- `EntityChange`
-- `Api`
-- `Cron`
-- `Subflow`
+- `EntityChange` — a change log of the model. Each change log starts a run at most once per flow: its `uuid` travels as the event id onto `FlowInstance.triggerEventId` (unique with the flow), so a redelivered change log returns the run it already started, while distinct changes of one row each start their own
+- `Cron` — the flow's own Quartz schedule (`cronExpression`, checked at publish); started only by it: the active revision is a job of cron-starter's scheduler, other cron jobs' ticks never start it, and `POST /flow/automation/trigger` refuses the type. Not taken by Approval flows
 - `FieldChange` (COMPUTE scenario only)
+- `Api` (AUTOMATION scenario only) — started explicitly by id; no event matches it, and `POST /flow/automation/trigger` refuses the type
+- `Subflow` (AUTOMATION scenario only) — run only from a parent's Subflow node; refused as an event likewise
+- `Submit` (APPROVAL scenario only) — names the model whose records the flow approves and, optionally, a condition over the record. Started only by record submission; change logs never produce it and `POST /flow/automation/trigger` refuses it
 
 `EntityChange` is fired from the change log, so a model declared `@Model(enableAuditLog = false)` never triggers it, synchronously or asynchronously — see [Audit log switch](../backend_dev/model_dev/annotation#audit-log-switch-enableauditlog).
 
@@ -381,7 +413,7 @@ Pulsar-connected components are conditionally registered:
 | `mq.topics.flow-event.topic` | `FlowEventProducer`, `FlowEventConsumer` | Async trigger fire and consume |
 | `mq.topics.flow-async-task.topic` | `FlowAsyncTaskProducer`, `FlowAsyncTaskConsumer` | Async task dispatch and callback resume |
 | `mq.topics.change-log.topic` | `ChangeLogFlowConsumer` | Entity change driven flow triggers |
-| `mq.topics.cron-task.topic` | `CronTaskFlowConsumer` | Cron-driven flow triggers |
+| `mq.topics.cron-task.topic` | `CronFlowJobProvider`, `CronTaskFlowConsumer` | Cron-triggered flows on the cron schedule, and their start |
 | `mq.topics.flow-timer.topic` | `FlowTimerConsumer` | Timer wake-up consume side |
 
 Important timer note:
@@ -395,7 +427,7 @@ Important timer note:
 |---|---|
 | `FlowDesign` | Draft working copy |
 | `FlowBundle` | Published compiled bundle |
-| `FlowInstance` | Persisted runtime instance state (trace and approval history are NOT embedded — see the two dedicated tables) |
+| `FlowInstance` | Persisted runtime instance state (trace and approval history are NOT embedded — see the two dedicated tables). Approval instances are kept; finished Automation runs, with their trace, branches and the trigger event log, are purged after `flow.automation.retention-days` (default 30) by the `flow_automation_purge` cron |
 | `FlowExecutionTrace` | Append-only execution trace rows (the in-memory state keeps only the current attempt's delta) |
 | `FlowApprovalTask` | Pending/completed/CC task projections |
 | `FlowApprovalRecord` | Approval action audit ledger — the authoritative approval history, flushed by the instance store in the same transaction as the instance row |

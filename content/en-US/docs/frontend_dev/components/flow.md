@@ -8,7 +8,7 @@ Framework-layer visual editor and viewer for softa flow-starter definitions, bui
 // Editor page (always the SSR-safe lazy entry — xyflow measures the DOM):
 import { FlowDesignerLazy } from "@/components/flow/flow-designer-lazy";
 
-<FlowDesignerLazy designId={designId} toolbarExtra={<BackButton />} />
+<FlowDesignerLazy flowId={flowId} toolbarExtra={<BackButton />} />
 
 // Read-only render of a published snapshot with a run-state overlay:
 import { FlowViewer, useInstanceOverlay } from "@/components/flow";
@@ -21,7 +21,7 @@ const { overlay, trace } = useInstanceOverlay(instanceId);
 
 | Export | Purpose |
 | --- | --- |
-| `FlowDesigner` / `FlowDesignerLazy` | Self-contained designer: palette, canvas, property panel, toolbar, autosave, 470 conflict dialog, validation diagnostics, publish dialog, version history, debug runs. `FlowDesignerProps = { designId, readOnly?, toolbarExtra?, className? }`. Always mount the lazy entry from Next.js pages. |
+| `FlowDesigner` / `FlowDesignerLazy` | Self-contained designer: palette, canvas, property panel, toolbar, autosave, 470 conflict dialog, validation diagnostics, publish dialog, version history, debug runs. `FlowDesignerProps = { flowId, readOnly?, toolbarExtra?, className? }`. Always mount the lazy entry from Next.js pages. |
 | `FlowViewer` | Read-only canvas: `{ definition, overlay?, onNodeClick?, fitView?, className? }`. Render history/instances from the bundle's `?include=design` snapshot — the compiled graph drops `width`/`height`/`data`/`label` and cannot repaint faithfully. |
 | `useInstanceOverlay(instanceId, { intervalMs?, enabled? })` | The runtime polling loop: overlay refetch (default 2.5s) plus incremental trace accumulation via `sinceSequence`; both stop automatically on terminal instance status. |
 | `registerConfigControl(type, component)` | App-level extension seam for the property-panel control registry (see below). |

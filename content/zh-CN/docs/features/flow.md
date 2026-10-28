@@ -16,8 +16,8 @@ Flow > BP = Workflow > BPMN
 
 - 供可视化编辑器使用的设计时图文档
 - 编译时校验并转换为运行时 bundle
-- 按 `designId` 发布的 bundle 修订版
-- 流程、校验和计算流程的运行时执行
+- 按 `flowId` 发布的 bundle 修订版
+- 审批、自动化、校验和计算流程的运行时执行
 - 实例、审批任务、审批记录、委托、抄送规则和触发事件的持久化投影
 - 可选的基于 Pulsar 的触发与异步任务集成
 
@@ -35,26 +35,41 @@ Flow > BP = Workflow > BPMN
 
 ### Flow 身份与修订版
 
-- `FlowDesign` 是草稿工作副本。
-- `FlowBundle` 是编译后的已发布快照。
-- 已发布修订版以 `designId` 为键，而非 `flowCode`。
+- `FlowDesign` 是草稿工作副本。它的 `id`（分布式字符串 id）就是流程在各处的身份：bundle、实例、待办、审批记录、事件、委托和抄送规则都以 `flowId` 引用它，列表通过这个引用显示流程名称。
+- `flowName` 在租户内唯一；没有单独的 flow code。
+- `FlowBundle` 是编译后的已发布快照；已发布修订版以 `flowId` 为键。
 - `FlowStartRequest` 按以下顺序解析 bundle：
   1. `bundleId` — 固定到确切的已发布修订版
-  2. `designId` — 启动当前活动修订版
+  2. `flowId` — 启动当前活动修订版
 - 要启动特定历史修订版，通过修订版列表端点查找其 `bundleId` 并作为 `bundleId` 传入。
 - `FlowBundle.designJson` 保留发布时使用的设计快照，以便编辑器恢复历史画布。
 
 ### Flow 场景
 
-模块现使用单一的 `FlowScenario` 枚举，取代旧的 `FlowKind + FlowPurpose` 拆分。
+单一的 `FlowScenario` 枚举声明流程是什么。它在创建流程时选定，此后不可更改（`FlowDesign.scenario` 在更新时只读；设计文档跟随该列）。
 
-| 场景 | 含义 |
+| 场景 | 含义 | 可声明的触发器 |
+|---|---|---|
+| `APPROVAL` | 记录的审批：由提交记录启动，包含审批步骤，结果回写到记录。持久化实例，作为记录的审批历史保留 | `Submit` |
+| `AUTOMATION` | 由变更、cron、显式启动或父流程启动；不含审批步骤。持久化运行，保留期过后清理 | `EntityChange`、`Cron`、`Api`、`Subflow` |
+| `VALIDATION` | 无状态同步校验流程——瞬态求值：无实例行、无 trace、无事件日志 | `EntityChange`、`Cron` |
+| `COMPUTE` | 无状态同步计算/onchange 流程——瞬态求值，同样零足迹规则 | `FieldChange`、`EntityChange`、`Cron` |
+
+场景决定执行策略：`APPROVAL` / `AUTOMATION` 流程经 `FlowRuntimeEngine.start`（持久化、可恢复）；`VALIDATION` / `COMPUTE` 流程经 `evaluate`——相同遍历但零 flow 足迹。任务节点产生的业务写入仍加入调用方事务，因此求值失败会回滚。
+
+每个流程都声明触发器，**触发器就是流程的启动契约**——每种只对应一条启动路径：
+
+| 触发器 | 流程如何启动 |
 |---|---|
-| `PROCESS` | 有状态运行时流程，持久化实例；涵盖审批式与自动化式流程 |
-| `VALIDATION` | 无状态同步校验流程——瞬态求值：无实例行、无 trace、无事件日志 |
-| `COMPUTE` | 无状态同步计算/onchange 流程——瞬态求值，同样零足迹规则 |
+| `Submit` | 只能由提交记录启动（`FlowClient.submitRecord`） |
+| `EntityChange` / `FieldChange` | 只能由各自的事件启动 |
+| `Cron` | 只能按自己的调度启动：触发器上的 Quartz `cronExpression` |
+| `Api` | 只能按 id 显式启动：`POST /flow/instances/start`、`FlowClient.start` / `publishAndStart` |
+| `Subflow` | 只能被父流程的 Subflow 节点调用 |
 
-场景决定执行策略：`PROCESS` 流程经 `FlowRuntimeEngine.start`（持久化、可恢复）；`VALIDATION` / `COMPUTE` 流程经 `evaluate`——相同遍历但零 flow 足迹。任务节点产生的业务写入仍加入调用方事务，因此求值失败会回滚。
+显式启动和 Subflow 调用运行的都是 Automation 流程，因此 `Api` 和 `Subflow` 只属于 Automation。草稿的调试运行忽略触发器。
+
+设置项也各属一个场景：`allowInitiatorWithdraw` 和 `approverDedup` 属于 Approval 流程；`sync` / `rollbackOnFail` 属于 Automation 流程，而 sync 流程在写数据的事务里运行，不能包含 Timer、AsyncTask 或 Approval 节点。违反任一规则的流程会被编译器拒绝。
 
 ### 节点类型
 
@@ -69,9 +84,17 @@ Flow > BP = Workflow > BPMN
 
 \* `HumanTask` 和 `ForEach` 已定义但**尚未运行时支持**：它们从节点面板中省略，并在编译时被拒绝（`UNSUPPORTED_NODE_TYPE`），因此包含它们的流程无法发布。
 
+每个 `FlowNodeType` 声明允许使用它的场景（`FlowNodeType.getScenarios()`）；节点面板和编译器（`INVALID_SCENARIO_NODE`）都以此为准：
+
+| 节点类型 | 场景 |
+|---|---|
+| `Start`、`End`、`Script`、`ReturnValue`、`CreateRecord`、`GetRecord`、`UpdateRecord`、`DeleteRecord`、`QueryRecords`、`CallService`、`CallWebhook` | 四个场景 |
+| `Timer`、各网关、`Subflow`、`ValidateData`、`Transform`、`SendEmail`、`SendSms`、`SendInboxNotification`、`QueryAI`、`AsyncTask`、`GenerateFile`、`ForEach` | Approval、Automation |
+| `Approval`、`HumanTask` | Approval |
+
 节点行为不变量：
 
-- **`Subflow` 仅支持同步**：若子流程进入等待状态（`WAITING_APPROVAL` / `TIMER` / `ASYNC`），编排器会使父流程失败；递归子流程调用会被拒绝。人工步骤应建模在父流程中，而非子流程。
+- **`Subflow` 仅支持同步**：若子流程进入等待状态（`TIMER` / `ASYNC`），编排器会使父流程失败；递归子流程调用会被拒绝。子流程必须是带 `Subflow` 触发器的 Automation 流程，否则父流程失败。人工步骤应建模在 Approval 流程中，而非子流程。
 - **`ParallelFork` 分支串行执行**（确定性顺序），而非墙钟并行——该网关建模路由拓扑，而非并发。
 
 ### 运行时状态
@@ -90,7 +113,7 @@ Flow > BP = Workflow > BPMN
 
 ## API 概览
 
-宿主应用若在进程内嵌入引擎，应通过 `FlowClient` 门面（`io.softa.starter.flow.api`）集成，而不是绕回 REST——actor / initiator / tenant 身份始终从服务端上下文解析，绝不作为调用参数传入。参见 Softa 源仓库中模块内集成指南：`starters/flow-starter/docs/integration-guide.md`。
+宿主应用若在进程内嵌入引擎，应通过 `FlowClient` 门面（`io.softa.starter.flow.api`）集成，而不是绕回 REST——actor / initiator / tenant 身份始终从服务端上下文解析，绝不作为调用参数传入。只有当应用没有定义自己的 `FlowClient` bean 时，`FlowAutoConfiguration` 才注册默认的 `InProcessFlowClient`。参见 Softa 源仓库中模块内集成指南：`starters/flow-starter/docs/integration-guide.md`。
 
 ### 设计 API（flow 编辑器）
 
@@ -103,7 +126,7 @@ Flow > BP = Workflow > BPMN
 | `GET` | `/flow/designs/{id}` | 加载一个草稿（画布 + 乐观锁 version） |
 | `POST` | `/flow/designs/{id}/save` | 自动保存画布；过期 version 会被拒绝 |
 | `POST` | `/flow/designs/{id}/delete` | 删除从未发布过的草稿 |
-| `POST` | `/flow/designs/{id}/duplicate` | 在新 flow code 下复制草稿 |
+| `POST` | `/flow/designs/{id}/duplicate` | 以新名称复制草稿（省略 `newFlowName` 时为 `"<名称> (copy)"`） |
 | `POST` | `/flow/designs/validate` | 校验提交的文档；诊断作为成功 payload 返回 |
 | `POST` | `/flow/designs/{id}/publish` | 将已保存草稿发布为新活动修订版 |
 | `POST` | `/flow/designs/{id}/restore?bundleId=` | 从历史 bundle 快照恢复草稿画布 |
@@ -118,9 +141,9 @@ Flow > BP = Workflow > BPMN
 
 | Method | Path | 说明 |
 |---|---|---|
-| `GET` | `/flow/bundles?designId=` | 一个设计的修订版列表（无 `designId` 时为每个设计的活动 bundle） |
+| `GET` | `/flow/bundles?flowId=` | 一个流程的修订版列表（无 `flowId` 时为每个流程的活动 bundle） |
 | `GET` | `/flow/bundles/{bundleId}?include=design` | 一个修订版摘要，可选含画布完整设计快照 |
-| `POST` | `/flow/bundles/{bundleId}/activate` | 使此修订版成为设计的生效修订版（回滚 = 向前滚动） |
+| `POST` | `/flow/bundles/{bundleId}/activate` | 使此修订版成为流程的生效修订版（回滚 = 向前滚动） |
 
 ### 节点描述符 API
 
@@ -129,40 +152,47 @@ Flow > BP = Workflow > BPMN
 | Method | Path | 说明 |
 |---|---|---|
 | `GET` | `/flow/nodeDescriptors` | 列出编辑器面板的所有节点描述符 |
-| `GET` | `/flow/nodeDescriptors?scenario=PROCESS` | 按 `FlowScenario` 过滤描述符 |
+| `GET` | `/flow/nodeDescriptors?scenario=Approval` | 按 `FlowScenario` 过滤描述符 |
 
-### 运行时 API
+### 实例 API
 
-基础路径：`/flow/runtime`
+基础路径：`/flow/instances`——运行时实例的启动、读取与审批操作。
 
 | Method | Path | 说明 |
 |---|---|---|
-| `POST` | `/flow/runtime/instances/start` | 启动流程实例 |
-| `GET` | `/flow/runtime/instances/{instanceId}?includeTrace=` | 获取一个运行时实例（默认排除 trace） |
-| `GET` | `/flow/runtime/instances/{instanceId}/overlay` | 画布绘制的每节点运行状态 |
-| `GET` | `/flow/runtime/instances/{instanceId}/trace?sinceSequence=` | 用于轮询的增量 trace 行 |
-| `POST` | `/flow/runtime/instances/search` | 调用方自身实例的分页摘要——发起人过滤始终为已认证用户（filters：flowCode/designId/status/model/row/createdFrom/createdTo） |
-| `POST` | `/flow/runtime/instances/approve` | 批准待审批 |
-| `POST` | `/flow/runtime/instances/reject` | 拒绝待审批 |
-| `POST` | `/flow/runtime/instances/transfer` | 转交待审批任务 |
-| `POST` | `/flow/runtime/instances/delegate` | 委托待审批任务 |
-| `POST` | `/flow/runtime/instances/add-sign-before` | 插入前置签批人 |
-| `POST` | `/flow/runtime/instances/add-sign-after` | 插入后续签批人 |
-| `POST` | `/flow/runtime/instances/cc` | 发送抄送通知 |
-| `POST` | `/flow/runtime/instances/cc/read` | 标记抄送为已读 |
-| `POST` | `/flow/runtime/instances/return` | 退回待审批 |
-| `POST` | `/flow/runtime/instances/resubmit` | 重新提交已退回实例 |
-| `POST` | `/flow/runtime/instances/withdraw` | 撤回流程实例 |
-| `POST` | `/flow/runtime/instances/urge` | 催办待审批人 |
-| `POST` | `/flow/runtime/instances/comment` | 添加评论审计条目 |
-| `GET` | `/flow/runtime/instances/{instanceId}/nodes/{nodeId}/formPermissions` | 获取字段级表单权限 |
-| `POST` | `/flow/runtime/trigger` | 触发事件并启动匹配流程 |
-| `POST` | `/flow/runtime/onchange` | 瞬态运行 `COMPUTE` 流程并返回变量 diff |
-| `POST` | `/flow/runtime/validate` | 针对候选行数据瞬态运行 `VALIDATION` 流程；按 flow code 返回各流程声明的输出 |
+| `POST` | `/flow/instances/start` | 按 `flowId` 或固定的 `bundleId` 启动触发器为 `Api` 的 Automation 流程；其他流程一律拒绝 |
+| `GET` | `/flow/instances/{instanceId}?includeTrace=` | 获取一个运行时实例（默认排除 trace） |
+| `GET` | `/flow/instances/{instanceId}/overlay` | 画布绘制的每节点运行状态 |
+| `GET` | `/flow/instances/{instanceId}/trace?sinceSequence=` | 用于轮询的增量 trace 行 |
+| `POST` | `/flow/instances/search` | 调用方自己提交的记录审批的分页摘要——发起人过滤始终为已认证用户，其写入触发的自动化运行不在其中（filters：flowId/status/model/row/createdFrom/createdTo） |
+| `POST` | `/flow/instances/approve` | 批准待审批 |
+| `POST` | `/flow/instances/reject` | 拒绝待审批 |
+| `POST` | `/flow/instances/transfer` | 转交待审批任务 |
+| `POST` | `/flow/instances/delegate` | 委托待审批任务 |
+| `POST` | `/flow/instances/add-sign-before` | 插入前置签批人 |
+| `POST` | `/flow/instances/add-sign-after` | 插入后续签批人 |
+| `POST` | `/flow/instances/cc` | 发送抄送通知 |
+| `POST` | `/flow/instances/cc/read` | 标记抄送为已读 |
+| `POST` | `/flow/instances/return` | 退回待审批 |
+| `POST` | `/flow/instances/resubmit` | 重新提交已退回实例 |
+| `POST` | `/flow/instances/withdraw` | 撤回 Approval 实例（由发起人撤回，且流程允许） |
+| `POST` | `/flow/instances/urge` | 催办待审批人 |
+| `POST` | `/flow/instances/comment` | 添加评论审计条目 |
+| `GET` | `/flow/instances/{instanceId}/nodes/{nodeId}/formPermissions` | 获取字段级表单权限 |
 
-引擎内部恢复回调位于 `/internal/flow/runtime/instances/{resumeAsync|resumeTimer}`（INTERNAL 身份范围）——不属于面向用户的表面。
+### 自动化 API
 
-`actorId` / `initiatorId` / `tenantId` **从不**由客户端发送：每个操作请求从登录上下文服务端盖章（`@JsonProperty(READ_ONLY)`），所有查询端点从上下文解析当前 actor。
+基础路径：`/flow/automation`——触发与瞬态运行；这些端点都不读取或操作已有实例。
+
+| Method | Path | 说明 |
+|---|---|---|
+| `POST` | `/flow/automation/trigger` | 触发事件并启动匹配流程。`Submit`、`Cron`、`Api`、`Subflow` 类型的事件会被拒绝：这些流程分别由提交记录、自己的调度、按 id 启动、父流程调用来启动 |
+| `POST` | `/flow/automation/onchange` | 瞬态运行 `COMPUTE` 流程并返回变量 diff |
+| `POST` | `/flow/automation/validate` | 针对候选行数据瞬态运行 `VALIDATION` 流程；按 `flowId` 返回各流程声明的输出 |
+
+异步任务与定时器的恢复没有 REST 端点：`FlowAsyncTaskConsumer`、`FlowTimerConsumer` 以及维护 cron 的到期定时器扫描在进程内直接调用 `FlowRuntimeEngine`。
+
+`actorId` / `initiatorId` / `tenantId` **从不**由客户端发送：每个操作请求从登录上下文服务端盖章（`@JsonProperty(READ_ONLY)`），所有查询端点从上下文解析当前 actor。进程内的 `FlowClient` 以同样方式解析 actor，并调用与这些端点相同的服务。
 
 ## 审批投影 API
 
@@ -173,10 +203,10 @@ Flow > BP = Workflow > BPMN
 | Method | Path | 说明 |
 |---|---|---|
 | `GET` | `/flow/approvalTasks/counts` | 当前 actor 的收件箱徽章计数（`{pendingApprovals, unreadCc}`——过滤定义与分页 `/pending` 及 `/cc?read=false` 查询相同） |
-| `GET` | `/flow/approvalTasks/pending?flowCode=&instanceId=&nodeId=&pageNumber=&pageSize=` | 当前 actor 的待办任务（分页：返回 `Page`） |
-| `GET` | `/flow/approvalTasks/completed?flowCode=&instanceId=&nodeId=&pageNumber=&pageSize=` | 当前 actor 的已完成任务（分页） |
-| `GET` | `/flow/approvalTasks/cc?read=&flowCode=&instanceId=&nodeId=&pageNumber=&pageSize=` | 当前 actor 的抄送任务（分页；`read=false` 未读，`read=true` 已确认，省略 `read` 则两者都返回） |
-| `GET` | `/flow/approvalTasks/inbox?flowCode=&instanceId=&nodeId=&includeCompletedApprovals=&pageNumber=&pageSize=` | 统一收件箱视图（待审批 + 抄送；可选已完成审批） |
+| `GET` | `/flow/approvalTasks/pending?flowId=&instanceId=&nodeId=&pageNumber=&pageSize=` | 当前 actor 的待办任务（分页：返回 `Page`） |
+| `GET` | `/flow/approvalTasks/completed?flowId=&instanceId=&nodeId=&pageNumber=&pageSize=` | 当前 actor 的已完成任务（分页） |
+| `GET` | `/flow/approvalTasks/cc?read=&flowId=&instanceId=&nodeId=&pageNumber=&pageSize=` | 当前 actor 的抄送任务（分页；`read=false` 未读，`read=true` 已确认，省略 `read` 则两者都返回） |
+| `GET` | `/flow/approvalTasks/inbox?flowId=&instanceId=&nodeId=&includeCompletedApprovals=&pageNumber=&pageSize=` | 统一收件箱视图（待审批 + 抄送；可选已完成审批） |
 | `GET` | `/flow/approvalTasks/instance/{instanceId}` | 一个运行时实例的所有任务（仅参与者 / 发起人） |
 
 ### 审批记录
@@ -196,7 +226,7 @@ Flow > BP = Workflow > BPMN
 | Method | Path | 说明 |
 |---|---|---|
 | `POST` | `/flow/ccConfigs` | 创建抄送规则 |
-| `GET` | `/flow/ccConfigs?flowCode=` | 按 `flowCode` 列出抄送规则 |
+| `GET` | `/flow/ccConfigs?flowId=` | 按 `flowId` 列出抄送规则 |
 | `POST` | `/flow/ccConfigs/{id}/deactivate` | 停用抄送规则 |
 
 ### 委托
@@ -225,7 +255,7 @@ Flow > BP = Workflow > BPMN
 
 | Method | Path | 说明 |
 |---|---|---|
-| `GET` | `/flow/events?flowCode=&sourceModel=&sourceRowId=&instanceId=&success=&eventTimeFrom=&eventTimeTo=&pageNumber=&pageSize=` | 分页事件日志，最新在前（filters 以 AND 组合；列表行排除 parameters payload） |
+| `GET` | `/flow/events?flowId=&sourceModel=&sourceRowId=&instanceId=&success=&eventTimeFrom=&eventTimeTo=&pageNumber=&pageSize=` | 分页事件日志，最新在前（filters 以 AND 组合；列表行排除 parameters payload） |
 | `GET` | `/flow/events/{id}` | 单条事件，含原始触发参数 payload |
 
 ## 审批模型
@@ -331,13 +361,14 @@ Flow > BP = Workflow > BPMN
 
 ## 触发与消息集成
 
-支持的触发源（`TriggerSource` sealed 子类型）：
+支持的触发源（`TriggerSource` sealed 子类型），每种都是声明它的流程的启动契约（各场景可用哪些，见 [Flow 场景](#flow-场景)）：
 
-- `EntityChange`
-- `Api`
-- `Cron`
-- `Subflow`
+- `EntityChange` —— 模型的一条变更日志。每条变更日志对每个流程最多启动一次运行：它的 `uuid` 作为事件 id 写入 `FlowInstance.triggerEventId`（与流程组合唯一），因此重投的变更日志会返回它已启动的那次运行，而同一行的不同变更各自启动自己的运行
+- `Cron` —— 流程自己的 Quartz 调度（`cronExpression`，发布时校验）；只能由它启动：活动修订版是 cron-starter 调度器的一个任务，其他 cron 任务的触发不会启动它，`POST /flow/automation/trigger` 也拒绝该类型。Approval 流程不能使用
 - `FieldChange`（仅 COMPUTE 场景）
+- `Api`（仅 AUTOMATION 场景）—— 只能按 id 显式启动；不匹配任何事件，`POST /flow/automation/trigger` 拒绝该类型
+- `Subflow`（仅 AUTOMATION 场景）—— 只能由父流程的 Subflow 节点运行；同样不能作为事件触发
+- `Submit`（仅 APPROVAL 场景）—— 指明流程审批哪个模型的记录，可选地附带对记录的条件。只能由提交记录启动；变更日志永远不会产生它，`POST /flow/automation/trigger` 也拒绝它
 
 `EntityChange` 由变更日志触发，因此声明为 `@Model(enableAuditLog = false)` 的模型永远不会触发它，同步、异步都不会——见[审计日志开关](../backend_dev/model_dev/annotation#审计日志开关enableauditlog)。
 
@@ -348,7 +379,7 @@ Pulsar 相关组件按条件注册：
 | `mq.topics.flow-event.topic` | `FlowEventProducer`、`FlowEventConsumer` | 异步触发投递与消费 |
 | `mq.topics.flow-async-task.topic` | `FlowAsyncTaskProducer`、`FlowAsyncTaskConsumer` | 异步任务分发与回调恢复 |
 | `mq.topics.change-log.topic` | `ChangeLogFlowConsumer` | 实体变更驱动的流程触发 |
-| `mq.topics.cron-task.topic` | `CronTaskFlowConsumer` | Cron 驱动的流程触发 |
+| `mq.topics.cron-task.topic` | `CronFlowJobProvider`、`CronTaskFlowConsumer` | 按 cron 调度 Cron 触发的流程，并启动它们 |
 | `mq.topics.flow-timer.topic` | `FlowTimerConsumer` | 定时器唤醒的消费侧 |
 
 重要定时器说明：
@@ -362,7 +393,7 @@ Pulsar 相关组件按条件注册：
 |---|---|
 | `FlowDesign` | 草稿工作副本 |
 | `FlowBundle` | 已发布的编译 bundle |
-| `FlowInstance` | 持久化运行时实例状态（trace 与审批历史**不**内嵌——见两张专用表） |
+| `FlowInstance` | 持久化运行时实例状态（trace 与审批历史**不**内嵌——见两张专用表）。Approval 实例长期保留；已结束的 Automation 运行连同其 trace、并行分支和触发事件日志，在 `flow.automation.retention-days`（默认 30）天后由 `flow_automation_purge` cron 清理 |
 | `FlowExecutionTrace` | 仅追加的执行 trace 行（内存状态只保留当前尝试的增量） |
 | `FlowApprovalTask` | 待办/已完成/抄送任务投影 |
 | `FlowApprovalRecord` | 审批动作审计账本——权威审批历史，由实例存储与实例行在同一事务中刷写 |
