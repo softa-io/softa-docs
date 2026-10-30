@@ -8,20 +8,24 @@
 
 每条记录都有一个**当事人**：记录所涉及的员工，基于组织关系的审批人源从他开始解析（*审批人解析*）。它是模型的 `employeeId`，除非处理器的 `subject()` 指定了另一个字段（`Transfer::getTransfereeId`）；无论哪种，都必须是指向员工模型（`softa.flow.org.employee-model`）的多对一字段，启动时会检查。当事人为空的记录不能提交。提交会把它作为启动变量 `_subjectId` 带给流程。
 
+### 路由变量
+
+审批启动时带上记录上所有可供路由比较的字段，变量名即字段名：记录自身的普通类型列——文本、数字、布尔、日期和时间（转为 ISO 文本）、选项和多选（item code）、多值文本、多对一/一对一关联（id）——但不含标识、簿记和审批状态字段（`id`、`tenantId`、`version`、`deleted`、审计字段、`approvalStatus`、`submitterId`、`submittedTime`），也不含声明为敏感的字段（加密或读取时脱敏），因为实例变量不经过记录的字段权限；没有值的字段不放入。处理器的 `submission` 在此之上补充它根据记录算出的值——例如通过其他模型读到的公司币种——同名变量会覆盖字段值。设计器提供的就是这些字段，因此连线上的规则条件可以读取其中任何一个。
+
 框架维护审批状态，对每个模型都一样；处理器负责只有业务才知道的部分：
 
 | 框架 | 处理器 |
 |---|---|
 | 审批字段——`approvalStatus`（`ApprovalStatus`）、`submitterId`、`submittedTime`——以及对它们的每一次写入 | `validate(record)`：提交必须通过的检查——谁可以提交该记录、记录必须包含什么 |
 | 下文唯一的状态机：只有草稿可以提交或作废；一条记录同一时间只有一个审批 | `validateCancel(record)`：除能看到草稿外，还有谁可以作废它，例如只有报销人本人 |
-| 冻结所有非草稿记录（`ApprovalLockValidator`） | `submission(record)`：一个 `ApprovalSubmission(title, variables, effectiveDate, code)`——仅根据记录算出的实例标题和路由变量，以及模型有这些信息时，记录的生效日期和记录自身的编号，供审批列表显示与筛选 |
+| 冻结所有非草稿记录（`ApprovalLockValidator`） | `submission(record)`：一个 `ApprovalSubmission(title, variables, effectiveDate, code)`——仅根据记录算出的实例标题和在记录自身字段之外补充的路由变量，以及模型有这些信息时，记录的生效日期和记录自身的编号，供审批列表显示与筛选 |
 | 每个结果只回写一次 | `afterSubmitted(record)`：提交所引发的动作，例如预占假期余额 |
 | 提交时记在实例上的内容：当事人、部门、生效日期、编号 | `afterOutcome(record, outcome)`：结果的后续动作，例如扣减余额——或在拒绝、作废后释放余额 |
 | | `effectStatuses(rowIds)`：对审批后延期生效的模型，每条已批准记录的变更进行到哪一步（`RecordEffectStatus`：`Scheduled`、`Applied`、`Failed`），从记录本身读取，从不根据日期推测。默认为空，适用于审批后立即生效的模型 |
 
 | `FlowClient` | 会发生什么 |
 |---|---|
-| `submitRecord(modelName, rowId)` | 提交人必须能以自己的权限读取该记录；只有没有进行中审批的草稿才会被提交。随后 `handler.validate` 以提交人身份检查整条记录，`handler.submission` 返回实例标题和路由变量。流程从租户的活动流程中选出：其提交触发器指明该模型、且条件对该记录成立——必须恰好匹配一个，否则提交被拒绝并说明原因。记录变为 `Pending`，记下提交人与时间，运行 `handler.afterSubmitted`，然后启动记录的审批。全部在调用方事务中完成。每次提交都从头启动一个新的审批——退回之后也是如此，并按记录当前的样子重新选择流程——同时把该记录之前的审批标记为 `superseded` |
+| `submitRecord(modelName, rowId)` | 提交人必须能以自己的权限读取该记录；只有没有进行中审批的草稿才会被提交。随后 `handler.validate` 以提交人身份检查整条记录，`handler.submission` 返回实例标题和它在记录字段之外补充的路由变量。流程从租户的活动流程中选出：其提交触发器指明该模型、且条件对该记录成立——必须恰好匹配一个，否则提交被拒绝并说明原因。记录变为 `Pending`，记下提交人与时间，运行 `handler.afterSubmitted`，然后启动记录的审批。全部在调用方事务中完成。每次提交都从头启动一个新的审批——退回之后也是如此，并按记录当前的样子重新选择流程——同时把该记录之前的审批标记为 `superseded` |
 | `withdrawRecord(modelName, rowId, comment)` | 撤回正在等待的审批（引擎检查 actor 是发起人，且流程的 `withdrawPolicy` 允许）；记录重新成为草稿。若记录的审批**失败**，其提交人也以同样方式取回记录——处理器得知它被撤回；失败的实例保留供流程监控。记录没有进行中的审批时拒绝 |
 | `cancelRecord(modelName, rowId)` | 永久作废草稿：申请人必须能以自己的权限读取该记录，记录必须是草稿，且 `handler.validateCancel` 必须通过。记录变为 `Cancelled`，`handler.afterOutcome` 收到一个没有实例的 `Cancelled` 结果。在调用方事务中完成 |
 | `recordApprovals(modelName, rowId)` | 审批历史，同 `GET /flow/instances/by-record` |
@@ -49,7 +53,7 @@ public class LeaveRequestApprovalHandler implements ModelApprovalHandler<LeaveRe
     public ApprovalSubmission submission(LeaveRequest r) {
         return new ApprovalSubmission(
             "Leave · " + r.getEmployeeName(),                           // 实例标题，列表与通知里显示
-            Map.of("days", r.getDays(), "leaveType", r.getLeaveType()), // 路由变量
+            Map.of(),                                                    // 记录自身字段之外的路由变量——这里没有
             r.getStartDate(),                                            // 生效日期
             r.getCode());                                                // 单据编号
     }

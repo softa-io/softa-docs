@@ -22,7 +22,7 @@
 | `POST` | `/flow/designs/{id}/publish` | 将已保存草稿发布为新活动修订版 |
 | `POST` | `/flow/designs/{id}/restore?bundleId=` | 从历史 bundle 快照恢复草稿画布 |
 | `GET` | `/flow/designs/{id}/status` | 发布状态：修订版徽章 + dirty 标志 |
-| `GET` | `/flow/designs/{id}/availableVariables?nodeId=` | 节点可见变量（表达式自动完成） |
+| `GET` | `/flow/designs/{id}/availableVariables?nodeId=&afterNode=` | 节点可见变量（表达式自动完成）；`afterNode=true` 时为该节点出边可见的变量，包含节点自身的输出 |
 | `POST` | `/flow/designs/{id}/debugRun` | 将当前草稿编译并作为调试 bundle 运行（非沙箱） |
 | `GET` | `/flow/designs/{id}/debugRuns` | 调试运行历史，最新在前 |
 
@@ -58,20 +58,20 @@
 | `POST` | `/flow/instances/search` | 调用方自己提交的记录审批的分页摘要，最新在前——发起人过滤始终为已认证用户，其写入触发的自动化运行不在其中。过滤条件与每行内容见[实例搜索](#实例搜索) |
 | `POST` | `/flow/instances/approve` | 批准待审批 |
 | `POST` | `/flow/instances/reject` | 拒绝待审批；必须填写说明理由的意见 |
-| `POST` | `/flow/instances/batch/approve` | 批准调用方的多个待办任务（`tasks`：实例 + 步骤，最多 100 个），每个任务各在自己的事务中执行。返回 `FlowBatchActionResult`——成功 / 跳过 / 失败计数及每个任务的结果。见[批量操作与办理步骤](./approval#批量操作与办理步骤) |
+| `POST` | `/flow/instances/batch/approve` | 批准调用方的多个待办任务（`tasks`：实例 + 步骤，最多 100 个），每个任务各在自己的事务中执行。返回 `FlowBatchActionResult`——成功 / 跳过 / 失败计数及每个任务的结果。见[批量操作](./approval#批量操作) |
 | `POST` | `/flow/instances/batch/return` | 以同一条意见（必填）把多个待办任务退回给各自的发起人；不允许退回的步骤会被跳过 |
 | `POST` | `/flow/instances/batch/reject` | 以同一条意见（必填）拒绝多个待办任务 |
 | `POST` | `/flow/instances/transfer` | 转交待审批任务 |
 | `POST` | `/flow/instances/delegate` | 委托待审批任务 |
 | `POST` | `/flow/instances/add-sign-before` | 插入前置签批人 |
 | `POST` | `/flow/instances/add-sign-after` | 插入后续签批人 |
-| `POST` | `/flow/instances/cc` | 发送抄送通知 |
+| `POST` | `/flow/instances/cc` | 调用方在自己待处理的步骤上抄送一人或多人（`targetActorIds`）；该步骤的审批人和已在这一步被抄送过的人跳过。见[审批动作](./approval#审批动作) |
 | `POST` | `/flow/instances/cc/read` | 标记抄送为已读 |
 | `POST` | `/flow/instances/return` | 把待审批退回给发起人，实例以 `Returned` 结束。只有该步骤的审批人可以退回，且该步骤须允许退回（`returnEnabled`），并附上说明需修改内容的意见 |
 | `POST` | `/flow/instances/withdraw` | 撤回 Approval 实例：由其发起人撤回，且实例正在等待审批人、流程的 `withdrawPolicy` 允许（`WithdrawPolicyGuard`） |
 | `GET` | `/flow/instances/{instanceId}/withdraw` | 调用方现在能否撤回该实例——恰在撤回会被接受时为 `true`，判断同样出自 `WithdrawPolicyGuard`。可查看该实例的人均可调用 |
-| `POST` | `/flow/instances/urge` | 提醒审批所等待的审批人——仅限发起人。每个等待中的步骤在 `flow.approval.urge-interval-minutes`（默认 240）内最多被催办一次，无论由发起人还是管理员催办；每个被催办的步骤各记一条 `URGE` 历史，若所有步骤都仍在间隔内则拒绝催办。返回 `FlowUrgeStatus`，而非实例 |
-| `GET` | `/flow/instances/{instanceId}/urge` | 现在能否催办该审批，若不能则何时可以（`FlowUrgeStatus`）。可查看该实例的人均可调用 |
+| `POST` | `/flow/instances/urge` | 提醒审批所等待的审批人——仅限发起人，且流程的 `urgeEnabled` 没有关闭。每个等待中的步骤在流程的 `urgeIntervalMinutes`（默认 240）内最多被催办一次，无论由发起人还是管理员催办；每个被催办的步骤各记一条 `URGE` 历史，若所有步骤都仍在间隔内则拒绝催办。返回 `FlowUrgeStatus`，而非实例 |
+| `GET` | `/flow/instances/{instanceId}/urge` | 调用方现在能否催办该审批，若不能则何时可以（`FlowUrgeStatus`）；流程关闭了 `urgeEnabled` 时，发起人始终不能催办。可查看该实例的人均可调用 |
 | `POST` | `/flow/instances/comment` | 在实例运行期间添加评论审计条目——仅限其参与者：发起人以及它给过或正给着任务的人。已结束的实例不再接受评论。返回 `true`，而非实例 |
 | `GET` | `/flow/instances/{instanceId}/nodes/{nodeId}/formPermissions` | 获取字段级表单权限 |
 | `GET` | `/flow/instances/by-record?modelName=&rowId=` | 业务记录的审批历史：其审批实例按最新在前排列，含仍在等待的步骤、尚未处理的审批人以及审批动作，所有用户都显示姓名（仅在调用方获准后才解析姓名）；失败的实例说明在哪里、因何停止（`failure`）。参与过其审批或能读取该记录的人均可调用 |
@@ -80,7 +80,7 @@
 
 谁可以查看实例：默认是其发起人以及它给了任务的人（待处理或已处理的审批人、抄送接收人、转交、委托和加签的目标）；其他人则通过标准的角色与数据范围配置——他们能以自己的权限读取 `FlowInstance` 行，或者对于记录的审批，能读取该记录本身。
 
-默认规则不需要对流程模型授权，而任何业务角色都不持有流程模型。引擎自身的簿记——加载与保存实例、审批账本、任务与分支投影、委托与自动抄送规则——越过调用方的数据权限运行：谁可以操作由动作处理器判定，谁可以查看由访问守卫判定。当前用户自己的列表——收件箱计数、待办 / 已办 / 抄送任务与收件箱（`/flow/approvalTasks`）、其审批历史与已发抄送（`/flow/approvalRecords`）、其委托，以及 `POST /flow/instances/search`，连同对应的 `FlowClient` 方法——都带有 `@SkipPermissionCheck`：它们固定于调用方本人，行范围只会把它们清空。按实例的读取（`.../instance/{instanceId}`、实例详情端点）不豁免，因为访问守卫会按每个人自己的权限判断除发起人和任务持有人之外的所有人。
+默认规则不需要对流程模型授权，而任何业务角色都不持有流程模型。引擎自身的簿记——加载与保存实例、审批账本、任务与分支投影、委托与抄送接收人的查找——越过调用方的数据权限运行：谁可以操作由动作处理器判定，谁可以查看由访问守卫判定。当前用户自己的列表——收件箱计数、待办 / 已办 / 抄送任务与收件箱（`/flow/approvalTasks`）、其审批历史与已发抄送（`/flow/approvalRecords`）、其委托，以及 `POST /flow/instances/search`，连同对应的 `FlowClient` 方法——都带有 `@SkipPermissionCheck`：它们固定于调用方本人，行范围只会把它们清空。按实例的读取（`.../instance/{instanceId}`、实例详情端点）不豁免，因为访问守卫会按每个人自己的权限判断除发起人和任务持有人之外的所有人。
 
 ### 实例搜索
 
@@ -127,7 +127,7 @@
 | `GET` | `/flow/approvalTasks/inbox?flowId=&instanceId=&nodeId=&includeCompletedApprovals=&pageNumber=&pageSize=` | 统一收件箱视图（待审批 + 抄送；可选已完成审批） |
 | `GET` | `/flow/approvalTasks/instance/{instanceId}` | 一个运行时实例的所有任务（仅参与者 / 发起人） |
 
-每个任务（`FlowApprovalTaskView`）都带有其实例的上下文——`instanceTitle`、`modelName` / `rowId`、`instanceStatus`、`initiator` 与 `submittedTime`，以及记录的审批为其记录记下的内容（`subject`、`subjectDept`、`effectiveDate`、`recordCode`），所有用户、员工和部门都显示名称——还带有其步骤配置对处理方式的说明，取自实例所运行的修订版：`handling`（办理步骤）、`returnAllowed`（步骤的 `returnEnabled`）以及 `batchable`（当前对其审批人开放——待处理、未被加签阻塞、实例在等待——且所在步骤不是办理步骤、也没有必填字段）。见[批量操作与办理步骤](./approval#批量操作与办理步骤)。
+每个任务（`FlowApprovalTaskView`）都带有其实例的上下文——`instanceTitle`、`modelName` / `rowId`、`instanceStatus`、`initiator` 与 `submittedTime`，以及记录的审批为其记录记下的内容（`subject`、`subjectDept`、`effectiveDate`、`recordCode`），所有用户、员工和部门都显示名称——还带有其步骤配置对处理方式的说明，取自实例所运行的修订版：`returnAllowed`（步骤的 `returnEnabled`）以及 `batchable`（当前对其审批人开放——待处理、未被加签阻塞、实例在等待——且所在步骤没有必填字段）。见[批量操作](./approval#批量操作)。
 
 ### 审批记录
 
@@ -140,31 +140,6 @@
 | `GET` | `/flow/approvalRecords/cc/sent` | 发送方抄送历史 |
 
 每个条目（`FlowApprovalRecord`、`FlowApprovalRecordView`）记录其 `action`（`ApprovalActionType`：`APPROVE`、`AUTO_APPROVE`、`REJECT`、`TRANSFER`、`DELEGATE`、`ADD_SIGN`、`CC`、`READ`、`RETURN`、`WITHDRAW`、`URGE`、`COMMENT`、`TERMINATE`）、其 `actorId`，以及代该 actor 执行的动作的 `operatorId`——转派该 actor 任务的管理员（一条从原审批人到新审批人的 `TRANSFER` 条目）；actor 亲自操作时为空。
-
-### 抄送配置
-
-基础路径：`/flow/ccConfigs`
-
-| Method | Path | 说明 |
-|---|---|---|
-| `POST` | `/flow/ccConfigs` | 创建抄送规则 |
-| `GET` | `/flow/ccConfigs?flowId=` | 按 `flowId` 列出抄送规则 |
-| `POST` | `/flow/ccConfigs/{id}/deactivate` | 停用抄送规则 |
-
-一条规则（`FlowCcConfig`）在其时机抄送其接收人：
-
-- `OnSubmit`：流程启动时。
-- `OnApprove` / `OnReject`：审批人批准或拒绝某个步骤之后。
-- `OnComplete`：审批以批准完成时。
-
-没有 `nodeId` 的规则是流程级的，在每个这样的时刻触发。指明步骤的规则只在该步骤的 `OnApprove` / `OnReject` 触发。`recipientType` 为 `INITIATOR` 时抄送发起人；其他类型把 `recipientConfig` 读作以逗号分隔的用户 id。可选的 `ccCondition` 基于实例变量求值。
-
-自动抄送与手动抄送记录方式相同：审批历史中每个接收人一条 `CC` 条目。该条目没有 actor，因为不是由某个人发送的。它落在规则触发的节点上——被处理的步骤，或者 `OnSubmit` 时的开始节点（以及所有步骤都自动通过时 `OnComplete` 的开始节点）——位于该节点的当前周期。因此接收人：
-
-- 在收件箱中有一条抄送任务，可标记为已读；
-- 是实例的参与者：可以打开并评论它。
-
-已在同一节点、同一周期被抄送过的接收人（无论是规则还是手动抄送）不会再次被抄送，因此由多位审批人批准的步骤只抄送一次。`sendNotification` 会额外通知该次被抄送的接收人。
 
 ### 委托
 
@@ -185,7 +160,7 @@
 |---|---|---|
 | `GET` | `/flow/monitor/health` | 流程运行时健康快照（按状态的实例计数、逾期定时器） |
 | `POST` | `/flow/monitor/instances/search` | 跨发起人的分页实例摘要，以调用方自己的权限读取：其数据范围所能触及的 `FlowInstance` 行。请求中若有 `initiatorId` 过滤则予以采纳；其余同[实例搜索](#实例搜索) |
-| `POST` | `/flow/monitor/instances/urge` | 以管理员而非发起人的身份催办审批：任何能以自己的权限读取该实例 `FlowInstance` 行的人。发起人的间隔同样适用——间隔内被任何人催办过的步骤不会再次被催办。返回 `FlowUrgeStatus` |
+| `POST` | `/flow/monitor/instances/urge` | 以管理员而非发起人的身份催办审批：任何能以自己的权限读取该实例 `FlowInstance` 行的人，不受流程 `urgeEnabled` 的限制。流程的 `urgeIntervalMinutes` 同样适用——间隔内被任何人催办过的步骤不会再次被催办。返回 `FlowUrgeStatus` |
 | `POST` | `/flow/monitor/instances/terminate` | 以同一条 `reason`（必填）结束所列出的每个运行中、等待中或失败的实例（`instanceIds`，最多 100 个）：其待审批关闭，实例以 `Cancelled` 结束——记录的审批会作废其记录——历史中记下一条附带理由的 `TERMINATE` 条目，并把理由发送给发起人。仅限调用方权限能读取的实例；每个实例各在自己的事务中处理。返回 `FlowBatchActionResult` |
 | `POST` | `/flow/monitor/approvers/reassign/preview` | 一次转派（`fromActorId` → `toActorId`）会移动该审批人在调用方权限可读实例上的多少个待审批任务：`FlowReassignPreview`（`tasks`、`instances`） |
 | `POST` | `/flow/monitor/approvers/reassign` | 以 `reason`（必填）把这些任务逐个移交给新审批人，每个各在自己的事务中处理：记为原审批人的 `TRANSFER`，调用方为 `operatorId`；新审批人获得该任务，发起人会被告知现在由谁处理。只移动实例当前等待的步骤——尚未到达的步骤在到达时才解析审批人；抄送任务保持不变。返回 `FlowBatchActionResult` |
@@ -212,7 +187,6 @@
 | `FlowExecutionTrace` | 仅追加的执行 trace 行（内存状态只保留当前尝试的增量） |
 | `FlowApprovalTask` | 待办/已完成/抄送任务投影 |
 | `FlowApprovalRecord` | 审批动作审计账本——权威审批历史，由实例存储与实例行在同一事务中刷写；`operatorId` 指明代该 actor 操作的管理员 |
-| `FlowCcConfig` | 自动抄送规则 |
 | `FlowDelegation` | 委托规则 |
 | `FlowEvent` | 触发事件日志 |
 | `FlowDebugHistory` | 调试快照 |

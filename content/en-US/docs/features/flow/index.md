@@ -6,7 +6,7 @@
 - compile-time validation and transformation into runtime bundles
 - published bundle revisions by `flowId`
 - runtime execution for approval, automation, validation, and compute flows
-- persistent projections for instances, approval tasks, approval records, delegations, CC rules, and trigger events
+- persistent projections for instances, approval tasks, approval records, delegations, and trigger events
 - optional Pulsar-based trigger and async-task integration
 
 ```mermaid
@@ -38,7 +38,7 @@ The pages in this section document the current backend contract of `flow-starter
 
 ### Flow Identity And Revisions
 
-- `FlowDesign` is the draft working copy. Its `id` (a distributed string id) is the flow's identity everywhere: bundles, instances, tasks, approval records, events, delegations and CC rules reference it as `flowId`, and lists show the flow's name through that reference.
+- `FlowDesign` is the draft working copy. Its `id` (a distributed string id) is the flow's identity everywhere: bundles, instances, tasks, approval records, events and delegations reference it as `flowId`, and lists show the flow's name through that reference.
 - `flowName` is unique within a tenant; there is no separate flow code.
 - `FlowBundle` is the compiled published snapshot; published revisions are keyed by `flowId`.
 - `FlowStartRequest` resolves bundles in this order:
@@ -72,7 +72,7 @@ Every flow declares a trigger, and **the trigger is the flow's start contract** 
 
 An explicit start and a Subflow call both run an Automation flow, so `Api` and `Subflow` belong to Automation alone. Debug runs of a draft ignore the trigger.
 
-Settings belong to one scenario too: `withdrawPolicy`, `approverDedup`, `selfApproval` and `emailNotification` to Approval flows; `sync` / `rollbackOnFail` to Automation flows, and a sync flow — which runs inside the writer's transaction — may not contain a Timer, AsyncTask or Approval node. The compiler rejects a flow that breaks any of these rules.
+Settings belong to one scenario too: `withdrawPolicy`, `urgeEnabled`, `urgeIntervalMinutes`, `approverDedup`, `selfApproval` and `emailNotification` to Approval flows; `sync` / `rollbackOnFail` to Automation flows, and a sync flow — which runs inside the writer's transaction — may not contain a Timer, AsyncTask or Approval node. The compiler rejects a flow that breaks any of these rules.
 
 ### Node Types
 
@@ -99,6 +99,21 @@ Node-behavior invariants:
 
 - **`Subflow` is synchronous-only**: the orchestrator fails the parent if a child enters a waiting state (`TIMER` / `ASYNC`), and recursive subflow invocation is rejected. The child must be an Automation flow with a `Subflow` trigger, else the parent fails. Model human steps in an Approval flow, not a child.
 - **`ParallelFork` branches execute serially** (deterministic order), not wall-clock-parallel — the gateway models routing topology, not concurrency.
+
+The graph itself has exactly one `Start` as its entry — a node that merely lacks incoming edges is not one (`NO_START_NODE` / `MULTIPLE_START_NODES`) — no cycle (`GRAPH_CYCLE`), and every node reachable from the `Start` along the edges (`UNREACHABLE_NODE`). An unreachable node would never run, and a `ParallelJoin` it feeds counts its edge among the arrivals it waits for, so every instance would stop there. A draft may break these rules — saving never validates — but it cannot publish.
+
+### Routing: Edge Conditions
+
+Conditions live on edges; a node carries none. Every node routes **exclusively** over its outgoing edges — at most one conditional edge may hold, else the instance fails; when none holds it takes the one edge without a condition (the default, at most one per node) — except `InclusiveGateway`, which takes every edge that holds plus every edge without a condition, and `ParallelFork`, which takes all of them.
+
+An edge's condition is one of two kinds, never both:
+
+| Kind | Field | Use | Judged |
+|---|---|---|---|
+| Rule | `condition` — the platform Filters JSON, `["days", ">", 3]` / `[[…], "AND", […]]` | The fields of the record the flow starts on; the designer builds it with the model's own filter builder | Like a field condition (`requiredWhen`): typed by the record model's fields, an empty value equals `""`, ordering needs two values (`days < 3` is false for an empty `days`), options compare by item code, relations by id |
+| Expression | `conditionExpression` — AviatorScript | What a rule cannot say: arithmetic, functions, what an earlier node produced | By AviatorScript over the instance's variables, with its own semantics (`nil` is smaller than any number) |
+
+A rule needs a flow that starts on a record — a `Submit`, `EntityChange` or `FieldChange` trigger. Publishing checks it the way a field condition is checked: a field the model lacks, a to-many field, ordering an option or a relation, `PARENT OF` / `CHILD OF` and an unresolvable placeholder are refused, and an approval's rule reads only the fields its approvals route on (see [routing variables](./integration#routing-variables)).
 
 ## Flow Concept
 

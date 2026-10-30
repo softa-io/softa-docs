@@ -8,20 +8,24 @@ A business record — a leave request, an expense claim — is approved by an Ap
 
 Every record has a **subject**: the employee it is about, whom the organization-relative approver sources start from (*Approver Resolution*). It is the model's `employeeId` unless the handler's `subject()` names another field (`Transfer::getTransfereeId`); either way a many-to-one onto the employee model (`softa.flow.org.employee-model`), which the boot checks. A record whose subject is empty is not submitted. The submission carries it to the flow as the start variable `_subjectId`.
 
+### Routing variables
+
+An approval starts with every field of the record a route can compare, under the field's name: its own columns of a plain type — text, numbers, booleans, dates and times (as ISO text), options and multi-options (item codes), multi-strings, to-one relations (the id) — less its identity, bookkeeping and approval state (`id`, `tenantId`, `version`, `deleted`, the audit fields, `approvalStatus`, `submitterId`, `submittedTime`) and any field declared sensitive — encrypted, or masked when read — since an instance's variables are not read through the record's field permissions; a field with no value is left out. The handler's `submission` adds what it works out from the record on top — a value read through another model, such as the company's currency — and one of the same name replaces the field's. The designer offers the same fields, so a rule condition on an edge can read every one of them.
+
 The framework keeps the approval state, the same for every model; the handler holds what only the business knows:
 
 | Framework | Handler |
 |---|---|
 | The approval fields — `approvalStatus` (`ApprovalStatus`), `submitterId`, `submittedTime` — and every write of them | `validate(record)`: the checks a submission must pass — who may submit the record, what it must hold |
 | The one state machine below: only a draft is submitted or cancelled; one approval of a record at a time | `validateCancel(record)`: who may cancel the draft beyond seeing it, such as only its claimant |
-| Freezing every record that is not a draft (`ApprovalLockValidator`) | `submission(record)`: an `ApprovalSubmission(title, variables, effectiveDate, code)` — the instance title and the routing variables, worked out from the record alone, and, when the model has them, the date the record takes effect and its own number, which the approval lists show and filter on |
+| Freezing every record that is not a draft (`ApprovalLockValidator`) | `submission(record)`: an `ApprovalSubmission(title, variables, effectiveDate, code)` — the instance title and the routing variables it adds to the record's own fields, worked out from the record alone, and, when the model has them, the date the record takes effect and its own number, which the approval lists show and filter on |
 | Writing each result back, once | `afterSubmitted(record)`: what a submission sets off, such as reserving a leave balance |
 | What a submission records on the instance: subject, department, effective date, number | `afterOutcome(record, outcome)`: the follow-up actions of a result, such as deducting the balance — or releasing it after a rejection or a cancellation |
 | | `effectStatuses(rowIds)`: for a model whose approval takes effect later, where each approved record's change stands (`RecordEffectStatus`: `Scheduled`, `Applied`, `Failed`), read from the records themselves, never guessed from dates. Empty by default, for a model whose approval takes effect at once |
 
 | `FlowClient` | What happens |
 |---|---|
-| `submitRecord(modelName, rowId)` | The submitter must read the record with their own permissions; only a draft with no approval in progress is submitted. `handler.validate` then checks the whole record as the submitter, and `handler.submission` returns the instance title and routing variables. The flow is chosen among the tenant's active flows whose submit trigger names the model and whose condition holds for the record — exactly one must match, else the submission is refused naming why. The record becomes `Pending`, with its submitter and the time, `handler.afterSubmitted` runs, and the record's approval starts. All in the caller's transaction. Every submission starts a new approval from the beginning — after a return too, with the flow chosen again for the record as it is now — and marks the record's earlier approvals `superseded` |
+| `submitRecord(modelName, rowId)` | The submitter must read the record with their own permissions; only a draft with no approval in progress is submitted. `handler.validate` then checks the whole record as the submitter, and `handler.submission` returns the instance title and the routing variables it adds to the record's fields. The flow is chosen among the tenant's active flows whose submit trigger names the model and whose condition holds for the record — exactly one must match, else the submission is refused naming why. The record becomes `Pending`, with its submitter and the time, `handler.afterSubmitted` runs, and the record's approval starts. All in the caller's transaction. Every submission starts a new approval from the beginning — after a return too, with the flow chosen again for the record as it is now — and marks the record's earlier approvals `superseded` |
 | `withdrawRecord(modelName, rowId, comment)` | Withdraws the waiting approval (the engine checks the actor is the initiator and the flow's `withdrawPolicy` permits it); the record is a draft again. When the record's approval **failed**, its submitter takes the record back the same way — the handler is told it was withdrawn; the failed instance stays for flow monitoring. Refused when the record has no approval in progress |
 | `cancelRecord(modelName, rowId)` | Cancels a draft for good: the applicant must read the record with their own permissions, it must be a draft, and `handler.validateCancel` must pass. The record becomes `Cancelled` and `handler.afterOutcome` gets a `Cancelled` result with no instance. In the caller's transaction |
 | `recordApprovals(modelName, rowId)` | The approval history, as `GET /flow/instances/by-record` |
@@ -49,7 +53,7 @@ public class LeaveRequestApprovalHandler implements ModelApprovalHandler<LeaveRe
     public ApprovalSubmission submission(LeaveRequest r) {
         return new ApprovalSubmission(
             "Leave · " + r.getEmployeeName(),                           // instance title, shown in lists and notifications
-            Map.of("days", r.getDays(), "leaveType", r.getLeaveType()), // routing variables
+            Map.of(),                                                    // routing variables beyond the record's own fields — none here
             r.getStartDate(),                                            // effective date
             r.getCode());                                                // record number
     }

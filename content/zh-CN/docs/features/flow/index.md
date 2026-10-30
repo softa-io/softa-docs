@@ -6,7 +6,7 @@
 - 编译时校验并转换为运行时 bundle
 - 按 `flowId` 发布的 bundle 修订版
 - 审批、自动化、校验和计算流程的运行时执行
-- 实例、审批任务、审批记录、委托、抄送规则和触发事件的持久化投影
+- 实例、审批任务、审批记录、委托和触发事件的持久化投影
 - 可选的基于 Pulsar 的触发与异步任务集成
 
 ```mermaid
@@ -38,7 +38,7 @@ flowchart LR
 
 ### Flow 身份与修订版
 
-- `FlowDesign` 是草稿工作副本。它的 `id`（分布式字符串 id）就是流程在各处的身份：bundle、实例、待办、审批记录、事件、委托和抄送规则都以 `flowId` 引用它，列表通过这个引用显示流程名称。
+- `FlowDesign` 是草稿工作副本。它的 `id`（分布式字符串 id）就是流程在各处的身份：bundle、实例、待办、审批记录、事件和委托都以 `flowId` 引用它，列表通过这个引用显示流程名称。
 - `flowName` 在租户内唯一；没有单独的 flow code。
 - `FlowBundle` 是编译后的已发布快照；已发布修订版以 `flowId` 为键。
 - `FlowStartRequest` 按以下顺序解析 bundle：
@@ -72,7 +72,7 @@ flowchart LR
 
 显式启动和 Subflow 调用运行的都是 Automation 流程，因此 `Api` 和 `Subflow` 只属于 Automation。草稿的调试运行忽略触发器。
 
-设置项也各属一个场景：`withdrawPolicy`、`approverDedup`、`selfApproval` 和 `emailNotification` 属于 Approval 流程；`sync` / `rollbackOnFail` 属于 Automation 流程，而 sync 流程在写数据的事务里运行，不能包含 Timer、AsyncTask 或 Approval 节点。违反任一规则的流程会被编译器拒绝。
+设置项也各属一个场景：`withdrawPolicy`、`urgeEnabled`、`urgeIntervalMinutes`、`approverDedup`、`selfApproval` 和 `emailNotification` 属于 Approval 流程；`sync` / `rollbackOnFail` 属于 Automation 流程，而 sync 流程在写数据的事务里运行，不能包含 Timer、AsyncTask 或 Approval 节点。违反任一规则的流程会被编译器拒绝。
 
 ### 节点类型
 
@@ -99,6 +99,21 @@ flowchart LR
 
 - **`Subflow` 仅支持同步**：若子流程进入等待状态（`TIMER` / `ASYNC`），编排器会使父流程失败；递归子流程调用会被拒绝。子流程必须是带 `Subflow` 触发器的 Automation 流程，否则父流程失败。人工步骤应建模在 Approval 流程中，而非子流程。
 - **`ParallelFork` 分支串行执行**（确定性顺序），而非墙钟并行——该网关建模路由拓扑，而非并发。
+
+图本身要满足：恰好一个 `Start` 作为入口——仅仅没有入边的节点不算（`NO_START_NODE` / `MULTIPLE_START_NODES`）；没有环（`GRAPH_CYCLE`）；每个节点都能从 `Start` 沿连线到达（`UNREACHABLE_NODE`）。走不到的节点永远不会执行，而它连到的 `ParallelJoin` 会把它那条边计入要等待的到达数，导致每个实例都停在那里。草稿可以违反这些规则——保存从不校验——但不能发布。
+
+### 路由：连线条件
+
+条件写在连线上，节点本身不带条件。每个节点对其出边做**排他**路由——成立的条件边至多一条，否则实例失败；都不成立时走那条没有条件的边（默认边，每个节点至多一条）——例外是 `InclusiveGateway` 走所有成立的边以及所有无条件的边，`ParallelFork` 全部都走。
+
+一条连线的条件是以下两种之一，不能同时有：
+
+| 种类 | 字段 | 用途 | 判定方式 |
+|---|---|---|---|
+| 规则 | `condition`——平台 Filters JSON，`["days", ">", 3]` / `[[…], "AND", […]]` | 读取流程所基于记录的字段；设计器用该模型自己的筛选器来构建 | 与字段条件（`requiredWhen`）相同：按记录模型的字段类型判定，空值等同 `""`，比较大小需要两边都有值（`days` 为空时 `days < 3` 为假），选项按 item code 比较，关联按 id 比较 |
+| 表达式 | `conditionExpression`——AviatorScript | 规则表达不了的：算术、函数、上游节点的输出 | 由 AviatorScript 在实例变量上求值，遵循它自己的语义（`nil` 小于任何数字） |
+
+规则需要流程基于一条记录启动——`Submit`、`EntityChange` 或 `FieldChange` 触发器。发布时按字段条件的方式检查规则：模型没有的字段、一对多/多对多字段、对选项或关联比较大小、`PARENT OF` / `CHILD OF`、无法解析的占位符都会被拒绝；审批流的规则只能读取其审批会路由的字段（见[路由变量](./integration#路由变量)）。
 
 ## Flow 概念
 

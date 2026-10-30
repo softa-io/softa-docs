@@ -9,8 +9,7 @@
 | 提交人（发起人） | 点「提交」的用户，即实例的 `initiator` | 提交、按撤回策略撤回、催办、评论、作废草稿；被退回后修改并重新提交 |
 | 当事人 | 单据所涉及的员工，默认是单据的 `employeeId` | 不一定是提交人（代他人提交时不同）。按组织找审批人时以他为起点 |
 | 审批人 | 当前步骤解析出的登录账号 | 批准、拒绝、退回、转交、委托、加签、抄送、评论；批量批准 / 退回 / 拒绝 |
-| 办理人 | 办理步骤上的审批人 | 填写该步骤要求的字段后「提交」（账本里仍记为批准） |
-| 抄送人 | 手动抄送或按抄送规则抄送到的用户 | 查看、标记已读、评论 |
+| 抄送人 | 审批人手动抄送的人，或流程设置里的抄送规则抄送到的人 | 查看、标记已读、评论 |
 | 受托人 | 委托规则指定的代理人 | 委托生效期间，原本派给委托人的任务改派给他 |
 | 管理员 | 持有监控台权限的用户，按 `FlowInstance` 数据范围 | 监控实例；终止、转派、代人委托、管理员催办 |
 
@@ -124,11 +123,25 @@ stateDiagram-v2
 | 审批设置 | 取值 | 默认值 |
 |---|---|---|
 | `withdrawPolicy` | 发起人可以撤回到何时：`Never`、`BeforeFirstAction`（直到审批人第一次批准、拒绝、退回、转交、委托或加签——自动通过不算）、`UntilCompleted` | `Never` |
+| `urgeEnabled` | 发起人能否催办；管理员不受这个开关限制 | 开启 |
+| `urgeIntervalMinutes` | 每个等待中的步骤多久能催一次（分钟），发起人和管理员共用；至少为 1 | `240` |
 | `approverDedup` | `Global`、`Contiguous`、`None`——见[审批人解析](#审批人解析) | `Global` |
 | `selfApproval` | `AutoApprove`、`RequireApproval`——见[审批业务记录](./integration#审批业务记录) | `AutoApprove` |
-| `emailNotification` | 是否同时以邮件发送通知；收件箱总会收到——见[通知](#通知) | 开启 |
+| `emailNotification` | 是否同时以邮件发送通知——见[通知](#通知) | 开启 |
+| `cc` | 抄送规则：提交时、通过后、驳回后抄送给谁——见[抄送](#抄送) | 不抄送 |
 
 流程的 `withdrawPolicy` 决定提交人可以撤回到何时：`Never`（默认）、`BeforeFirstAction`——直到审批人在任一步骤第一次批准、拒绝、退回、转交、委托或加签；自动通过不算——或 `UntilCompleted`。无论哪种策略，只有发起人可以撤回，且只能在审批等待审批人期间撤回。`WithdrawPolicyGuard` 是唯一的规则：撤回动作据此执行，预览、`GET /flow/instances/{instanceId}/withdraw` 和实例搜索的 `withdrawable` 据此报告，因此“撤回”按钮恰好在撤回会被接受时出现。
+
+### 抄送
+
+抄送是整个审批的设置，只在流程设置里配置，审批步骤本身没有抄送配置。规则（`cc`，一组 `FlowCcRule`）随流程版本发布，实例按它运行的版本执行。每条规则写明：
+
+- **何时**：提交时（`OnSubmit`）；通过后（`OnApproved`，整个审批以批准结束时）；驳回后（`OnRejected`，整个审批以拒绝结束时——一票拒绝还没到步骤的拒绝门槛不算）。
+- **抄送谁**：指定的人（`recipients`），或像配审批人一样按规则查找（`recipientSource`，与审批步骤的 `approverSource` 同形——当事人的上级、部门负责人、角色、岗位、部门成员……），二者择一。按[审批人解析](#审批人解析)的方式查找，不受提交人数据权限的限制。
+
+规则抄送与手动抄送记录方式相同：每个接收人一条 `CC` 记录，没有操作人（不是某个人发的），落在开始节点（提交时；所有步骤都自动通过时的通过后也在这里）或结束审批的那一步上，位于该节点的当前周期。接收人因此在「抄送我」里有一条待阅、收到站内通知，并成为参与者：可以查看、评论。同一节点同一周期已经抄送过的人——不论是规则还是手动——不会重复抄送。
+
+审批人也可以在审批时手动抄送，一次选一人或多人——见[审批动作](#审批动作)。
 
 ### 一张单据只匹配一个流程
 
@@ -198,7 +211,7 @@ stateDiagram-v2
 
 一旦 actor 被确认为该节点的审批人，审批的表单编辑以及它所恢复执行的每个节点都会搁置该 actor 自己的行范围来运行。审批本身就是授权：审批人很少对其所审批的记录持有更新权限，而在按动作授予行范围的情况下（permission-starter），这会连审批本身都被拒绝。在引擎之外执行审批的宿主端点也同样处理，并先做一次入口检查，确认审批人能看到该申请（`@RequirePermission`）。因此，记录的写入规则（`ModelWriteValidator`）会把这些写入视为系统写入：在记录处于审批中时冻结记录的审批锁（`ApprovalLockValidator`，见*审批业务记录*）仍会放行节点标为可编辑的字段。
 
-搁置指的是**所有**权限检查，而不仅是行范围——包括敏感字段的写入检查。节点的表单配置（其字段权限 `formPermissions`）是审批人所编辑字段的唯一授权。只有标为 `EDITABLE` 或 `REQUIRED` 的字段会被回写；批准请求 `formData` 中的其他键——`HIDDEN` 或 `READONLY` 字段，或节点未列出的字段——都会被丢弃，没有 `formPermissions` 的节点什么也不写。`REQUIRED` 字段在编辑落地后必须有值——要么是提交的值，要么是记录已存的值——因此当记录缺少该值时，什么都不提交的批准仍会被拒绝。写入之后，记录的审批会根据编辑后的记录重新计算其处理器的 `submission`，其变量替换流程启动时的变量：后续路由能看到审批人所做的修改。因此，即使审批人的角色没有覆盖某个字段的敏感字段集，只要节点表单把它设为可编辑，审批人仍能写入它。流程设计者不得在审批表单上把敏感字段（薪资、银行信息、证件号码……）设为可编辑，除非该节点可能解析到的每位审批人都应当能编辑它；应设为只读，或不放在表单上。
+搁置指的是**所有**权限检查，而不仅是行范围——包括敏感字段的写入检查。节点的表单配置（其字段权限 `formPermissions`）是审批人所编辑字段的唯一授权。只有标为 `EDITABLE` 或 `REQUIRED` 的字段会被回写；批准请求 `formData` 中的其他键——`HIDDEN` 或 `READONLY` 字段，或节点未列出的字段——都会被丢弃，没有 `formPermissions` 的节点什么也不写。`REQUIRED` 字段在编辑落地后必须有值——要么是提交的值，要么是记录已存的值——因此当记录缺少该值时，什么都不提交的批准仍会被拒绝。写入之后，记录的审批会根据编辑后的记录重新读取路由变量——先是记录自身的字段，再叠加处理器的 `submission`——并替换流程启动时的变量：后续路由能看到审批人所做的修改，包括被清空的字段。因此，即使审批人的角色没有覆盖某个字段的敏感字段集，只要节点表单把它设为可编辑，审批人仍能写入它。流程设计者不得在审批表单上把敏感字段（薪资、银行信息、证件号码……）设为可编辑，除非该节点可能解析到的每位审批人都应当能编辑它；应设为只读，或不放在表单上。
 
 ### 审批动作
 
@@ -211,7 +224,7 @@ stateDiagram-v2
 | 退回 | 步骤开启 `returnEnabled`；意见必填 | 实例 `Returned`，单据回到草稿。总是退回给提交人，不能退到中间步骤 | 发起人 |
 | 转交 / 委托 | 本人还没投票；对象不能是本人，也不能已在该步骤 | 对象接替他的位置，所需票数不变；两者只在记录与任务状态上不同（`Transferred` / `Delegated`） | 新审批人 |
 | 前加签 / 后加签 | 本人还没投票；对象不在该步骤；一步同时只能有一对未完成的加签 | 加签人插在他前面（他要等加签人批准）或后面（加签人要等他批准）；这一步即使是「任一人」也需加签双方都批准 | 不单独通知加签人 |
-| 抄送 | 本人还没投票；对象不能是审批人；同一步同一周期不重复抄送 | 对象成为参与者，可查看、评论 | 抄送人（仅站内信） |
+| 抄送 | 本人还没投票；一次选一人或多人。已经能从这一步看到审批的人——该步骤的审批人（包括本人）、本周期已在这一步被抄送过的人——自动跳过，一个都不剩时拒绝 | 对象成为参与者，可查看、评论 | 抄送人（仅站内信） |
 | 评论 | 参与者即可；实例未结束 | 只写一条记录，不改变状态 | 无 |
 
 发起人能做的：
@@ -220,7 +233,7 @@ stateDiagram-v2
 |---|---|---|
 | 撤回 | 只有发起人；实例在等待审批；`withdrawPolicy` 允许 | 实例 `Withdrawn`，单据回到草稿，未处理的任务关闭；**不发任何通知** |
 | 取回失败的审批 | 只有提交人；实例 `Failed`；不受撤回策略限制 | 单据回到草稿；失败的实例保留供排查 |
-| 催办 | 只有发起人；实例在等待审批 | 提醒当前步骤尚未处理的审批人。每个步骤在 `flow.approval.urge-interval-minutes`（默认 240 分钟）内只催一次，与管理员共用这个间隔 |
+| 催办 | 只有发起人；实例在等待审批；流程的 `urgeEnabled` 没有关闭 | 提醒当前步骤尚未处理的审批人。每个步骤在流程的 `urgeIntervalMinutes`（默认 240 分钟）内只催一次，与管理员共用这个间隔 |
 | 评论 | 参与者；实例未结束 | 写入审批记录 |
 | 修改后重新提交 | 退回或撤回后单据是草稿 | 新的实例，从第一步开始，重新选流程 |
 
@@ -231,26 +244,28 @@ stateDiagram-v2
 | 终止 | 实例运行中、等待中或失败；理由必填；一次最多 100 个 | 关闭待审批，实例 `Cancelled`，单据作废；记一条 `TERMINATE`；通知发起人 |
 | 转派 | 原审批人、新审批人（不能相同）和理由；可先预览受影响的任务数 | 把原审批人当前的待审批任务移交给新审批人，记为原审批人的 `TRANSFER`（管理员为 `operatorId`）；新审批人已在同一步时合并为一个位置；尚未到达的步骤不受影响 |
 | 代人委托 | 单独的权限，不受数据范围限制 | 替某位审批人建委托规则，他在自己的委托里能看到、能取消 |
-| 管理员催办 | 能读取该实例 | 同发起人催办，共用间隔 |
+| 管理员催办 | 能读取该实例；不受流程的 `urgeEnabled` 限制 | 同发起人催办，共用间隔 |
 
-### 批量操作与办理步骤
+### 批量操作
 
-审批步骤要么是被评判的——批准、拒绝、退回——要么是被**办理**的：`config.handling = true` 声明一个办理步骤，其审批人填写该步骤要求的内容（其 `EDITABLE` / `REQUIRED` 字段）后提交，使流程继续。它仍然是一次审批——账本记为 `APPROVE`——但客户端把这个动作称为“提交”。`handling` 需要显式声明，从不根据 `formPermissions` 推断。`config.returnEnabled` 决定该步骤是否允许退回给发起人。
-
-`POST /flow/instances/batch/{approve,return,reject}`（`BatchApprovalExecutor`）以同一条意见对调用方最多 100 个待办任务执行同一种审批人动作——退回或拒绝时意见必填。每个任务都是一次独立的引擎调用，因此各在自己的事务中：一个被拒绝的任务不影响其他任务，且每条引擎规则都与单个操作时一样生效。批量操作不填写任何内容，因此在调用引擎之前会跳过所在步骤是办理步骤或有 `REQUIRED` 字段的任务，退回时还会跳过没有 `returnEnabled` 的步骤——与设置任务 `batchable` 标志的规则相同。结果（`FlowBatchActionResult`）给出成功 / 跳过 / 失败计数，以及按请求顺序排列的每个任务的结果与原因。
+`POST /flow/instances/batch/{approve,return,reject}`（`BatchApprovalExecutor`）以同一条意见对调用方最多 100 个待办任务执行同一种审批人动作——退回或拒绝时意见必填。每个任务都是一次独立的引擎调用，因此各在自己的事务中：一个被拒绝的任务不影响其他任务，且每条引擎规则都与单个操作时一样生效。批量操作不填写任何内容，因此在调用引擎之前会跳过所在步骤有 `REQUIRED` 字段的任务——要填的字段需要打开单据填写——退回时还会跳过没有开启 `returnEnabled`（该步骤是否允许退回给发起人）的步骤——与设置任务 `batchable` 标志的规则相同。结果（`FlowBatchActionResult`）给出成功 / 跳过 / 失败计数，以及按请求顺序排列的每个任务的结果与原因。
 
 ### 超时处理
 
-审批超时策略：
+审批节点的 `timeout` 给这一步设一个时限：步骤开始后 `timeoutHours` 小时到期；不填 `timeoutHours` 就没有时限，`timeout` 里的其他设置都不生效。到期时按 `timeoutStrategy` 处理：
 
-- `REMIND`
-- `AUTO_APPROVE`
-- `AUTO_REJECT`
-- `ESCALATE`
+| 策略 | 到期时 | 用到的设置 |
+|---|---|---|
+| `Remind`（默认） | 提醒尚未处理的审批人，之后每 `remindIntervalHours` 小时再提醒，最多 `maxRemindTimes` 次（不填为 3）；不填间隔就只在到期时提醒一次。不做任何自动处理 | `remindIntervalHours`、`maxRemindTimes` |
+| `AutoApprove` | 替尚未处理的审批人通过 | — |
+| `AutoReject` | 驳回这个审批 | — |
+| `Escalate` | 把这一步交给 `escalateToUserId`，并重新计时 | `escalateToUserId`（必填） |
 
-`ApprovalTimeoutScheduler` 针对已持久化的待审批处理提醒、自动动作与升级。
+到期前不发任何提醒。提醒只属于 `Remind`：在其他策略上设置会编译失败（`REMINDERS_OUTSIDE_REMIND`），设计器在换成其他策略时也会清掉它们；间隔或最多次数小于 1 同样编译失败（`INVALID_REMIND_INTERVAL`、`INVALID_MAX_REMINDERS`）。提醒是一条「审批已超时」的站内信，不发邮件。
 
-它由一条 cron 行驱动。starter 的维护 cron（审批超时提醒与处理、委托到期、定时器扫描、卡住实例扫描、调试 bundle 清理、自动化运行清理）以关闭状态随 `data-system/SysCron.FlowMaintenance.json` 发布。应用需要在其 `seed-manifest.yml` 的 `platform` 下列出该文件，否则这些行根本不存在；然后开启所需的那些。
+`ApprovalTimeoutScheduler` 针对已持久化的待审批，处理已经过了时限的步骤。
+
+它由 cron 行 `flow_approval_timeout_handle` 驱动。starter 的维护 cron（审批超时、委托到期、定时器扫描、卡住实例扫描、调试 bundle 清理、自动化运行清理）以关闭状态随 `data-system/SysCron.FlowMaintenance.json` 发布。应用需要在其 `seed-manifest.yml` 的 `platform` 下列出该文件，否则这些行根本不存在；然后开启所需的那些。
 
 ## 结果写回
 
@@ -287,9 +302,9 @@ stateDiagram-v2
 设计器的「校验」和「发布」都会编译一遍，错误逐条定位到节点，有错误就不能发布：
 
 - **结构**：缺流程名或场景；画布为空；开始节点不是恰好一个；节点或连线的 id 缺失、重复，或连线指向不存在的节点；图中有环。
-- **场景与触发器**：节点不能用在该场景；缺触发器或触发器不属于该场景；`Submit` 没写模型；cron 表达式为空或无法解析；非审批流设置了审批设置；`sync` 放错场景、sync 流程含会等待的节点、开了 `rollbackOnFail` 却没开 `sync`。
-- **审批节点**：审批人源类型未知；上级层级小于 1 或 `relativeTo` 非法；部门范围不适用于该源，或缺少它需要的部门、变量、角色、岗位；静态审批人为空或重复；计票模式没有审批人；`minCount` 不在 1 到人数之间；百分比不在 1–100；批准门槛 + 拒绝门槛大于人数 + 1；超时小时数 ≤ 0；提醒间隔不小于超时；升级却没指定人。
-- **路由**：连线条件语法错误；网关出边或汇聚入边少于两条；默认边多于一条。
+- **场景与触发器**：节点不能用在该场景；缺触发器或触发器不属于该场景；`Submit` 没写模型；cron 表达式为空或无法解析；非审批流设置了审批设置（含抄送）；催办间隔小于 1；抄送规则没写时机、没写抄送谁，或同时写了指定的人和查找规则；`sync` 放错场景、sync 流程含会等待的节点、开了 `rollbackOnFail` 却没开 `sync`。
+- **审批节点**：审批人源类型未知；上级层级小于 1 或 `relativeTo` 非法；部门范围不适用于该源，或缺少它需要的部门、变量、角色、岗位；静态审批人为空或重复；计票模式没有审批人；`minCount` 不在 1 到人数之间；百分比不在 1–100；批准门槛 + 拒绝门槛大于人数 + 1；超时小时数 ≤ 0；提醒间隔或最多提醒次数小于 1；`Remind` 以外的超时策略设置了提醒；升级却没指定人（不填超时小时数时，其余超时设置不检查）。
+- **路由**：连线表达式语法错误；一条连线同时有规则和表达式；流程不基于记录启动却使用规则；规则读取记录没有的字段、审批不路由的字段或一对多/多对多字段，对选项或关联比较大小，或使用 `PARENT OF` / `CHILD OF`；网关出边或汇聚入边少于两条；默认边多于一条。
 - **任务节点**：缺配置、配置格式错误、缺必填输入；使用了尚不支持的节点类型。
 
 编译时**不检查**、运行时才暴露的：节点是否从开始可达；定时节点配置；子流程目标及其触发器；脚本、返回值、表达式源、触发条件的语法；审批节点完全没配审批人（运行时按空审批人策略处理）；字段权限里的字段名是否存在；`declaredOutputs`。
@@ -298,9 +313,9 @@ stateDiagram-v2
 <summary>编译错误码</summary>
 
 - 结构：`MISSING_FLOW_NAME` `MISSING_SCENARIO` `EMPTY_GRAPH` `NO_START_NODE` `MULTIPLE_START_NODES` `DUPLICATE_NODE_ID` `DUPLICATE_EDGE_ID` `UNKNOWN_EDGE_SOURCE` `UNKNOWN_EDGE_TARGET` `GRAPH_CYCLE`
-- 场景与触发器：`INVALID_SCENARIO_NODE` `MISSING_TRIGGER` `TRIGGER_NOT_ALLOWED` `SUBMIT_MISSING_MODEL` `CRON_MISSING_EXPRESSION` `CRON_INVALID_EXPRESSION` `APPROVAL_SETTING_OUTSIDE_APPROVAL` `SYNC_OUTSIDE_AUTOMATION` `SYNC_FLOW_WAITS` `ROLLBACK_WITHOUT_SYNC`
-- 审批节点：`UNKNOWN_APPROVER_SOURCE_TYPE` `INVALID_SUPERVISOR_LEVEL` `INVALID_RELATIVE_TO` `INVALID_DEPT_SCOPE` `MISSING_DEPT_IDS` `MISSING_DEPT_VARIABLE` `MISSING_ROLE_IDS` `MISSING_POSITION_IDS` `BLANK_APPROVER` `DUPLICATE_APPROVER` `*_NEEDS_APPROVERS` `INVALID_MIN_COUNT` `INVALID_PERCENTAGE` `DEADLOCK_THRESHOLD` `INVALID_TIMEOUT_HOURS` `INVALID_REMIND_INTERVAL` `MISSING_ESCALATE_TARGET`
-- 路由：`INVALID_CONDITION_EXPR` `INSUFFICIENT_GATEWAY_EDGES` `MULTIPLE_DEFAULT_EDGES`
+- 场景与触发器：`INVALID_SCENARIO_NODE` `MISSING_TRIGGER` `TRIGGER_NOT_ALLOWED` `SUBMIT_MISSING_MODEL` `CRON_MISSING_EXPRESSION` `CRON_INVALID_EXPRESSION` `APPROVAL_SETTING_OUTSIDE_APPROVAL` `INVALID_URGE_INTERVAL` `INVALID_CC_RULE` `SYNC_OUTSIDE_AUTOMATION` `SYNC_FLOW_WAITS` `ROLLBACK_WITHOUT_SYNC`
+- 审批节点：`UNKNOWN_APPROVER_SOURCE_TYPE` `INVALID_SUPERVISOR_LEVEL` `INVALID_RELATIVE_TO` `INVALID_DEPT_SCOPE` `MISSING_DEPT_IDS` `MISSING_DEPT_VARIABLE` `MISSING_ROLE_IDS` `MISSING_POSITION_IDS` `BLANK_APPROVER` `DUPLICATE_APPROVER` `*_NEEDS_APPROVERS` `INVALID_MIN_COUNT` `INVALID_PERCENTAGE` `DEADLOCK_THRESHOLD` `INVALID_TIMEOUT_HOURS` `INVALID_REMIND_INTERVAL` `INVALID_MAX_REMINDERS` `REMINDERS_OUTSIDE_REMIND` `MISSING_ESCALATE_TARGET`
+- 路由：`INVALID_CONDITION_EXPR` `CONFLICTING_EDGE_CONDITIONS` `RULE_WITHOUT_RECORD` `INVALID_RULE_CONDITION` `INSUFFICIENT_GATEWAY_EDGES` `MULTIPLE_DEFAULT_EDGES`
 - 任务节点：`MISSING_TASK_CONFIG` `INVALID_TASK_CONFIG` `MISSING_REQUIRED_INPUT` `UNSUPPORTED_NODE_TYPE`
 
 </details>
@@ -320,7 +335,7 @@ stateDiagram-v2
 | 催办每个步骤有间隔 | 拒绝催办，返回下次可催时间 |
 | 评论只限参与者，实例结束后不能评论 | 拒绝操作 |
 | 终止只对运行中、等待中、失败的实例；终止、转派只在调用方数据范围内 | 逐个返回失败原因 |
-| 批量：办理步骤、有必填字段的步骤不可批量；一次最多 100 个 | 跳过该任务 |
+| 批量：有必填字段的步骤不可批量；一次最多 100 个 | 跳过该任务 |
 | 审批人写回只写可编辑 / 必填字段；必填字段写回后必须有值 | 其他字段丢弃；必填为空拒绝批准 |
 
 ### 出错时怎样处理
@@ -372,23 +387,23 @@ stateDiagram-v2
 
 默认的 `ApprovalNotificationService` 是 `CompositeApprovalNotificationService`，它分别通知两个通道——一个通道失败既不会让另一个沉默，也不会影响动作本身：
 
-- **收件箱**（`InboxApprovalNotificationService`），始终发送：经由 message-starter 发送 Workflow 类型的站内消息，指向流程实例（`sourceModel` = `FlowInstance`，`sourceId` = 其实例 id；客户端打开实例并从那里继续）。超过收件箱 200 字符上限的标题会被截断；文本翻译为租户的默认语言。
+- **收件箱**（`InboxApprovalNotificationService`），只发「需要知道的事」：经由 message-starter 发送 Workflow 类型的站内消息，指向流程实例（`sourceModel` = `FlowInstance`，`sourceId` = 其实例 id；客户端打开实例并从那里继续）。超过收件箱 200 字符上限的标题会被截断；文本翻译为租户的默认语言。「待处理的事」——要审批的任务、要阅读的抄送——不进收件箱：它们列在「我的待办」里，客户端顶栏显示其数量，同一件事不会被算两次。
 - **邮件**（`MailApprovalNotificationService`），在 `emailNotification` 未关闭的流程上发送：经由 message-starter 发往每个接收人的账号邮箱（`UserAccount.email`；没有邮箱的接收人跳过），措辞来自租户中该通知代码对应的邮件模板（见[邮件](../message/email)）。模板变量为 `subject`（实例标题，否则为流程名）、`content`（意见或理由，如有）、`flowName`、`recordCode` 和 `link`——审批页面，即 `system.site-url` + `/approvals/{instanceId}`，未配置站点 URL 时为空。flow-starter 不附带任何邮件模板：没有该代码模板的租户收不到邮件，失败会记入日志。
 
-由一个映射（`ApprovalNotices`）决定在两个通道上通知谁、通知什么：
+由一个映射（`ApprovalNotices`）决定在两个通道上通知谁、通知什么，以及它是待办还是消息：
 
-| 事件 | 通知对象 | 邮件模板 |
-|---|---|---|
-| 步骤中尚未处理的审批人被指派；任务被转交、委托或转派给某人 | 尚未处理的审批人；新的任务持有人 | `flow.task-assigned` |
-| 催办 | 被催办的审批人 | `flow.urged` |
-| 步骤即将超时 | 其尚未处理的审批人 | —（仅收件箱） |
-| 抄送 | 其接收人 | —（仅收件箱） |
-| 已批准；被拒绝或退回（附意见） | 发起人 | `flow.approved`、`flow.rejected`、`flow.returned` |
-| 被管理员终止，或某个步骤被管理员转派（附理由） | 发起人 | `flow.terminated`、`flow.reassigned` |
-| 记录的审批失败（附错误） | 发起人，以及 `flow.notification.failure-role-codes`（默认 `TENANT_ADMIN`）中角色的持有人 | `flow.failed` |
+| 事件 | 通知对象 | 收件箱 | 邮件模板 |
+|---|---|---|---|
+| 步骤中尚未处理的审批人被指派；任务被转交、委托或转派给某人 | 尚未处理的审批人；新的任务持有人 | 不发——是待办，在「我的待办」里 | `flow.task-assigned` |
+| 抄送 | 其接收人 | 不发——是待办，在「我的待办」里 | —（不发邮件） |
+| 催办 | 被催办的审批人 | 发 | `flow.urged` |
+| 步骤已过时限，且超时策略为 `Remind` | 其尚未处理的审批人 | 发 | —（不发邮件） |
+| 已批准；被拒绝或退回（附意见） | 发起人 | 发 | `flow.approved`、`flow.rejected`、`flow.returned` |
+| 被管理员终止，或某个步骤被管理员转派（附理由） | 发起人 | 发 | `flow.terminated`、`flow.reassigned` |
+| 记录的审批失败（附错误） | 发起人，以及 `flow.notification.failure-role-codes`（默认 `TENANT_ADMIN`）中角色的持有人 | 发 | `flow.failed` |
 
 只有 Approval 流程会通知其完成：自动化运行不是写入触发它的用户要求得知的事，而失败的自动化运行由运维人员关注。消息在动作提交之后、在其自己的事务中写入：回滚的动作不发送任何东西，无法写入的消息会记入日志而不使动作失败。失败会立即通知，因为失败那次尝试自身的事务会回滚。
 
-`InboxReadMarker` 让收件箱保持最新：一旦审批人对某个审批采取行动——批准、拒绝、退回、转交、委托、加签或阅读抄送——其关于该实例的未读站内消息会在动作提交后被标记为已读，因此铃铛只统计仍在等待他们的事项（催办、评论或发出抄送不算采取行动）。“我的待办”仍是工作清单。
+`InboxReadMarker` 让收件箱保持最新：一旦审批人对某个审批采取行动——批准、拒绝、退回、转交、委托、加签或阅读抄送——其关于该实例的未读站内消息（催办、超时提醒）会在动作提交后被标记为已读，因此铃铛只统计对他们仍是新消息的事项（催办、评论或发出抄送不算采取行动）。任务本身从不进收件箱：“我的待办”是工作清单。
 
 应用提供的 `ApprovalNotificationService` bean 会替换默认实现，连同两个通道一起；若要增加通道——短信、IM——请声明自己的 `CompositeApprovalNotificationService`，把收件箱和邮件通道与你的通道一并列入。

@@ -22,7 +22,7 @@ Base path: `/flow/designs` — the dedicated surface for the graphical editor (t
 | `POST` | `/flow/designs/{id}/publish` | Publish the saved draft as a new active revision |
 | `POST` | `/flow/designs/{id}/restore?bundleId=` | Restore the draft canvas from a historical bundle snapshot |
 | `GET` | `/flow/designs/{id}/status` | Publish status: revision badge + dirty flag |
-| `GET` | `/flow/designs/{id}/availableVariables?nodeId=` | Variables visible to a node (expression autocomplete) |
+| `GET` | `/flow/designs/{id}/availableVariables?nodeId=&afterNode=` | Variables visible to a node (expression autocomplete); `afterNode=true` — to the edges leaving it, its own outputs too |
 | `POST` | `/flow/designs/{id}/debugRun` | Compile and run the current draft as a debug bundle (not a sandbox) |
 | `GET` | `/flow/designs/{id}/debugRuns` | Debug-run history, newest first |
 
@@ -58,20 +58,20 @@ Base path: `/flow/instances` — launch, reads and approval actions on runtime i
 | `POST` | `/flow/instances/search` | Paged summaries of the caller's own record approvals, newest first — the initiator filter is always the authenticated user, and automation runs their writes triggered are left out. See [Instance search](#instance-search) for the filters and what each row carries |
 | `POST` | `/flow/instances/approve` | Approve a pending approval |
 | `POST` | `/flow/instances/reject` | Reject a pending approval; the comment saying why is required |
-| `POST` | `/flow/instances/batch/approve` | Approve several of the caller's pending tasks (`tasks`: instance + step, at most 100), each in its own transaction. Returns `FlowBatchActionResult` — succeeded / skipped / failed counts and each task's outcome. See [Batch actions and handling steps](./approval#batch-actions-and-handling-steps) |
+| `POST` | `/flow/instances/batch/approve` | Approve several of the caller's pending tasks (`tasks`: instance + step, at most 100), each in its own transaction. Returns `FlowBatchActionResult` — succeeded / skipped / failed counts and each task's outcome. See [Batch actions](./approval#batch-actions) |
 | `POST` | `/flow/instances/batch/return` | Return several pending tasks to their initiators with one comment (required); a step that allows no return is skipped |
 | `POST` | `/flow/instances/batch/reject` | Reject several pending tasks with one comment (required) |
 | `POST` | `/flow/instances/transfer` | Transfer a pending approval task |
 | `POST` | `/flow/instances/delegate` | Delegate a pending approval task |
 | `POST` | `/flow/instances/add-sign-before` | Insert a prerequisite signer |
 | `POST` | `/flow/instances/add-sign-after` | Insert a follow-up signer |
-| `POST` | `/flow/instances/cc` | Send a CC notification |
+| `POST` | `/flow/instances/cc` | CC one or more people (`targetActorIds`) on the caller's pending step; the step's approvers and people already CC'd on it are skipped. See [Approval actions](./approval#approval-actions) |
 | `POST` | `/flow/instances/cc/read` | Mark a CC as read |
 | `POST` | `/flow/instances/return` | Return a pending approval to the initiator, ending the instance as `Returned`. Only the step's approver, on a step that allows returns (`returnEnabled`), with a comment saying what to change |
 | `POST` | `/flow/instances/withdraw` | Withdraw an Approval instance: its initiator, while it waits on its approvers and the flow's `withdrawPolicy` permits it (`WithdrawPolicyGuard`) |
 | `GET` | `/flow/instances/{instanceId}/withdraw` | Whether the caller may withdraw the instance now — `true` exactly when a withdrawal would be accepted, by the same `WithdrawPolicyGuard`. Allowed to whoever may view the instance |
-| `POST` | `/flow/instances/urge` | Remind the approvers the approval waits on — its initiator only. Each waiting step is urged at most once per `flow.approval.urge-interval-minutes` (default 240), by the initiator or an administrator alike; each step urged gets its own `URGE` history entry, and when every step is still inside the interval the urge is refused. Returns `FlowUrgeStatus`, not the instance |
-| `GET` | `/flow/instances/{instanceId}/urge` | Whether the approval may be urged now, and if not, when (`FlowUrgeStatus`). Allowed to whoever may view the instance |
+| `POST` | `/flow/instances/urge` | Remind the approvers the approval waits on — its initiator only, on a flow whose `urgeEnabled` is not turned off. Each waiting step is urged at most once per the flow's `urgeIntervalMinutes` (default 240), by the initiator or an administrator alike; each step urged gets its own `URGE` history entry, and when every step is still inside the interval the urge is refused. Returns `FlowUrgeStatus`, not the instance |
+| `GET` | `/flow/instances/{instanceId}/urge` | Whether the caller may urge the approval now, and if not, when (`FlowUrgeStatus`) — never, for the initiator of a flow that turns `urgeEnabled` off. Allowed to whoever may view the instance |
 | `POST` | `/flow/instances/comment` | Add a comment audit entry while the instance runs — its participants only: the initiator and the people it gives or gave a task to. An instance that has ended takes no more comments. Returns `true`, not the instance |
 | `GET` | `/flow/instances/{instanceId}/nodes/{nodeId}/formPermissions` | Get field-level form permissions |
 | `GET` | `/flow/instances/by-record?modelName=&rowId=` | A business record's approval history: its approval instances newest first, with the steps still waiting, the approvers yet to act and the approval actions, every user named (names are resolved only once the caller is allowed); a failed instance says where and why it stopped (`failure`). Allowed to whoever took part in its approvals or can read the record |
@@ -80,7 +80,7 @@ Base path: `/flow/instances` — launch, reads and approval actions on runtime i
 
 Who may view an instance: its initiator and the people it gives a task to (approvers pending or done, CC recipients, transfer, delegation and add-sign targets) by default; anyone else through the standard role and data-scope configuration — they may read the `FlowInstance` row with their own permissions, or, for a record's approval, read the record itself.
 
-The defaults need no grant on the flow models, which no business role holds. The engine's own bookkeeping — loading and saving instances, the approval ledger, the task and branch projections, delegation and auto-CC rules — runs past the caller's data permissions: who may act is the action handlers' call, who may see the access guard's. The current user's own lists — inbox counts, pending / completed / CC tasks and the inbox (`/flow/approvalTasks`), their approval history and sent CCs (`/flow/approvalRecords`), their delegations, and `POST /flow/instances/search`, with their `FlowClient` counterparts — carry `@SkipPermissionCheck`: pinned to the caller, row scope could only empty them. The per-instance reads (`.../instance/{instanceId}`, the instance detail endpoints) are not waived, because the guard judges everyone but the initiator and the task holders by their own permissions.
+The defaults need no grant on the flow models, which no business role holds. The engine's own bookkeeping — loading and saving instances, the approval ledger, the task and branch projections, delegation and finding CC recipients — runs past the caller's data permissions: who may act is the action handlers' call, who may see the access guard's. The current user's own lists — inbox counts, pending / completed / CC tasks and the inbox (`/flow/approvalTasks`), their approval history and sent CCs (`/flow/approvalRecords`), their delegations, and `POST /flow/instances/search`, with their `FlowClient` counterparts — carry `@SkipPermissionCheck`: pinned to the caller, row scope could only empty them. The per-instance reads (`.../instance/{instanceId}`, the instance detail endpoints) are not waived, because the guard judges everyone but the initiator and the task holders by their own permissions.
 
 ### Instance search
 
@@ -127,7 +127,7 @@ Base path: `/flow/approvalTasks`
 | `GET` | `/flow/approvalTasks/inbox?flowId=&instanceId=&nodeId=&includeCompletedApprovals=&pageNumber=&pageSize=` | Unified inbox view (pending approvals + CC; optional completed approvals) |
 | `GET` | `/flow/approvalTasks/instance/{instanceId}` | All tasks for one runtime instance (participants / initiator only) |
 
-Each task (`FlowApprovalTaskView`) comes with its instance's context — `instanceTitle`, `modelName` / `rowId`, `instanceStatus`, the `initiator` and `submittedTime`, and what a record's approval recorded of its record (`subject`, `subjectDept`, `effectiveDate`, `recordCode`), every user, employee and department named — and with what its step's configuration says about acting on it, read from the revision the instance runs on: `handling` (a handling step), `returnAllowed` (the step's `returnEnabled`) and `batchable` (open to its approver now — pending, not blocked by an add-sign, the instance waiting — on a step that is not a handling step and makes no field required). See [Batch actions and handling steps](./approval#batch-actions-and-handling-steps).
+Each task (`FlowApprovalTaskView`) comes with its instance's context — `instanceTitle`, `modelName` / `rowId`, `instanceStatus`, the `initiator` and `submittedTime`, and what a record's approval recorded of its record (`subject`, `subjectDept`, `effectiveDate`, `recordCode`), every user, employee and department named — and with what its step's configuration says about acting on it, read from the revision the instance runs on: `returnAllowed` (the step's `returnEnabled`) and `batchable` (open to its approver now — pending, not blocked by an add-sign, the instance waiting — on a step that makes no field required). See [Batch actions](./approval#batch-actions).
 
 ### Approval Records
 
@@ -140,31 +140,6 @@ Base path: `/flow/approvalRecords`
 | `GET` | `/flow/approvalRecords/cc/sent` | Sender-side CC history |
 
 An entry (`FlowApprovalRecord`, `FlowApprovalRecordView`) records its `action` (`ApprovalActionType`: `APPROVE`, `AUTO_APPROVE`, `REJECT`, `TRANSFER`, `DELEGATE`, `ADD_SIGN`, `CC`, `READ`, `RETURN`, `WITHDRAW`, `URGE`, `COMMENT`, `TERMINATE`), its `actorId` and, for an action done on the actor's behalf, `operatorId` — the administrator who reassigned the actor's task (a `TRANSFER` entry from the approver to the new one); empty when the actor acted themselves.
-
-### CC Config
-
-Base path: `/flow/ccConfigs`
-
-| Method | Path | Description |
-|---|---|---|
-| `POST` | `/flow/ccConfigs` | Create a CC rule |
-| `GET` | `/flow/ccConfigs?flowId=` | List CC rules by `flowId` |
-| `POST` | `/flow/ccConfigs/{id}/deactivate` | Deactivate a CC rule |
-
-A rule (`FlowCcConfig`) CCs its recipients at its timing:
-
-- `OnSubmit`: when the flow starts.
-- `OnApprove` / `OnReject`: after an approver approves or rejects a step.
-- `OnComplete`: when the approval completes approved.
-
-A rule without a `nodeId` is flow-level and fires at every such moment. A rule naming a step fires at `OnApprove` / `OnReject` of that step only. `recipientType` `INITIATOR` CCs the initiator; any other type reads `recipientConfig` as comma-separated user ids. An optional `ccCondition` is evaluated over the instance variables.
-
-An automatic CC is recorded like a manual one: one `CC` entry per recipient in the approval history. The entry has no actor, since no person sent it. It sits on the node the rule fired at — the step acted on, or the start node at `OnSubmit` (and at `OnComplete` when every step passed on its own) — in that node's current cycle. So the recipient:
-
-- has a CC task in the inbox, which they mark read;
-- is a participant of the instance: they open it and comment on it.
-
-A recipient already CC'd on the same node and cycle, by a rule or by hand, is not CC'd again, so a step that several approvers approve CCs once. `sendNotification` additionally notifies the recipients CC'd that time.
 
 ### Delegation
 
@@ -185,7 +160,7 @@ Base path: `/flow/monitor` — the administrators' console. No role is built in:
 |---|---|---|
 | `GET` | `/flow/monitor/health` | Flow runtime health snapshot (per-status instance counts, overdue timers) |
 | `POST` | `/flow/monitor/instances/search` | Cross-initiator paged instance summaries, read with the caller's own permissions: the `FlowInstance` rows their data scope reaches. Honors the request's `initiatorId` filter when present; otherwise as [Instance search](#instance-search) |
-| `POST` | `/flow/monitor/instances/urge` | Urge an approval as an administrator rather than its initiator: whoever may read the instance's `FlowInstance` row with their own permissions. The initiator's interval applies — a step urged within it, by anyone, is not urged again. Returns `FlowUrgeStatus` |
+| `POST` | `/flow/monitor/instances/urge` | Urge an approval as an administrator rather than its initiator: whoever may read the instance's `FlowInstance` row with their own permissions, whether or not the flow's `urgeEnabled` lets its initiator urge. The flow's `urgeIntervalMinutes` applies — a step urged within it, by anyone, is not urged again. Returns `FlowUrgeStatus` |
 | `POST` | `/flow/monitor/instances/terminate` | End each instance named (`instanceIds`, at most 100) that is running, waiting or failed, with one `reason` (required): its pending approvals close, it ends `Cancelled` — a record's approval cancels its record — and the history records a `TERMINATE` entry with the reason, which the initiator is sent. Only instances the caller's permissions read; each in its own transaction. Returns `FlowBatchActionResult` |
 | `POST` | `/flow/monitor/approvers/reassign/preview` | How many of an approver's pending approval tasks (`fromActorId` → `toActorId`), on the instances the caller's permissions read, a reassignment would move: `FlowReassignPreview` (`tasks`, `instances`) |
 | `POST` | `/flow/monitor/approvers/reassign` | Move each of those tasks to the new approver, with a `reason` (required), each in its own transaction: recorded as the approver's `TRANSFER` with the caller as `operatorId`; the new approver is given the task, the initiator is told who now holds it. Only the steps the instances wait on now move — a step not reached yet resolves its approvers when reached; CC tasks stay. Returns `FlowBatchActionResult` |
@@ -212,7 +187,6 @@ Base path: `/flow/events`
 | `FlowExecutionTrace` | Append-only execution trace rows (the in-memory state keeps only the current attempt's delta) |
 | `FlowApprovalTask` | Pending/completed/CC task projections |
 | `FlowApprovalRecord` | Approval action audit ledger — the authoritative approval history, flushed by the instance store in the same transaction as the instance row; `operatorId` names an administrator who acted on the actor's behalf |
-| `FlowCcConfig` | Automatic CC rules |
 | `FlowDelegation` | Delegation rules |
 | `FlowEvent` | Trigger event logs |
 | `FlowDebugHistory` | Debug snapshots |
