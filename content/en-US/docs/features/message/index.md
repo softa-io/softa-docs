@@ -6,9 +6,11 @@ Provides unified messaging capabilities for Softa applications:
 - **SMS**: send SMS messages, batch send, render templates, and retry on failure
 - **Inbox**: push in-app notifications to users
 
-Delivery reliability is built on a **transactional outbox** + **optimistic-lock CAS**
-state machine, so broker failures, duplicate deliveries, and in-flight crashes are
-handled without message loss or double-sends.
+Every mail and SMS is a **send record**, and the record is the delivery queue: a
+delivery loop claims due records through an **optimistic-lock CAS** state machine,
+so concurrent instances never send a record twice and an in-flight crash loses
+nothing (at-least-once: a crash between the provider accepting a message and the
+record being marked sent re-sends it once). No broker sits in the delivery path.
 
 ## Dependency
 
@@ -38,15 +40,12 @@ always contains exactly one phone number.
 
 ## Requirements and Configuration
 
-Apply the following DDL under `src/main/resources/sql/`:
-
-- `message-starter.sql` — email + inbox tables
-- `message-starter-sms.sql` — SMS tables
-- `message-starter-outbox.sql` — transactional outbox (shared by mail + SMS)
-- `message-starter-dlq.sql` — unified dead-letter store (`dead_letter_message`)
-
-Uses the framework ORM/versionLock path for runtime writes, so outbox publishing
-does not depend on database-specific row-lock SQL.
+The tables are declared by the starter's `@Model` classes: an application whose
+`system.metadata.scanner-scope` covers `io\.softa\.starter\.message.*` gets them
+created and kept current at boot. Runtime writes use the framework
+ORM/versionLock path, so claiming a record does not depend on database-specific
+row-lock SQL. Upgrading from a release that delivered through an outbox: see
+*Upgrading from the outbox pipeline* below.
 
 ### Hard dependencies
 
@@ -59,9 +58,9 @@ etc.). The trade-off and the operational expectations:
 
 | Dependency | Used by | Failure behaviour | Operational expectation |
 |---|---|---|---|
-| Database | All paths (records, outbox, framework versionLock) | Operation throws; caller sees 5xx | HA-Database (replicated MySQL / managed PG); migrations applied. |
+| Database | All paths (send records, framework versionLock) | Operation throws; caller sees 5xx | HA-Database (replicated MySQL / managed PG); migrations applied. |
 | Redis | `RateLimiter` (per-config delivery rate windows), `MailConfigCache` | Operation throws; caller sees 5xx | Sentinel or Cluster setup. K8s `readinessProbe` should include `/actuator/health/redis` so the load balancer routes traffic away while Redis is unreachable. |
-| Pulsar broker | `OutboxPublisher` (publish), consumers (subscribe) | Outbox row stays `NEW`; publisher retries with exponential back-off; eventually marks `DEAD` after `MAX_PUBLISH_ATTEMPTS=10`. | HA cluster. Failure does not block business writes — outbox absorbs the gap. |
+| Pulsar broker | `CronTaskMailFetchConsumer` (scheduled mail fetch), `DeadLetterConsumer` (archiving other consumers' poison messages) | Fetching and poison archiving pause until the broker is back. Sending is unaffected: delivery reads the send records directly. | Optional for sending. |
 | SMTP / SMS provider | Outbound send | Per-record fails; classified by `ErrorClassifier`; retried with exponential back-off (`ExponentialBackoffPolicy`). | Configure provider-side rate limits below provider's quota. |
 
 **Why no in-process fallback for Redis?** A local Guava limiter would silently
@@ -77,19 +76,18 @@ All messaging business tables (`mail_*`, `sms_*`, `inbox_notification`) are
 reads are isolated to the caller's tenant and writes are auto-stamped by the
 ORM. `tenant_id = -1` rows (`BaseConstant.PLATFORM_TENANT_ID`) form the **platform tier** — owned by the platform operator and invisible to tenants. The two tiers are fully separate namespaces; there is no overlay:
 
-- **Templates are seeded per tenant, not shared.** Each tenant receives its template rows at provisioning from the APPLICATION's tenant seed files (the tenant files of its `seed-manifest.yml`, run by seed-starter when the tenant is set up). From then on the tenant owns and edits its rows freely. A tenant runs a seed file once, so a new template reaches existing tenants as a new tenant file the platform admin runs, and a change to a template they already have goes out as a data migration (the seed file is edited too, for tenants created after). The platform tier holds only the templates PLATFORM-scoped sends render (billing, security); a code needed on both tiers (e.g. a public password-reset fallback) appears in both seed sets. Send-time resolution is tier-pure: `scope = TENANT` reads the current scope's own rows only, `scope = PLATFORM` reads the platform tier only.
+- **Templates are seeded per tenant, not shared.** Each tenant receives its template rows at provisioning from the APPLICATION's tenant seed files (the tenant files of its `seed-manifest.yml`, run by seed-starter when the tenant is set up). From then on the tenant owns and edits its rows freely. A tenant runs a seed file once, so a new template reaches existing tenants as a new tenant file the platform admin runs — or, when the application gives its template file `mode: append` in the manifest, straight from that file on the admin's next run, created only where a tenant lacks it; a template the tenant already has under that code without a seed binding (inserted by a script or added by hand) is bound by its code and left as it is, never created a second time. Either way, a change to a template they already have goes out as a data migration (the seed file is edited too, for tenants created after). The platform tier holds only the templates PLATFORM-scoped sends render (billing, security); a code needed on both tiers (e.g. a public password-reset fallback) appears in both seed sets. Send-time resolution is tier-pure: `scope = TENANT` reads the current scope's own rows only, `scope = PLATFORM` reads the platform tier only.
 - **Server/provider configs are invisible to tenants.** Tenants see and pin only their own configs; the platform tier is reached solely by the dispatchers' silent fallback (`@CrossTenant`) when a tenant has none — mail send/receive fall back to the platform default, and SMS routing falls back **per country** (tiers never interleave within one country).
 - Background jobs are cross-tenant scans that execute per-record in the owning
-  tenant's context: the scheduled mail fetch runs each receive config inside
-  its config's tenant, and the zombie sweeper revives each stuck record inside
-  its record's tenant.
-- The transactional outbox and the dead-letter store are shared infrastructure
-  tables; tenant identity travels inside the message payload
-  (`recordId / tenantId / traceId`) and is restored by the consumer.
+  tenant's context: the delivery loop claims and sends each due record inside
+  its record's tenant (and under the trace id of the request that submitted it),
+  the scheduled mail fetch runs each receive config inside its config's tenant,
+  and the zombie sweeper revives each stuck record inside its record's tenant.
+- The dead-letter store is a shared infrastructure table.
 
 Two more moving parts round the model out:
 
-- Per-send tier policy: `SendMailDTO.scope` / `SendSmsDTO.scope` / `MailRequestMessage.scope` (`MessageScope.TENANT` default, `PLATFORM` = the platform tier for template, server AND quota bucket — for billing/security/compliance messages). `MailRequestMessage.tenantId` lets the MQ consumer restore the tenant context, so a TENANT-scoped render reaches the tenant's own template and the send record lands in the tenant's books.
+- Per-send tier policy: `SendMailDTO.scope` / `SendSmsDTO.scope` (`MessageScope.TENANT` default, `PLATFORM` = the platform tier for template, server or provider AND quota bucket — for billing/security/compliance messages). The scope is stored on the send record (`platform_scope`), so the first delivery attempt renders and routes in the tier the caller chose. The record belongs to the tenant the call is made in (see *Calling MessageService*), so a TENANT-scoped render reaches that tenant's own template.
 - Platform rows are structurally un-writable from a tenant scope (payload guard, insert stamping, and the tenant-filtered pre-read on update/delete); the mail write endpoints additionally turn that silent no-op into an explanatory `BusinessException`.
 
 With multi-tenancy disabled, no filtering or stamping occurs and everything
@@ -101,75 +99,126 @@ The seven config/template models (`MailTemplate`, `MailSendServerConfig`, `MailR
 
 ### Monthly send quotas
 
-`TenantMessageQuota` (deliberately NOT `multiTenant` — a platform-owned registry ABOUT tenants, writable only from the platform scope) sets per-tenant monthly ceilings for accepted mail/SMS sends. Enforcement is at **acceptance** time in `MonthlyQuotaGuard`: an over-quota send is rejected synchronously — a commercial ceiling, not rate limiting — and delivery retries never touch the count. The bucket follows the send's scope: `PLATFORM` sends draw on the platform's own `tenantId = -1` row (set it very large; it exists to cap runaway or malicious mass sending); missing rows fall back to `softa.message.quota.mail-monthly-default` / `sms-monthly-default` (null = unlimited — the ledger still advances for reporting). The counters live in the **database**: one `TenantMessageUsage` row per bucket per calendar month, check-and-incremented via the ORM's optimistic-lock CAS (`versionLock`, one `REQUIRES_NEW` transaction per attempt). There is no reset job — a new month starts a new row — and rows are never expired, so per-tenant consumption history is a plain model query with the ceiling in force snapshotted onto each row. `GET /TenantMessageQuota/usage?tenantId=` serves one bucket's usage vs currently-resolved limits (a tenant session may read only its own bucket). The per-config `dailySendLimit` / `rateLimitPerMinute` windows are a different axis (delivery-time infrastructure protection) and stay unchanged.
+`TenantMessageQuota` (deliberately NOT `multiTenant` — a platform-owned registry ABOUT tenants, writable only from the platform scope) sets per-tenant monthly ceilings for mail/SMS sends. `MonthlyQuotaGuard` charges a send when it is **prepared** — its first delivery attempt, after its template rendered and its server or provider resolved, so a send that cannot go out costs nothing. An over-quota send fails its record with `MONTHLY_QUOTA_EXCEEDED` (logged at ERROR) — a commercial ceiling, not rate limiting — and retries of a prepared record never touch the count. Fix the quota and Retry the record to send it. The bucket follows the send's scope: `PLATFORM` sends draw on the platform's own `tenantId = -1` row (set it very large; it exists to cap runaway or malicious mass sending); missing rows fall back to `softa.message.quota.mail-monthly-default` / `sms-monthly-default` (null = unlimited — the ledger still advances for reporting). The counters live in the **database**: one `TenantMessageUsage` row per bucket per calendar month, check-and-incremented via the ORM's optimistic-lock CAS (`versionLock`, one `REQUIRES_NEW` transaction per attempt). There is no reset job — a new month starts a new row — and rows are never expired, so per-tenant consumption history is a plain model query with the ceiling in force snapshotted onto each row. `GET /TenantMessageQuota/usage?tenantId=` serves one bucket's usage vs currently-resolved limits (a tenant session may read only its own bucket). The per-config `dailySendLimit` / `rateLimitPerMinute` windows are a different axis (delivery-time infrastructure protection) and stay unchanged.
 
 ### Async delivery (the only delivery model)
 
-Every `MessageService.sendMail(...)` / `sendSms(...)` call follows the same
-path regardless of broker configuration:
+Every `MessageService.sendMail(...)` / `sendSms(...)` call follows the same path:
 
-1. A `MailSendRecord` / `SmsSendRecord` and an `OutboxEntry` are written **in one
-   DB transaction** (`status = PENDING`, `version = 0`). The method returns the
-   record id(s) immediately — callers do not block on the SMTP/SMS round-trip.
-2. The scheduled `OutboxPublisher` (500 ms poll) claims `NEW` rows as
-   `PUBLISHING` through framework `versionLock`, publishes them to the
-   corresponding topic, and flips the outbox row to `PUBLISHED`.
-3. A `@PulsarListener` consumer reads the message (carrying only `recordId` /
-   `tenantId` / `traceId`), then drives the channel's `DeliveryProcessor`, which CAS-transitions
-   `PENDING|RETRY → SENDING` before invoking the provider.
+1. **Acceptance** — in the caller's thread and transaction — checks only what
+   the caller got wrong: a recipient, well-formed addresses or an E.164 number,
+   content or a template to render it from. It writes one `MailSendRecord` /
+   `SmsSendRecord` per message, `status = PENDING`, holding the request as it was
+   made: any explicit content, the template and its variables, the scope, the
+   caller's trace id. The method returns the record id(s) at once; the records
+   commit or roll back with the caller's transaction. A rejection throws before
+   anything is written and does not mark the caller's transaction rollback-only.
+2. The **delivery loop** (`DeliveryPoller`, every
+   `softa.message.delivery.poll-interval-ms`, default 500) claims due records —
+   `PENDING`, or `RETRY` whose `next_retry_at` has passed — across tenants: a CAS
+   `PENDING|RETRY → SENDING` through framework `versionLock`. It claims no more
+   records than its channel has free workers
+   (`softa.message.{mail,sms}.send-concurrency`, default 1 per instance) and runs
+   each claimed record on a worker, in the record's tenant and trace.
+3. The channel's `DeliveryProcessor` **prepares** a record on its first attempt:
+   it renders the template and applies its defaults, chooses the server (mail)
+   or routes the number to a provider (SMS), and charges the monthly quota, last.
+   It writes the result back, so retries replay it verbatim. Then it rate-limits,
+   sends, and marks the record `SENT` — or hands the failure to
+   `SendFailureHandler`: `RETRY` with a back-off `next_retry_at`, `FAILED`, or
+   `DEAD_LETTER`.
 
-If no broker topic is configured, outbox rows stay in `NEW` state and are retried
-by the publisher on every poll — nothing is lost; sends just queue up until an
-operator supplies a topic. When due rows are waiting on an unavailable route the
-publisher logs a throttled WARN naming the stranded route(s) (at most one line per
-5 minutes), so a down broker never leaves records `PENDING` without log evidence.
-Spring `@Async` is **not** used.
+**A send that cannot go out as configured still has its record.** No server or
+provider, a missing or broken template, the monthly quota used up, a template
+that renders nothing: the record fails `FAILED` with a marker code
+(`CONFIG_NOT_RESOLVABLE`, `TEMPLATE_NOT_RESOLVABLE`, `MONTHLY_QUOTA_EXCEEDED`,
+`CONTENT_INVALID`) and the reason, and every terminal failure is logged at ERROR
+with the record id and tenant, so log-based alerting reaches a developer. Fix the
+configuration, then use the record's Retry action: a record that failed before it
+was prepared is prepared afresh. The caller never sees these errors —
+`sendMail` returned the record id when the request was accepted.
+
+Instances polling the same tables never send a record twice: of two claims
+holding the same version only one wins. There is no outbox table and no broker in
+the delivery path; Spring `@Async` is **not** used.
+
+**Calling MessageService.** Every module that sends mail or SMS — user-starter's
+login codes, invitations, account notices and subscription reminders included —
+depends on message-starter and calls `MessageService` directly; there is no
+request event in between. The send record belongs to the tenant the call is made
+in. To send for another tenant — a scheduled job, or an anonymous link that names
+its tenant — make the call inside `ContextUtils.inTenantContext(tenantId, …)`. A
+`PLATFORM`-scoped send from a context with no tenant (a login code, asked for
+before any session exists) is filed under the platform tier, and the insert never
+runs cross-tenant, so a cross-tenant caller's record still gets its tenant
+(`TenantScopes.inRecordOwnerContext`). A rejection (`BusinessException`) leaves
+the caller's transaction usable; a caller whose own change must not fail because
+of a notice catches it and logs it at ERROR, as user-starter's notices do.
 
 ### Manual retry
 
 Automatic recovery covers delivery failures (`SendFailureHandler`: exponential
-back-off, then `FAILED` / `DEAD_LETTER`; non-retryable failures such as auth
-errors or an unresolvable config skip the back-off and dead-letter on the
-first attempt) and stuck in-flight states (`ZombieRecordSweeper`:
-stale `SENDING` → `RETRY`, stale outbox `PUBLISHING` → `NEW`) — but not a record whose
-outbox row died against a broken broker. Two operator endpoints close that gap:
+back-off, then `FAILED` / `DEAD_LETTER`; non-retryable failures — an auth error,
+a missing server or template, a used-up quota — skip the back-off and fail on
+the first attempt) and stuck in-flight states (`ZombieRecordSweeper`: stale
+`SENDING` → `RETRY`). Once the cause is fixed, an operator endpoint sends again:
 
 - `POST /MailSendRecord/retry?id=` / `POST /SmsSendRecord/retry?id=` — requeue one record:
-  `PENDING / RETRY / FAILED / DEAD_LETTER` → `RETRY` plus a **fresh outbox row**, atomically.
-  `SENT` and in-flight `SENDING` are rejected. Safe to call repeatedly — the delivery claim
-  is CAS-guarded, so duplicates no-op and no double email/SMS is possible. `retryCount`
-  keeps counting: a manual retry grants one new attempt; another failure returns the record
-  to `FAILED` / `DEAD_LETTER` instead of re-arming the whole automatic budget.
-- `POST /OutboxEntry/requeue?id=` — reopen one `DEAD` outbox entry (`NEW`, attempts reset,
-  due immediately). Publish attempts are infra failures, so once the broker is fixed the
-  full budget applies again. Other statuses are rejected.
+  `PENDING / RETRY / FAILED / DEAD_LETTER` → `RETRY`, due now, so the delivery loop takes it
+  on its next poll. A record that failed before it was prepared is prepared afresh, so
+  fixing the configuration and retrying is enough. `SENT` and in-flight `SENDING` are
+  rejected. Safe to call repeatedly — the delivery claim is CAS-guarded, so no double
+  email/SMS is possible. `retryCount` keeps counting: a manual retry grants one new attempt;
+  another failure returns the record to `FAILED` / `DEAD_LETTER` instead of re-arming the
+  whole automatic budget.
 
-The HCM admin UI surfaces both as status-gated toolbar actions on the
-Mail Send Record / SMS Send Record / Outbox Entry detail pages, and as
-row-level actions on the corresponding list pages.
+The HCM admin UI surfaces it as a status-gated toolbar action on the
+Mail Send Record / SMS Send Record detail pages, and as a row-level action on
+the corresponding list pages.
 
 ### Broker topics
 
-Only the channel topics you actually use need to be declared. Initial delivery
-and delayed retries share the same topic; retry timing is carried by the
-transactional outbox's `next_attempt_at` rather than encoded as a separate
-broker route. Send dead-lettering is a terminal record state (`DEAD_LETTER`)
-plus a row archived into the unified `dead_letter_message` store (see *Dead
-letter store* below), not a separate queue.
+Delivery uses no topic. message-starter consumes two, both optional: `cron-task`
+drives the scheduled mail fetch, and `softa.message.dlq.topic` collects other
+consumers' poison messages into the dead-letter store. Send dead-lettering is a
+terminal record state (`DEAD_LETTER`) plus a row archived into the unified
+`dead_letter_message` store (see *Dead letter store* below), not a separate queue.
 
 ```yml
 mq:
   topics:
-    mail-send:
-      topic: dev_demo_mail_send
-      sub: dev_demo_mail_send_sub
-    sms-send:
-      topic: dev_demo_sms_send
-      sub: dev_demo_sms_send_sub
     cron-task:
       topic: dev_demo_cron_task
       mail-fetch-sub: dev_demo_cron_task_mail_fetch_sub
 ```
+
+### Upgrading from the outbox pipeline
+
+Earlier releases delivered through a `message_outbox` table and the `mail-send` /
+`sms-send` (plus `mail-request` / `sms-request`) Pulsar topics. On upgrade:
+
+- Remove those four topic entries from the application config; nothing reads
+  them any more.
+- The framework events `MailRequestMessage` / `SmsRequestMessage` (softa-base)
+  are gone. Code that published one calls `MessageService` instead —
+  `SendMailDTO.ofTemplate` / `SendSmsDTO.ofTemplate` build the same templated
+  send — inside `ContextUtils.inTenantContext(tenantId, …)` where the event named
+  a tenant.
+- Records the old pipeline left `PENDING` or `RETRY` need no migration: the
+  delivery loop claims them by their own `status` and `next_retry_at`. The old
+  pipeline prepared records at acceptance, so most are already prepared. A mail
+  record whose server config had no from address was stored with an empty
+  `from_address` and is prepared again on its first attempt here, which charges
+  the monthly quota a second time.
+- The scanner adds the new record columns (`platform_scope`, `template_id`,
+  `template_code`, `template_variables`, `trace_id`) and makes
+  `mail_send_record.body_mode` nullable. It never drops a removed model's table,
+  so `message_outbox` and the `OutboxEntry` / `OutboxStatus` / `TopicRoute`
+  catalog rows stay until the deploying application removes them with a release
+  script, after the new jar is up. Rows still `NEW` in `message_outbox` at that
+  point are harmless: their records are delivered from the record tables.
+- Remove pages built on `OutboxEntry` (an outbox list, its Requeue action); the
+  send record's Retry action covers what Requeue did.
 
 ### Message-starter properties
 
@@ -178,12 +227,12 @@ Bound under `softa.message` from `MessageProperties`, `RetryProperties`, and DLQ
 ```yml
 softa:
   message:
-    outbox:
-      enabled: true           # default true; disable on read-only replicas
-      poll-interval-ms: 500
+    delivery:
+      enabled: true           # default true; false = this instance sends nothing
+      poll-interval-ms: 500   # how often due send records are claimed
     zombie:
       enabled: true           # default true
-      stale-seconds: 300      # stale SENDING/PUBLISHING claims are revived
+      stale-seconds: 300      # SENDING records older than this are revived
       cron: "0 * * * * *"     # every minute
     retry:
       default-max-attempts: 5
@@ -234,15 +283,13 @@ Common setups:
 
 ### Metrics
 
-When Micrometer is on the classpath, `MessageMetrics` emits four counter
+When Micrometer is on the classpath, `MessageMetrics` emits two counter
 families:
 
 | Name | Tags | When incremented |
 |---|---|---|
 | `softa.message.sent` | `channel` (mail/sms), `provider` | Provider call succeeded |
-| `softa.message.failed` | `channel`, `provider`, `outcome` (retry/failed/dead_letter) | Provider call failed |
-| `softa.message.outbox.published` | `route` | Outbox entry successfully published to broker |
-| `softa.message.outbox.dead` | `route` | Outbox entry exceeded publish attempts → DEAD |
+| `softa.message.failed` | `channel`, `provider`, `outcome` (retry/failed/dead_letter) | A send attempt failed, preparation included |
 
 `softa.message.failed{outcome=dead_letter}` is emitted by `SendFailureHandler`
 when a send record transitions to DEAD_LETTER.
@@ -274,10 +321,9 @@ the provider.
 
 `ZombieRecordSweeper` runs every minute. Records stuck in `SENDING` whose
 `updated_time` is older than `softa.message.zombie.stale-seconds` (default
-300) are versionLock-transitioned back to `RETRY` with `next_retry_at = now`
-and a retry outbox row is written in the same transaction. Stale outbox
-`PUBLISHING` claims are reopened to `NEW`. This covers JVM crashes between
-claiming a record and finishing the provider/broker call.
+300) are versionLock-transitioned back to `RETRY` with `next_retry_at = now`,
+which makes them due for the delivery loop again. This covers JVM crashes
+between claiming a record and finishing the provider call.
 
 Disable via `softa.message.zombie.enabled=false` on read-only replicas.
 
@@ -344,6 +390,6 @@ with a configurable base, multiplier, cap, and ±jitter, tuned via
 `softa.message.retry.exponential.*`. The error category from `ErrorClassifier`
 decides the disposition: TRANSIENT / QUOTA / UNKNOWN retry (QUOTA clamped to
 `quota-floor-seconds`) until `default-max-attempts` is reached and the record
-is dead-lettered; PERMANENT / INVALID_INPUT / AUTH fail immediately without
+is dead-lettered; PERMANENT / INVALID_INPUT / AUTH / CONFIG fail immediately without
 retry. `RetryDecision` is a sealed type (`Retry` / `Fail` / `DeadLetter`) so the
 failure handler's `switch` stays exhaustive.

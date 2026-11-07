@@ -27,7 +27,7 @@ scope = PLATFORM      -> 平台层模板（tenant_id = -1）
 
 #### 投递管道
 
-与邮件相同。每个收件人产生一条 `SmsSendRecord`；状态机为相同的六态 CAS 流程（`PENDING → SENDING → SENT / FAILED / RETRY / DEAD_LETTER`）。提供商路由在持久化前解析，重试重放记录在记录上存储的相同提供商/模板参数。
+与邮件相同。每个收件人产生一条 `SmsSendRecord`；状态机为相同的六态 CAS 流程（`PENDING → SENDING → SENT / FAILED / RETRY / DEAD_LETTER`）。提供商路由在准备记录时（首次投递）解析，重试重放记录上存储的相同提供商/模板参数。收件人所在国家没有提供商时，记录以 `CONFIG_NOT_RESOLVABLE` 失败。
 
 ### 发送短信
 
@@ -51,10 +51,10 @@ SendSmsDTO second = new SendSmsDTO();
 second.setPhoneNumber("+2222222222");
 second.setContent("System maintenance tonight at 10pm.");
 List<Long> ids = messageService.sendSmsBatch(List.of(first, second));
-// ids point at PENDING records; the consumer flips them to SENT/FAILED.
+// ids point at PENDING records; the delivery loop moves them on to SENT/FAILED.
 ```
 
-> **所有短信发送均为异步**——与 Mail 相同契约。`sendSms / sendSmsBatch` 入队 `SmsSendRecord (PENDING)` + outbox 行并立即返回；broker 驱动的消费者执行提供商调用。
+> **所有短信发送均为异步**——与 Mail 相同契约。`sendSms / sendSmsBatch` 在调用方事务中持久化 `SmsSendRecord (PENDING)` 并立即返回；投递循环负责渲染、路由和提供商调用。
 
 ### 发送模式
 
@@ -188,7 +188,7 @@ parseRegion(+8613800138000) -> "CN"
 
 ### SMS 提供商选择与重试
 
-当模板绑定多个合格 SMS 提供商时，入队时规划按 `priority` 顺序（越小越优先）选择一个提供商：
+当模板绑定多个合格 SMS 提供商时，首次投递时的规划按 `priority` 顺序（越小越优先）选择一个提供商：
 
 ```text
 country route candidates ∩ template bindings -> selected provider

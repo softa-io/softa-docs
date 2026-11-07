@@ -71,9 +71,9 @@ tier for programmatic callers:
 
 #### Delivery pipeline
 
-Every accepted send produces exactly one
-`MailSendRecord`. State transitions go through CAS helpers so duplicate broker
-deliveries self-reject without a dedupe table:
+Every accepted send produces exactly one `MailSendRecord`. State transitions go
+through CAS helpers, so a claim that lost a race self-rejects without a dedupe
+table:
 
 ```text
 PENDING → SENDING → SENT
@@ -81,24 +81,27 @@ PENDING → SENDING → SENT
                RETRY → SENDING → SENT
                    ↓
                    DEAD_LETTER (retries exhausted)
-               FAILED (permanent provider reject: bad recipient, malformed input)
-               DEAD_LETTER (non-retryable, non-permanent: auth failure or
-                            unresolvable config — first failure, no retry burn)
+               FAILED (permanent: bad recipient, malformed input, auth failure,
+                       no server or template, quota used up — first failure,
+                       no retry burn)
 ```
 
-On failure, `ErrorClassifier` maps the provider error to an `ErrorCategory`
-(TRANSIENT / PERMANENT / INVALID_INPUT / AUTH / QUOTA / UNKNOWN), and the
-retry policy (`ExponentialBackoffPolicy`) decides:
+The first attempt prepares the record (see *Async delivery*): a template it
+cannot load or render, a server it cannot resolve, a used-up monthly quota or an
+empty rendered body fails it with `TEMPLATE_NOT_RESOLVABLE`,
+`CONFIG_NOT_RESOLVABLE`, `MONTHLY_QUOTA_EXCEEDED` or `CONTENT_INVALID`.
 
-- **Retry** → `markRetry(nextRetryAt = now + backoff)` + enqueue a delayed
-  outbox row on `mail-send` so the same delivery consumer re-drives it
-- **Fail** → `markFailed` (terminal; no retry; permanent provider reject)
+On failure, `ErrorClassifier` maps the error to an `ErrorCategory`
+(TRANSIENT / PERMANENT / INVALID_INPUT / AUTH / CONFIG / QUOTA / UNKNOWN), and
+the retry policy (`ExponentialBackoffPolicy`) decides:
+
+- **Retry** → `markRetry(nextRetryAt = now + backoff)`; the delivery loop claims
+  the record again once `next_retry_at` has passed
+- **Fail** → `markFailed` (terminal; no retry) for PERMANENT / INVALID_INPUT /
+  AUTH / CONFIG — none of them heals by retrying: fix the cause, then use the
+  manual Retry action
 - **DeadLetter** → `markDeadLetter` + archive a `dead_letter_message` row
-  (`source = SendExhausted`) — reached by exhausting the retry budget **or
-  immediately** on a non-retryable, non-permanent failure (AUTH class). A
-  config-resolution failure is stamped with the marker code
-  `CONFIG_NOT_RESOLVABLE` and takes the immediate route: a broken config never
-  heals by retrying — fix the config, then requeue via the manual Retry action.
+  (`source = SendExhausted`) once the retry budget is spent
 
 Business code usually does not need to choose a mail server explicitly. Defaults
 should be prepared by the platform or tenant admin.
@@ -174,17 +177,18 @@ dto.setSubject("Offer Letter");
 dto.setHtmlBody("<p>Dear Alice...</p>");
 dto.setAttachments(List.of(attachment));
 Long fullRecordId = messageService.sendMail(dto);
-// IDs point at PENDING records; the consumer flips them to SENT/FAILED.
+// IDs point at PENDING records; the delivery loop moves them on to SENT/FAILED.
 // To check terminal status, query MailSendRecordService.getById(recordId).
 ```
 
 > **All mail sends are asynchronous.** `sendMail / sendMailBatch` persist a
-> `MailSendRecord (PENDING)` + outbox row in one DB transaction
-> and return immediately; SMTP delivery happens in the broker-driven consumer.
+> `MailSendRecord (PENDING)` in the caller's transaction and return
+> immediately; rendering and SMTP delivery happen in the delivery loop.
 > There is deliberately no synchronous variant: an SMTP `250 OK` is **not** the
 > same as "user has the email" — the user still waits seconds-to-minutes for the
-> provider to deliver, so the ~500ms of broker latency is invisible, while a
-> single async path avoids blocking HTTP threads and the stranded-`RETRY` edge case.
+> provider to deliver, so the ≤500ms poll is invisible, while a single async path
+> avoids blocking HTTP threads. A missing server or template therefore shows on
+> the record (FAILED, with the reason), not as an exception at the caller.
 
 #### Address rules
 
@@ -306,11 +310,11 @@ Pending -> Sending -> Sent
                   -> Failed
 ```
 
-- `Pending` — record created, waiting for the consumer or outbox publisher
-- `Sending` — claimed by a consumer via CAS; SMTP send in flight
+- `Pending` — record created, waiting for the delivery loop
+- `Sending` — claimed by the delivery loop via CAS; preparation or SMTP send in flight
 - `Sent` — SMTP server accepted the message
 - `Retry` — transient failure; re-driven after `next_retry_at` elapses
-- `Failed` — permanent SMTP reject or validation failure (bad recipient, auth, malformed input)
+- `Failed` — permanent SMTP reject, auth failure, or a send that could not be prepared (no server, template missing or broken, quota used up, empty content)
 - `DeadLetter` — retry budget exhausted; ops intervention required
 
 A record can transition `Sent → Failed` when an inbound bounce is correlated.

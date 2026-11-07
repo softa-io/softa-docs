@@ -6,7 +6,7 @@
 - **短信**：发送短信、批量发送、模板渲染、失败重试
 - **收件箱**：向用户推送应用内通知
 
-投递可靠性基于**事务性 outbox** + **乐观锁 CAS** 状态机，因此 broker 故障、重复投递和进行中崩溃可在不丢消息、不重复发送的情况下处理。
+每封邮件、每条短信都是一条**发送记录**，发送记录本身就是投递队列：投递循环通过**乐观锁 CAS** 状态机认领到期记录，因此并发实例不会重复发送同一条记录，进行中崩溃也不会丢消息（至少一次：提供商已接收、记录还没标记为已发送时崩溃，会再发一次）。投递路径上没有 broker。
 
 ## 依赖
 
@@ -32,14 +32,7 @@
 
 ## 要求与配置
 
-在 `src/main/resources/sql/` 下应用以下 DDL：
-
-- `message-starter.sql` — 邮件 + 收件箱表
-- `message-starter-sms.sql` — SMS 表
-- `message-starter-outbox.sql` — 事务性 outbox（邮件 + SMS 共享）
-- `message-starter-dlq.sql` — 统一死信存储（`dead_letter_message`）
-
-使用框架 ORM/versionLock 路径进行运行时写入，因此 outbox 发布不依赖数据库特定的行锁 SQL。
+表由 starter 的 `@Model` 类声明：`system.metadata.scanner-scope` 覆盖 `io\.softa\.starter\.message.*` 的应用在启动时自动建表并保持最新。运行时写入走框架 ORM/versionLock 路径，因此认领记录不依赖数据库特定的行锁 SQL。从经由 outbox 投递的旧版本升级：见下文*从 outbox 管道升级*。
 
 ### 硬依赖
 
@@ -47,9 +40,9 @@
 
 | 依赖 | 使用者 | 失败行为 | 运维期望 |
 |---|---|---|---|
-| Database | 所有路径（记录、outbox、框架 versionLock） | 操作抛出；调用方看到 5xx | HA 数据库（复制 MySQL / 托管 PG）；已应用迁移。 |
+| Database | 所有路径（发送记录、框架 versionLock） | 操作抛出；调用方看到 5xx | HA 数据库（复制 MySQL / 托管 PG）；已应用迁移。 |
 | Redis | `RateLimiter`（每配置的投递速率窗口）、`MailConfigCache` | 操作抛出；调用方看到 5xx | Sentinel 或 Cluster 部署。K8s `readinessProbe` 应包含 `/actuator/health/redis`，以便 Redis 不可达时负载均衡器分流。 |
-| Pulsar broker | `OutboxPublisher`（发布）、消费者（订阅） | Outbox 行保持 `NEW`；发布者指数退避重试；最终在 `MAX_PUBLISH_ATTEMPTS=10` 后标记 `DEAD`。 | HA 集群。失败不阻塞业务写入——outbox 吸收间隙。 |
+| Pulsar broker | `CronTaskMailFetchConsumer`（定时拉取邮件）、`DeadLetterConsumer`（归档其他消费者的毒消息） | 拉取邮件和毒消息归档暂停，直到 broker 恢复。发送不受影响：投递直接读发送记录。 | 发送不依赖它。 |
 | SMTP / SMS provider | 外发发送 | 每条记录失败；由 `ErrorClassifier` 分类；指数退避重试（`ExponentialBackoffPolicy`）。 | 将提供商侧速率限制配置在提供商配额以下。 |
 
 **为何 Redis 无进程内回退？** 本地 Guava 限流器会在 Redis 故障期间静默让单节点突破跨节点配额，足够长的故障可能击穿提供商日配额并产生真实成本（Twilio / 阿里云 / SES）。通过 readiness 探针在负载均衡器层面 fail closed，比部分故障下静默扇出更安全。
@@ -58,14 +51,14 @@
 
 所有消息业务表（`mail_*`、`sms_*`、`inbox_notification`）为 `multiTenant` 模型：当平台 `system.enable-multi-tenancy` 开启时，读取隔离于调用方租户，写入由 ORM 自动盖章。`tenant_id = -1` 行（`BaseConstant.PLATFORM_TENANT_ID`）构成**平台层**——归平台运营方所有，对租户不可见。两个层级是完全分离的命名空间，不存在叠加：
 
-- **模板按租户种入，不共享。** 每个租户在开通时由**应用**的租户种子文件获得自己的模板行（应用 `seed-manifest.yml` 里的租户文件，由 seed-starter 在租户开通时运行）。此后租户自由拥有并编辑自己的行。每个租户只跑一次同一个种子文件，所以新模板以新的租户文件的形式，由平台管理员运行后到达存量租户；修改存量租户已有的模板走数据迁移（种子文件也同步修改，供之后开通的租户使用）。平台层只保存 PLATFORM 作用域发送要渲染的模板（账单、安全）；两层都需要的 code（如公开密码重置兜底）在两份种子里各出现一次。发送时的解析层级纯净：`scope = TENANT` 只读当前作用域自己的行，`scope = PLATFORM` 只读平台层。
+- **模板按租户种入，不共享。** 每个租户在开通时由**应用**的租户种子文件获得自己的模板行（应用 `seed-manifest.yml` 里的租户文件，由 seed-starter 在租户开通时运行）。此后租户自由拥有并编辑自己的行。每个租户只跑一次同一个种子文件，所以新模板以新的租户文件的形式，由平台管理员运行后到达存量租户；应用若在清单里给模板文件标 `mode: append`，新模板直接加进该文件即可，平台管理员下次运行时只在缺这条模板的租户里创建；租户已有同 code 的模板、只是没有种子绑定（脚本插入或手工新建）时，按 code 补上绑定、原样保留，不再建第二条。不论哪种，修改存量租户已有的模板都走数据迁移（种子文件也同步修改，供之后开通的租户使用）。平台层只保存 PLATFORM 作用域发送要渲染的模板（账单、安全）；两层都需要的 code（如公开密码重置兜底）在两份种子里各出现一次。发送时的解析层级纯净：`scope = TENANT` 只读当前作用域自己的行，`scope = PLATFORM` 只读平台层。
 - **服务器/提供商配置对租户不可见。** 租户只能看到并 pin 自己的配置；平台层只通过调度器的静默兜底（`@CrossTenant`）在租户没有配置时被触达——邮件收发兜底到平台默认，短信路由**按国家**兜底（同一国家内两层永不交错）。
-- 后台任务为跨租户扫描，在每条记录所属租户上下文中执行：定时邮件拉取在每个接收配置的租户内运行，僵尸清扫器在每个卡住记录的租户内恢复。
-- 事务性 outbox 和死信存储为共享基础设施表；租户身份在消息 payload（`recordId / tenantId / traceId`）中传递，由消费者恢复。
+- 后台任务为跨租户扫描，在每条记录所属租户上下文中执行：投递循环在每条到期记录的租户内（并沿用提交它的请求的 trace id）认领并发送，定时邮件拉取在每个接收配置的租户内运行，僵尸清扫器在每个卡住记录的租户内恢复。
+- 死信存储为共享基础设施表。
 
 模型还有两个配套件：
 
-- 每次发送的层级策略：`SendMailDTO.scope` / `SendSmsDTO.scope` / `MailRequestMessage.scope`（默认 `MessageScope.TENANT`；`PLATFORM` = 模板、服务器与配额桶全部走平台层——用于账单/安全/合规消息）。`MailRequestMessage.tenantId` 让 MQ 消费者恢复租户上下文，TENANT 作用域的渲染因此能命中租户自己的模板，发送记录也落入租户名下。
+- 每次发送的层级策略：`SendMailDTO.scope` / `SendSmsDTO.scope`（默认 `MessageScope.TENANT`；`PLATFORM` = 模板、服务器或提供商与配额桶全部走平台层——用于账单/安全/合规消息）。scope 存在发送记录上（`platform_scope`），首次投递按调用方选的层级渲染和路由。发送记录属于发起调用时所在的租户（见*调用 MessageService*），所以 TENANT 作用域的渲染命中该租户自己的模板。
 - 平台行在租户作用域内结构性不可写（payload 校验、插入盖章、更新/删除的租户过滤预读）；邮件写端点还会把这种静默 no-op 转为带解释的 `BusinessException`。
 
 多租户禁用时，无过滤或盖章，一切表现为单租户。
@@ -76,44 +69,51 @@
 
 ### 月度发送配额
 
-`TenantMessageQuota`（刻意**非** `multiTenant`——平台拥有的、关于租户的登记表，只能从平台作用域写入）为每个租户设置月度邮件/短信接受上限。执行点在**接受时**（`MonthlyQuotaGuard`）：超额发送同步拒绝——这是商业上限而非速率控制——投递重试不再触碰计数。计数桶跟随发送的 scope：`PLATFORM` 发送消耗平台自己的 `tenantId = -1` 行（设一个非常大的值即可，它的存在是为了兜住失控或恶意的批量发送）；缺行时回退到 `softa.message.quota.mail-monthly-default` / `sms-monthly-default`（null = 不限——账本仍会累加以便报表）。计数落在**数据库**：每桶每日历月一行 `TenantMessageUsage`，通过 ORM 乐观锁 CAS（`versionLock`，每次尝试独立 `REQUIRES_NEW` 事务）做检查并自增。没有重置任务——新月份自然开新行——行也永不过期，因此每租户的历史消耗就是一次普通模型查询，且每行快照了当时生效的上限。`GET /TenantMessageQuota/usage?tenantId=` 返回某个桶的用量与当前解析上限（租户会话只能查自己的桶）。每配置的 `dailySendLimit` / `rateLimitPerMinute` 属于另一条轴（投递时的基础设施保护），保持不变。
+`TenantMessageQuota`（刻意**非** `multiTenant`——平台拥有的、关于租户的登记表，只能从平台作用域写入）为每个租户设置月度邮件/短信发送上限。`MonthlyQuotaGuard` 在发送记录**准备**时扣额度——即首次投递、模板渲染完且服务器或提供商解析出来之后，发不出去的消息不占额度。超额的记录变为 `FAILED`，错误码 `MONTHLY_QUOTA_EXCEEDED`（并打 ERROR 日志）——这是商业上限而非速率控制——已准备记录的重试不再触碰计数。调整额度后在记录上点 Retry 即可重发。计数桶跟随发送的 scope：`PLATFORM` 发送消耗平台自己的 `tenantId = -1` 行（设一个非常大的值即可，它的存在是为了兜住失控或恶意的批量发送）；缺行时回退到 `softa.message.quota.mail-monthly-default` / `sms-monthly-default`（null = 不限——账本仍会累加以便报表）。计数落在**数据库**：每桶每日历月一行 `TenantMessageUsage`，通过 ORM 乐观锁 CAS（`versionLock`，每次尝试独立 `REQUIRES_NEW` 事务）做检查并自增。没有重置任务——新月份自然开新行——行也永不过期，因此每租户的历史消耗就是一次普通模型查询，且每行快照了当时生效的上限。`GET /TenantMessageQuota/usage?tenantId=` 返回某个桶的用量与当前解析上限（租户会话只能查自己的桶）。每配置的 `dailySendLimit` / `rateLimitPerMinute` 属于另一条轴（投递时的基础设施保护），保持不变。
 
 ### 异步投递（唯一投递模型）
 
-无论 broker 配置如何，每次 `MessageService.sendMail(...)` / `sendSms(...)` 调用遵循相同路径：
+每次 `MessageService.sendMail(...)` / `sendSms(...)` 调用遵循相同路径：
 
-1. `MailSendRecord` / `SmsSendRecord` 和 `OutboxEntry` 在**一个 DB 事务**中写入（`status = PENDING`，`version = 0`）。方法立即返回记录 id——调用方不阻塞于 SMTP/SMS 往返。
-2. 定时 `OutboxPublisher`（500 ms 轮询）通过框架 `versionLock` 将 `NEW` 行认领为 `PUBLISHING`，发布到对应 topic，并将 outbox 行翻转为 `PUBLISHED`。
-3. `@PulsarListener` 消费者读取消息（仅携带 `recordId` / `tenantId` / `traceId`），然后驱动渠道的 `DeliveryProcessor`，在调用提供商前 CAS 转换 `PENDING|RETRY → SENDING`。
+1. **受理**——在调用方的线程和事务里——只检查调用方的错误：有收件人、地址或 E.164 号码格式正确、有内容或可用于渲染的模板。每条消息写一条 `MailSendRecord` / `SmsSendRecord`，`status = PENDING`，原样保存请求：显式内容、模板及其变量、scope、调用方的 trace id。方法立即返回记录 id；记录随调用方事务一起提交或回滚。被拒绝时在写入任何数据之前抛出，且不会把调用方事务标记为只回滚。
+2. **投递循环**（`DeliveryPoller`，每 `softa.message.delivery.poll-interval-ms`，默认 500）跨租户认领到期记录——`PENDING`，或 `next_retry_at` 已到的 `RETRY`——通过框架 `versionLock` 做 CAS `PENDING|RETRY → SENDING`。认领数量不超过该渠道的空闲工作线程（`softa.message.{mail,sms}.send-concurrency`，每实例默认 1），每条认领到的记录在工作线程里、以记录的租户和 trace 运行。
+3. 渠道的 `DeliveryProcessor` 在首次投递时**准备**记录：渲染模板并应用其默认值，选择服务器（邮件）或按号码路由到提供商（短信），最后扣月度额度；结果写回记录，重试原样重放。然后限流、发送，成功标记 `SENT`，失败交给 `SendFailureHandler`：带退避 `next_retry_at` 的 `RETRY`、`FAILED` 或 `DEAD_LETTER`。
 
-若未配置 broker topic，outbox 行保持 `NEW` 状态，发布者每次轮询重试——无丢失；发送仅排队直到运维提供 topic。当到期行等待在不可用路由上时，发布者会打出节流 WARN 点名滞留路由（每 5 分钟至多一条），因此 broker 宕机不会让记录在零日志证据下停在 `PENDING`。**不**使用 Spring `@Async`。
+**配置不全的发送也有记录。** 没有服务器或提供商、模板缺失或渲染出错、月度额度用完、模板渲染出空内容：记录变为 `FAILED`，带标记码（`CONFIG_NOT_RESOLVABLE`、`TEMPLATE_NOT_RESOLVABLE`、`MONTHLY_QUOTA_EXCEEDED`、`CONTENT_INVALID`）和原因；每次终态失败都打 ERROR 日志（含记录 id 和租户），日志告警可以通知到开发人员。配置好后在记录上点 Retry：准备前就失败的记录会重新准备。调用方看不到这些错误——受理时 `sendMail` 已返回记录 id。
+
+在同一张表上轮询的多个实例不会重复发送同一条记录：持有相同版本的两次认领只有一次成功。投递路径上没有 outbox 表，也没有 broker；**不**使用 Spring `@Async`。
+
+**调用 MessageService。** 所有发邮件、短信的模块——包括 user-starter 的登录验证码、邀请、账号变更提醒和订阅到期提醒——都依赖 message-starter，直接调用 `MessageService`，中间没有请求事件。发送记录属于发起调用时所在的租户。要替另一个租户发——定时任务，或带着租户信息的匿名链接——在 `ContextUtils.inTenantContext(tenantId, …)` 里调用。在没有租户的上下文里发 `PLATFORM` 作用域的消息（比如登录验证码，此时还没有会话），记录记在平台层；写记录时从不跨租户，所以跨租户的调用方写下的记录也有租户（`TenantScopes.inRecordOwnerContext`）。受理拒绝（`BusinessException`）不会让调用方事务失效；不能因为一条提醒而让自身改动失败的调用方，捕获它并打 ERROR 日志，user-starter 的各类提醒就是这样做的。
 
 ### 手动重试
 
-自动恢复覆盖投递失败（`SendFailureHandler`：指数退避，然后 `FAILED` / `DEAD_LETTER`；认证错误、配置无法解析等不可重试失败跳过退避，首败即入死信）与在途卡死（`ZombieRecordSweeper`：陈旧 `SENDING` → `RETRY`、陈旧 outbox `PUBLISHING` → `NEW`）——但覆盖不了 outbox 行已对着坏 broker 死掉的记录。两个运维端点补上这个缺口：
+自动恢复覆盖投递失败（`SendFailureHandler`：指数退避，然后 `FAILED` / `DEAD_LETTER`；认证错误、配置或模板缺失、额度用完等不可重试失败跳过退避，首败即 `FAILED`）与在途卡死（`ZombieRecordSweeper`：陈旧 `SENDING` → `RETRY`）。修好原因之后用运维端点重发：
 
-- `POST /MailSendRecord/retry?id=` / `POST /SmsSendRecord/retry?id=`——重新入队一条记录：`PENDING / RETRY / FAILED / DEAD_LETTER` → `RETRY` 并原子性写入**一条全新 outbox 行**。`SENT` 与在途 `SENDING` 被拒绝。可安全重复调用——投递认领是 CAS 门控的，重复调用空转，不可能重复发信。`retryCount` 持续累计：手动重试给予一次新尝试；再次失败回到 `FAILED` / `DEAD_LETTER`，而非重新武装整个自动重试预算。
-- `POST /OutboxEntry/requeue?id=`——重开一条 `DEAD` outbox 行（回 `NEW`，attempts 清零，立即到期）。发布失败是基础设施故障，broker 修好后应重新享有完整预算。其他状态被拒绝。
+- `POST /MailSendRecord/retry?id=` / `POST /SmsSendRecord/retry?id=`——把一条记录改回 `RETRY` 并立即到期：`PENDING / RETRY / FAILED / DEAD_LETTER` → `RETRY`，投递循环下一次轮询就会认领。准备前就失败的记录会重新准备，因此补好配置后重试即可。`SENT` 与在途 `SENDING` 被拒绝。可安全重复调用——投递认领是 CAS 门控的，不可能重复发信。`retryCount` 持续累计：手动重试给予一次新尝试；再次失败回到 `FAILED` / `DEAD_LETTER`，而非重新武装整个自动重试预算。
 
-HCM 管理界面在 Mail Send Record / SMS Send Record / Outbox Entry 详情页以按状态显隐的工具栏动作暴露这两个操作，并在对应列表页提供行级动作。
+HCM 管理界面在 Mail Send Record / SMS Send Record 详情页以按状态显隐的工具栏动作暴露这个操作，并在对应列表页提供行级动作。
 
 ### Broker topics
 
-仅需声明实际使用的渠道 topic。初始投递与延迟重试共享同一 topic；重试时机由事务性 outbox 的 `next_attempt_at` 携带，而非编码为独立 broker 路由。发送死信为终态记录状态（`DEAD_LETTER`）加上归档到统一 `dead_letter_message` 存储的行（见下文*死信存储*），而非独立队列。
+投递不使用 topic。message-starter 只消费两个可选 topic：`cron-task` 驱动定时邮件拉取，`softa.message.dlq.topic` 把其他消费者的毒消息收进死信存储。发送死信为终态记录状态（`DEAD_LETTER`）加上归档到统一 `dead_letter_message` 存储的行（见下文*死信存储*），而非独立队列。
 
 ```yml
 mq:
   topics:
-    mail-send:
-      topic: dev_demo_mail_send
-      sub: dev_demo_mail_send_sub
-    sms-send:
-      topic: dev_demo_sms_send
-      sub: dev_demo_sms_send_sub
     cron-task:
       topic: dev_demo_cron_task
       mail-fetch-sub: dev_demo_cron_task_mail_fetch_sub
 ```
+
+### 从 outbox 管道升级
+
+早期版本经 `message_outbox` 表和 `mail-send` / `sms-send`（以及 `mail-request` / `sms-request`）Pulsar topic 投递。升级时：
+
+- 从应用配置里删掉这四个 topic；不再有代码读它们。
+- 框架事件 `MailRequestMessage` / `SmsRequestMessage`（softa-base）已删除。原来发布它们的代码改为调用 `MessageService`——`SendMailDTO.ofTemplate` / `SendSmsDTO.ofTemplate` 构造同样的模板发送；事件里指定了租户的，在 `ContextUtils.inTenantContext(tenantId, …)` 里调用。
+- 旧管道留下的 `PENDING` / `RETRY` 记录无需迁移：投递循环按记录自己的 `status` 和 `next_retry_at` 认领。旧管道在受理时就准备了记录，所以大多数已是准备好的；服务器配置没有发件地址的邮件记录当时存的是空 `from_address`，在这里首次投递时会重新准备，月度额度会再扣一次。
+- 扫描器会加上新的记录列（`platform_scope`、`template_id`、`template_code`、`template_variables`、`trace_id`），并把 `mail_send_record.body_mode` 改为可空。被删模型的表扫描器从不删除，所以 `message_outbox` 和 `OutboxEntry` / `OutboxStatus` / `TopicRoute` 的目录行要由部署应用在新 jar 起来之后用发版脚本删掉；那时 `message_outbox` 里还是 `NEW` 的行无害，对应记录会从记录表直接投递。
+- 删掉基于 `OutboxEntry` 的页面（outbox 列表及其 Requeue 动作）；发送记录的 Retry 涵盖了 Requeue 的用途。
 
 ### Message-starter 属性
 
@@ -122,12 +122,12 @@ mq:
 ```yml
 softa:
   message:
-    outbox:
-      enabled: true           # default true; disable on read-only replicas
-      poll-interval-ms: 500
+    delivery:
+      enabled: true           # default true; false = this instance sends nothing
+      poll-interval-ms: 500   # how often due send records are claimed
     zombie:
       enabled: true           # default true
-      stale-seconds: 300      # stale SENDING/PUBLISHING claims are revived
+      stale-seconds: 300      # SENDING records older than this are revived
       cron: "0 * * * * *"     # every minute
     retry:
       default-max-attempts: 5
@@ -175,14 +175,12 @@ softa:
 
 ### 指标
 
-当 classpath 上有 Micrometer 时，`MessageMetrics` 发出四类计数器：
+当 classpath 上有 Micrometer 时，`MessageMetrics` 发出两类计数器：
 
 | 名称 | 标签 | 递增时机 |
 |---|---|---|
 | `softa.message.sent` | `channel`（mail/sms）、`provider` | 提供商调用成功 |
-| `softa.message.failed` | `channel`、`provider`、`outcome`（retry/failed/dead_letter） | 提供商调用失败 |
-| `softa.message.outbox.published` | `route` | Outbox 条目成功发布到 broker |
-| `softa.message.outbox.dead` | `route` | Outbox 条目超过发布尝试 → DEAD |
+| `softa.message.failed` | `channel`、`provider`、`outcome`（retry/failed/dead_letter） | 一次发送尝试失败（含准备阶段） |
 
 `softa.message.failed{outcome=dead_letter}` 在发送记录转换为 DEAD_LETTER 时由 `SendFailureHandler` 发出。
 
@@ -201,7 +199,7 @@ softa:
 
 ### 僵尸记录清扫器
 
-`ZombieRecordSweeper` 每分钟运行。`updated_time` 早于 `softa.message.zombie.stale-seconds`（默认 300）且卡在 `SENDING` 的记录，经 versionLock 转换回 `RETRY`，`next_retry_at = now`，并在同一事务中写入重试 outbox 行。过期的 outbox `PUBLISHING` 认领重新打开为 `NEW`。覆盖 JVM 在认领记录与完成提供商/broker 调用之间崩溃的情况。
+`ZombieRecordSweeper` 每分钟运行。`updated_time` 早于 `softa.message.zombie.stale-seconds`（默认 300）且卡在 `SENDING` 的记录，经 versionLock 转换回 `RETRY`，`next_retry_at = now`，使其重新被投递循环认领。覆盖 JVM 在认领记录与完成提供商调用之间崩溃的情况。
 
 在只读副本上通过 `softa.message.zombie.enabled=false` 禁用。
 
@@ -242,4 +240,4 @@ public class ExchangeNdrRule implements MailClassificationRule {
 
 ### 重试策略
 
-失败发送由 `ExponentialBackoffPolicy` 重试——可配置基数、乘数、上限和 ±jitter，通过 `softa.message.retry.exponential.*` 调优。`ErrorClassifier` 的错误类别决定处置：TRANSIENT / QUOTA / UNKNOWN 重试（QUOTA 钳制到 `quota-floor-seconds`）直至达到 `default-max-attempts` 并死信；PERMANENT / INVALID_INPUT / AUTH 立即失败不重试。`RetryDecision` 为密封类型（`Retry` / `Fail` / `DeadLetter`），使失败处理器的 `switch` 保持穷尽。
+失败发送由 `ExponentialBackoffPolicy` 重试——可配置基数、乘数、上限和 ±jitter，通过 `softa.message.retry.exponential.*` 调优。`ErrorClassifier` 的错误类别决定处置：TRANSIENT / QUOTA / UNKNOWN 重试（QUOTA 钳制到 `quota-floor-seconds`）直至达到 `default-max-attempts` 并死信；PERMANENT / INVALID_INPUT / AUTH / CONFIG 立即失败不重试。`RetryDecision` 为密封类型（`Retry` / `Fail` / `DeadLetter`），使失败处理器的 `switch` 保持穷尽。
