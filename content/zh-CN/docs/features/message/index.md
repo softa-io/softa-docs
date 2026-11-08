@@ -76,7 +76,7 @@
 每次 `MessageService.sendMail(...)` / `sendSms(...)` 调用遵循相同路径：
 
 1. **受理**——在调用方的线程和事务里——只检查调用方的错误：有收件人、地址或 E.164 号码格式正确、有内容或可用于渲染的模板。每条消息写一条 `MailSendRecord` / `SmsSendRecord`，`status = PENDING`，原样保存请求：显式内容、模板及其变量、scope、调用方的 trace id。方法立即返回记录 id；记录随调用方事务一起提交或回滚。被拒绝时在写入任何数据之前抛出，且不会把调用方事务标记为只回滚。
-2. **投递循环**（`DeliveryPoller`，每 `softa.message.delivery.poll-interval-ms`，默认 500）跨租户认领到期记录——`PENDING`，或 `next_retry_at` 已到的 `RETRY`——通过框架 `versionLock` 做 CAS `PENDING|RETRY → SENDING`。认领数量不超过该渠道的空闲工作线程（`softa.message.{mail,sms}.send-concurrency`，每实例默认 1），每条认领到的记录在工作线程里、以记录的租户和 trace 运行。
+2. **投递循环**（`DeliveryPoller`）每个渠道一个工作线程池（`softa.message.{mail,sms}.send-concurrency`，每实例默认 1）。工作线程跨租户认领一条到期记录——`PENDING`，或 `next_retry_at` 已到的 `RETRY`——通过框架 `versionLock` 做 CAS `PENDING|RETRY → SENDING`，以记录的租户和 trace 发送，发完立即认领下一条；只有没有到期记录时才空闲，由每 `softa.message.delivery.poll-interval-ms`（默认 500）一次的轮询把新到期的记录交给空闲线程。因此积压在每个实例上按"并发数 ÷ 单条耗时"的速度消化；要更快就调大 `send-concurrency`，但不要超过邮件服务器对单个账号的并发连接数（每个邮件线程占一个连接）。每次扫描为每个线程多读几条到期记录、按随机顺序尝试认领，认领输给别的线程或实例时就换下一条。
 3. 渠道的 `DeliveryProcessor` 在首次投递时**准备**记录：渲染模板并应用其默认值，选择服务器（邮件）或按号码路由到提供商（短信），最后扣月度额度；结果写回记录，重试原样重放。然后限流、发送，成功标记 `SENT`，失败交给 `SendFailureHandler`：带退避 `next_retry_at` 的 `RETRY`、`FAILED` 或 `DEAD_LETTER`。
 
 **配置不全的发送也有记录。** 没有服务器或提供商、模板缺失或渲染出错、月度额度用完、模板渲染出空内容：记录变为 `FAILED`，带标记码（`CONFIG_NOT_RESOLVABLE`、`TEMPLATE_NOT_RESOLVABLE`、`MONTHLY_QUOTA_EXCEEDED`、`CONTENT_INVALID`）和原因；每次终态失败都打 ERROR 日志（含记录 id 和租户），日志告警可以通知到开发人员。配置好后在记录上点 Retry：准备前就失败的记录会重新准备。调用方看不到这些错误——受理时 `sendMail` 已返回记录 id。
@@ -124,7 +124,7 @@ softa:
   message:
     delivery:
       enabled: true           # default true; false = this instance sends nothing
-      poll-interval-ms: 500   # how often due send records are claimed
+      poll-interval-ms: 500   # how often idle workers look for newly due records
     zombie:
       enabled: true           # default true
       stale-seconds: 300      # SENDING records older than this are revived
