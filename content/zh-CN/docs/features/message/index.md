@@ -76,7 +76,7 @@
 每次 `MessageService.sendMail(...)` / `sendSms(...)` 调用遵循相同路径：
 
 1. **受理**——在调用方的线程和事务里——只检查调用方的错误：有收件人、地址或 E.164 号码格式正确、有内容或可用于渲染的模板。每条消息写一条 `MailSendRecord` / `SmsSendRecord`，`status = PENDING`，原样保存请求：显式内容、模板及其变量、scope、调用方的 trace id。方法立即返回记录 id；记录随调用方事务一起提交或回滚。被拒绝时在写入任何数据之前抛出，且不会把调用方事务标记为只回滚。
-2. **投递循环**（`DeliveryPoller`）每个渠道一个工作线程池（`softa.message.{mail,sms}.send-concurrency`，每实例默认 1）。工作线程跨租户认领一条到期记录——`PENDING`，或 `next_retry_at` 已到的 `RETRY`——通过框架 `versionLock` 做 CAS `PENDING|RETRY → SENDING`，以记录的租户和 trace 发送，发完立即认领下一条；只有没有到期记录时才空闲，由每 `softa.message.delivery.poll-interval-ms`（默认 500）一次的轮询把新到期的记录交给空闲线程。因此积压在每个实例上按"并发数 ÷ 单条耗时"的速度消化；要更快就调大 `send-concurrency`，但不要超过邮件服务器对单个账号的并发连接数（每个邮件线程占一个连接）。每次扫描为每个线程多读几条到期记录、按随机顺序尝试认领，认领输给别的线程或实例时就换下一条。
+2. **投递循环**（`DeliveryPoller`）每个渠道一个工作线程池（`softa.message.{mail,sms}.send-concurrency`，每实例默认 1）。工作线程跨租户认领一条到期记录——`PENDING`，或 `next_retry_at` 已到的 `RETRY`——通过框架 `versionLock` 做 CAS `PENDING|RETRY → SENDING`，以记录的租户和 trace 发送，发完立即认领下一条；只有没有到期记录时才空闲，由每 500 ms 一次的轮询把新到期的记录交给空闲线程。因此积压在每个实例上按"并发数 ÷ 单条耗时"的速度消化；要更快就调大 `send-concurrency`，但不要超过邮件服务器对单个账号的并发连接数（每个邮件线程占一个连接）。每次扫描为每个线程多读几条到期记录、按随机顺序尝试认领，认领输给别的线程或实例时就换下一条。
 3. 渠道的 `DeliveryProcessor` 在首次投递时**准备**记录：渲染模板并应用其默认值，选择服务器（邮件）或按号码路由到提供商（短信），最后扣月度额度；结果写回记录，重试原样重放。然后限流、发送，成功标记 `SENT`，失败交给 `SendFailureHandler`：带退避 `next_retry_at` 的 `RETRY`、`FAILED` 或 `DEAD_LETTER`。
 
 **配置不全的发送也有记录。** 没有服务器或提供商、模板缺失或渲染出错、月度额度用完、模板渲染出空内容：记录变为 `FAILED`，带标记码（`CONFIG_NOT_RESOLVABLE`、`TEMPLATE_NOT_RESOLVABLE`、`MONTHLY_QUOTA_EXCEEDED`、`CONTENT_INVALID`）和原因；每次终态失败都打 ERROR 日志（含记录 id 和租户），日志告警可以通知到开发人员。配置好后在记录上点 Retry：准备前就失败的记录会重新准备。调用方看不到这些错误——受理时 `sendMail` 已返回记录 id。
@@ -110,6 +110,7 @@ mq:
 早期版本经 `message_outbox` 表和 `mail-send` / `sms-send`（以及 `mail-request` / `sms-request`）Pulsar topic 投递。升级时：
 
 - 从应用配置里删掉这四个 topic；不再有代码读它们。
+- 下列配置项已删除，取值改成代码常量：`softa.message.delivery.poll-interval-ms`、`softa.message.zombie.*`（卡住发送的清理跟随 `softa.message.delivery.enabled`）、`softa.message.retry.*`、`softa.message.mail.max-body-chars`、`softa.message.mail.smtp-pool.idle-timeout` / `max-messages-per-connection`，以及 `softa.message.mail.fetch.*` 中除 `archive-eml` 以外的各项。从应用配置里删掉；设了也会被忽略。
 - 框架事件 `MailRequestMessage` / `SmsRequestMessage`（softa-base）已删除。原来发布它们的代码改为调用 `MessageService`——`SendMailDTO.ofTemplate` / `SendSmsDTO.ofTemplate` 构造同样的模板发送；事件里指定了租户的，在 `ContextUtils.inTenantContext(tenantId, …)` 里调用。
 - 旧管道留下的 `PENDING` / `RETRY` 记录无需迁移：投递循环按记录自己的 `status` 和 `next_retry_at` 认领。旧管道在受理时就准备了记录，所以大多数已是准备好的；服务器配置没有发件地址的邮件记录当时存的是空 `from_address`，在这里首次投递时会重新准备，月度额度会再扣一次。
 - 扫描器会加上新的记录列（`platform_scope`、`template_id`、`template_code`、`template_variables`、`trace_id`），并把 `mail_send_record.body_mode` 改为可空。被删模型的表扫描器从不删除，所以 `message_outbox` 和 `OutboxEntry` / `OutboxStatus` / `TopicRoute` 的目录行要由部署应用在新 jar 起来之后用发版脚本删掉；那时 `message_outbox` 里还是 `NEW` 的行无害，对应记录会从记录表直接投递。
@@ -117,26 +118,16 @@ mq:
 
 ### Message-starter 属性
 
-绑定前缀 `softa.message`，来源为 `MessageProperties`、`RetryProperties` 与 DLQ 的 `@Value` 键：
+绑定前缀 `softa.message`，来源为 `MessageProperties` 与 DLQ 的 `@Value` 键。只有各部署之间确实不同的才做成配置；重试退避、卡住发送的判定时间、轮询间隔、邮件正文上限、SMTP 连接池的空闲时间和单连接封数、收信的批量 / 租约 / 大小上限，都是代码里的常量。
 
 ```yml
 softa:
   message:
     delivery:
-      enabled: true           # default true; false = this instance sends nothing
-      poll-interval-ms: 500   # how often idle workers look for newly due records
-    zombie:
-      enabled: true           # default true
-      stale-seconds: 300      # SENDING records older than this are revived
-      cron: "0 * * * * *"     # every minute
-    retry:
-      default-max-attempts: 5
-      exponential:
-        base-seconds: 30
-        max-seconds: 3600
-        multiplier: 2.0
-        jitter: 0.5                 # ±50% randomisation
-        quota-floor-seconds: 300    # QUOTA errors wait at least 5 min
+      enabled: true           # default true; false = this instance sends nothing (no delivery loop, no stale-send sweep)
+    quota:
+      mail-monthly-default: 10000   # monthly ceiling for buckets with no TenantMessageQuota row; unset = unlimited
+      sms-monthly-default: 10000
     dlq:
       topic: dev_demo_message_dlq   # unset = broker-poison archiving disabled
       max-redeliver: 5              # broker nacks before dead-lettering
@@ -144,19 +135,16 @@ softa:
         recipients: ops@example.com # comma-separated; empty = no alert mail
     mail:
       debug: false                  # Jakarta Mail protocol debug — never enable in prod (leaks AUTH)
-      max-body-chars: 1048576       # 出站正文单字段受理上限（字符数）；列本身是无界 TEXT
+      send-concurrency: 1           # mails one instance sends in parallel (each worker holds an SMTP connection)
       fetch:
-        batch-limit: 100            # max messages per cron tick per (config, folder)
-        lease-timeout: 1h           # abandoned IMAP watermark lease takeover
-        max-message-size: 100MB     # RFC822 size cap; oversize → envelope-only + BodyTooLarge
-        max-attachment-size: 20MB   # per-part cap; oversize parts skipped
         archive-eml: false          # opt-in raw EML archive via FileService
-        max-mime-depth: 10          # MIME zip-bomb guard
-        max-mime-parts: 100         # attachment-storm guard
       transport:
         connection-timeout: 5s      # SMTP/IMAP/POP3 connect timeout
         read-timeout: 30s           # SMTP/IMAP/POP3 read timeout
+      smtp-pool:
+        enabled: true               # reuse authenticated SMTP connections; false = one connection per send
     sms:
+      send-concurrency: 1           # SMS one instance sends in parallel
       transport:
         connection-timeout: 5s      # HTTPS RestClient connect timeout
         read-timeout: 30s           # HTTPS RestClient read timeout
@@ -195,13 +183,13 @@ softa:
 - `daily_send_limit` — 每日累计发送
 - `rate_limit_per_minute` — 每分钟发送（平滑突发）
 
-任一可为 null/zero 以禁用该窗口。计数器位于 Redis（`rl:{channel}:{daily|min}:{tenantId}:{configId}:{window}`），因此多实例部署共享一个预算。配额突破表现为提供商侧 `QUOTA_EXCEEDED` 错误，分类为 `ErrorCategory.QUOTA`——重试策略应用配置的 `quotaFloorSeconds`（默认 5 分钟），避免猛击提供商。
+任一可为 null/zero 以禁用该窗口。计数器位于 Redis（`rl:{channel}:{daily|min}:{tenantId}:{configId}:{window}`），因此多实例部署共享一个预算。配额突破表现为提供商侧 `QUOTA_EXCEEDED` 错误，分类为 `ErrorCategory.QUOTA`——重试策略至少等 5 分钟再试，避免猛击提供商。
 
 ### 僵尸记录清扫器
 
-`ZombieRecordSweeper` 每分钟运行。`updated_time` 早于 `softa.message.zombie.stale-seconds`（默认 300）且卡在 `SENDING` 的记录，经 versionLock 转换回 `RETRY`，`next_retry_at = now`，使其重新被投递循环认领。覆盖 JVM 在认领记录与完成提供商调用之间崩溃的情况。
+`ZombieRecordSweeper` 每分钟运行。`updated_time` 早于 5 分钟前（远长于任何一次发送：连接和读超时都只有几秒）且卡在 `SENDING` 的记录，经 versionLock 转换回 `RETRY`，`next_retry_at = now`，使其重新被投递循环认领。覆盖 JVM 在认领记录与完成提供商调用之间崩溃的情况。
 
-在只读副本上通过 `softa.message.zombie.enabled=false` 禁用。
+它跟着投递循环走：`softa.message.delivery.enabled=false` 会把两者一起关掉。
 
 ### 敏感字段加密
 
@@ -240,4 +228,4 @@ public class ExchangeNdrRule implements MailClassificationRule {
 
 ### 重试策略
 
-失败发送由 `ExponentialBackoffPolicy` 重试——可配置基数、乘数、上限和 ±jitter，通过 `softa.message.retry.exponential.*` 调优。`ErrorClassifier` 的错误类别决定处置：TRANSIENT / QUOTA / UNKNOWN 重试（QUOTA 钳制到 `quota-floor-seconds`）直至达到 `default-max-attempts` 并死信；PERMANENT / INVALID_INPUT / AUTH / CONFIG 立即失败不重试。`RetryDecision` 为密封类型（`Retry` / `Fail` / `DeadLetter`），使失败处理器的 `switch` 保持穷尽。
+失败发送由 `ExponentialBackoffPolicy` 重试——依次等 30 秒、60 秒、120 秒、240 秒、480 秒，每次 ±50% 随机抖动。`ErrorClassifier` 的错误类别决定处置：TRANSIENT / QUOTA / UNKNOWN 重试（QUOTA 至少等 5 分钟），5 次重试用完即死信，约在首次失败后一刻钟；PERMANENT / INVALID_INPUT / AUTH / CONFIG 立即失败不重试。`RetryDecision` 为密封类型（`Retry` / `Fail` / `DeadLetter`），使失败处理器的 `switch` 保持穷尽。
