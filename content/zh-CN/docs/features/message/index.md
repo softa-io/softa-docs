@@ -90,8 +90,9 @@
 自动恢复覆盖投递失败（`SendFailureHandler`：指数退避，然后 `FAILED` / `DEAD_LETTER`；认证错误、配置或模板缺失、额度用完等不可重试失败跳过退避，首败即 `FAILED`）与在途卡死（`ZombieRecordSweeper`：陈旧 `SENDING` → `RETRY`）。修好原因之后用运维端点重发：
 
 - `POST /MailSendRecord/retry?id=` / `POST /SmsSendRecord/retry?id=`——把一条记录改回 `RETRY` 并立即到期：`PENDING / RETRY / FAILED / DEAD_LETTER` → `RETRY`，投递循环下一次轮询就会认领。准备前就失败的记录会重新准备，因此补好配置后重试即可。`SENT` 与在途 `SENDING` 被拒绝。可安全重复调用——投递认领是 CAS 门控的，不可能重复发信。`retryCount` 持续累计：手动重试给予一次新尝试；再次失败回到 `FAILED` / `DEAD_LETTER`，而非重新武装整个自动重试预算。
+- `POST /MailSendRecord/retryByIds` / `POST /SmsSendRecord/retryByIds`（请求体 `{"ids": [...]}`）——对选中的多条做同样的事：能重试的重新排队，`SENT`、在途 `SENDING`、期间被投递线程认领的记录跳过而不报错，返回实际重新排队的条数。邮件服务器恢复后、或补好缺失的服务器配置后，用它一次重发一批。
 
-HCM 管理界面在 Mail Send Record / SMS Send Record 详情页以按状态显隐的工具栏动作暴露这个操作，并在对应列表页提供行级动作。
+HCM 管理界面在 Mail Send Record / SMS Send Record 详情页以按状态显隐的工具栏动作暴露单条重试，在对应列表页提供行级动作，列表页还能勾选多条一起 Retry（确认框写明几条会被跳过）。这些动作都需要该页面的 Retry 权限。
 
 ### Broker topics
 

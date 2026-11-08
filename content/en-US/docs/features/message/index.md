@@ -177,10 +177,17 @@ the first attempt) and stuck in-flight states (`ZombieRecordSweeper`: stale
   email/SMS is possible. `retryCount` keeps counting: a manual retry grants one new attempt;
   another failure returns the record to `FAILED` / `DEAD_LETTER` instead of re-arming the
   whole automatic budget.
+- `POST /MailSendRecord/retryByIds` / `POST /SmsSendRecord/retryByIds` (body
+  `{"ids": [...]}`) — the same for the selected records: retryable ones are requeued, while
+  `SENT`, in-flight `SENDING` and records a worker claimed meanwhile are skipped instead of
+  failing the request; returns how many were requeued. Use it to resend a batch once the
+  mail server is back or a missing server is configured.
 
-The HCM admin UI surfaces it as a status-gated toolbar action on the
-Mail Send Record / SMS Send Record detail pages, and as a row-level action on
-the corresponding list pages.
+The HCM admin UI surfaces the single retry as a status-gated toolbar action on the
+Mail Send Record / SMS Send Record detail pages and as a row-level action on
+the corresponding list pages; the list pages also retry the selected rows
+together, the confirmation saying how many will be skipped. These actions
+need the page's Retry permission.
 
 ### Broker topics
 
