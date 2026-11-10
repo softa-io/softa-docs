@@ -1,0 +1,66 @@
+# 收件箱
+
+<Lead>
+
+站内信是发给系统用户的只读通知，显示在页面的铃铛和通知中心里。它不经投递循环：调用时直接写进收件人的收件箱，随调用方的事务提交，没有重试和发送状态，只有已读、未读。
+
+</Lead>
+
+## 发送站内信
+
+<Lead>
+
+用同一个 `MessageService` 发送；查询和标记已读在 `InboxNotificationService` 上，因为它们不是发送消息。
+
+</Lead>
+
+```java
+@Autowired
+private MessageService messageService;
+@Autowired
+private InboxNotificationService inboxNotificationService;
+
+SendInboxDTO notification = new SendInboxDTO();
+notification.setRecipientId(userId);
+notification.setTitle("Order shipped");
+notification.setContent("Your order #1234 has been dispatched.");
+Long notificationId = messageService.sendInbox(notification);
+
+int unread = inboxNotificationService.countUnread(userId);
+inboxNotificationService.markAsRead(notificationId);
+inboxNotificationService.markAllAsRead(userId);
+```
+
+| 字段 | 说明 |
+|---|---|
+| `recipientId` | 收件人的用户 id，必填 |
+| `title` | 标题，必填，最多 200 字 |
+| `content` | 内容，必填 |
+| `notificationType` | `System`（默认）、`Workflow`、`Manual` |
+| `sourceModel`、`sourceId` | 通知关于哪个对象（模型名最多 50 字），用来按对象标记已读、从通知跳到对象 |
+| `expiredAt` | 过期时间，可选 |
+
+Flow 的审批通知就是站内信：类型为 `Workflow`，来源是审批实例；自动化流程也有「发送站内信」任务。用户打开某个审批时，前端按来源把关于它的未读通知标为已读。
+
+## 本人的通知
+
+<Lead>
+
+下面的接口一律只读写调用者本人的通知，不受行范围限制，所有登录用户都能用：页面上的铃铛每个页面都要用它们。
+
+</Lead>
+
+| 方法 | 路径 | 用途 |
+|---|---|---|
+| GET | `/InboxNotification/myCountUnread` | 未读数 |
+| GET | `/InboxNotification/myRecent?limit=` | 最近的通知，最多 50 条 |
+| POST | `/InboxNotification/myMarkAsRead?id=` | 把本人的一条通知标为已读 |
+| POST | `/InboxNotification/myMarkAllAsRead` | 本人的通知全部标为已读 |
+| POST | `/InboxNotification/myMarkAsReadBySource?sourceModel=&sourceId=` | 本人关于某个对象的未读通知标为已读（如打开了某个审批） |
+| POST | `/InboxNotification/mySearch` | 通知中心的表格：分页读本人的通知，请求体 `{ filters, orders, pageNumber, pageSize }`，默认按时间倒序 |
+| POST | `/InboxNotification/myMarkAsReadByIds` | 请求体里的 id（JSON 数组）中，本人未读的标为已读，别人的 id 直接跳过；返回标记了几条 |
+
+- 应用要在 `permission.authenticated-bypass-patterns` 里放开 `/InboxNotification/my*`。不受行范围限制是因为 `InboxNotification` 没有任何业务角色会被授予的锚点字段，按行范围过滤只会把结果清空。
+- `mySearch` 的 `filters` 与「本人的通知」做 AND，所以按别的收件人筛选只会什么都查不到；搜索框匹配标题和内容。
+- 因为不受行范围限制，`filters` 和 `orders` 只能写模型自己存储的字段：带点的路径（如 `createdId.…`）或不存在的字段直接返回 400，不会用调用者本不能读的数据来回答。
+- 调用方给了排序时，末尾补上 `id` 排序，方向与第一个排序字段相同，翻页不会重叠；默认排序由索引 `(recipientId, createdTime)` 支撑。

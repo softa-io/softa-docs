@@ -1,0 +1,238 @@
+# 消息通知
+
+<Lead>
+
+message-starter 给应用发三种消息：邮件、短信和站内信。业务代码调用 `MessageService`：邮件和短信各写下一条**发送记录**就返回，由投递循环在后台发出，失败了按原因重试或停下；站内信直接写进收件人的收件箱。一封邮件、一条短信有没有发出、为什么没发出，都记在它的发送记录上。
+
+</Lead>
+
+<RoleCards>
+<RoleCard title="管理员" href="/zh-CN/docs/features/message/email/">配置发件服务器、短信提供商和模板；给租户设月度额度</RoleCard>
+<RoleCard title="开发者" href="#从业务代码发送">调用 MessageService 发邮件、短信和站内信；替别的租户发；依赖与配置</RoleCard>
+<RoleCard title="运维" href="/zh-CN/docs/features/message/delivery/">发送失败怎样重试、卡住怎样恢复、什么时候手动重发；看哪些指标和日志</RoleCard>
+<RoleCard title="排查「没收到」" href="/zh-CN/docs/features/message/delivery/#监控与排查">按收件人找到发送记录，看状态和错误码，修好原因后重发</RoleCard>
+</RoleCards>
+
+## 全景
+
+<Lead>
+
+邮件和短信走同一条链路：受理只写记录，投递在后台进行。两者之间没有消息队列——发送记录本身就是队列。
+
+</Lead>
+
+### 组成
+
+- **调用方**：业务模块，以及 user-starter、Flow 通知等框架模块。调用 `MessageService`，拿到记录 id 就继续做自己的事。
+- **受理**（`MessageService`）：只检查调用方给错的东西：收件人、地址或号码格式、有没有内容或模板；每条消息写一条 <Status>Pending</Status> 记录。
+- **发送记录**（`MailSendRecord`、`SmsSendRecord`）：一条消息的全部经过：原样的请求、准备结果、尝试次数、错误码和原因、发送时间。
+- **投递循环**（`DeliveryPoller`）：每个实例、每个渠道一组工作线程，认领到期的记录，交给处理器。
+- **处理器**：邮件、短信各一个。首次投递时准备记录（渲染模板、选服务器或提供商、扣月度额度），然后限流、发送、记下结果。
+- **外部服务**：SMTP 服务器、短信提供商。它们接收就算已发送；之后能否送达，要看退信或提供商的回执。
+- **卡住清理**（`ZombieRecordSweeper`）：每分钟把卡在 <Status>Sending</Status> 超过 5 分钟的记录放回重试。
+
+### 主链路
+
+<MessageFigure name="sequence">
+
+①–④ 在调用方的事务里：调用方回滚，这条记录也不存在；受理不通过时直接抛错，什么都不写，也不会让调用方的事务只能回滚。之后的步骤都在后台，与调用方无关。
+
+⑥ 认领、⑨ 写回、⑫ 记结果各是一个短事务；⑪ 发送不在任何事务里，发送期间不占数据库连接。⑧ ⑨ 只在首次投递时发生，重试原样重放准备好的内容、服务器和提供商。⑪ 已经发出、⑫ 却没写成功时，记录留在发送中，5 分钟后被放回重试，会再发一次：投递是「至少一次」。
+
+</MessageFigure>
+
+<Dev title="每一步由谁实现">
+
+① ② ③：`MessageServiceImpl` 交给 `MailMessageHandler` / `SmsMessageHandler` 检查请求、建记录，写记录时在记录所属的租户里（`TenantScopes.inRecordOwnerContext`）。⑤ ⑥ ⑦ ⑬：`DeliveryPoller`。⑧–⑫：`MailDeliveryProcessor` / `SmsDeliveryProcessor`，⑩ 是 `RateLimiter`，⑫ 失败时交给 `SendFailureHandler` 决定重试、失败或死信。状态转换都走框架的 `versionLock`（`AbstractCasSendRecordServiceImpl`）。每一步落在哪个事务里，见[设计要点](./design#事务边界)。
+
+</Dev>
+
+### 发送记录的状态
+
+邮件和短信的发送记录共用一套状态。状态只由投递循环、处理器、卡住清理、收信时的退信处理和运维的重试动作改，调用方不改。
+
+<MessageFigure name="recordStates">
+
+失败分两种：<Status>Failed</Status> 是不会因重试而好转的，比如准备时的配置、模板、额度问题；<Status>DeadLetter</Status> 是重试 5 次仍然失败的。两种都要人处理：修好原因后在记录上点 Retry。哪些错误算哪一种，见[失败与重试](./delivery#失败与重试)。邮件发出后收到退信，<Status>Sent</Status> 会改为 <Status>Failed</Status>。
+
+</MessageFigure>
+
+| 状态 | 含义 | 接下来 |
+|---|---|---|
+| <Status>Pending</Status> | 已受理，等待投递 | 下一次轮询，或有工作线程空出来时被认领 |
+| <Status>Sending</Status> | 工作线程正在准备或发送 | 记下结果后离开；卡住超过 5 分钟回到 <Status>Retry</Status> |
+| <Status>Sent</Status> | 服务器或提供商已接收 | 终态；邮件收到退信时改为 <Status>Failed</Status> |
+| <Status>Retry</Status> | 临时失败，等到 `next_retry_at` | 到点后再被认领 |
+| <Status>Failed</Status> | 重试也不会好的失败 | 修好原因后手动重试 |
+| <Status>DeadLetter</Status> | 5 次重试都失败 | 查明原因后手动重试；同时归档进死信表 |
+
+## 三个渠道
+
+| 渠道 | 发给谁 | 记录 | 经投递循环 | 详见 |
+|---|---|---|---|---|
+| 邮件 | 邮箱地址，可以多个 | `MailSendRecord` | 是 | [邮件](./email) |
+| 短信 | 一个 E.164 号码 | `SmsSendRecord` | 是 | [短信](./sms) |
+| 站内信 | 系统用户 | `InboxNotification` | 否，直接写入 | [收件箱](./inbox) |
+
+一封邮件可以有多个收件人、抄送和密送，共用一条记录；站内信调用时直接写入收件箱，没有发送状态。
+
+## 从业务代码发送
+
+<Lead>
+
+注入 `MessageService` 调用即可。它只负责受理：返回的 id 指向一条 <Status>Pending</Status> 记录，不代表已经发出；发送结果看记录。
+
+</Lead>
+
+| 渠道 | 单条 | 批量 |
+|---|---|---|
+| 邮件 | `sendMail(SendMailDTO)` | `sendMailBatch(List<SendMailDTO>)` |
+| 短信 | `sendSms(SendSmsDTO)` | `sendSmsBatch(List<SendSmsDTO>)` |
+| 站内信 | `sendInbox(SendInboxDTO)` | `sendInboxBatch(List<SendInboxDTO>)` |
+
+```java
+@Autowired
+private MessageService messageService;
+
+// A template of the sender's own tier, rendered with this recipient's variables.
+Long mailId = messageService.sendMail(SendMailDTO.ofTemplate(
+        List.of("alice@example.com"), "USER_WELCOME", Map.of("name", "Alice"), MessageScope.TENANT));
+Long smsId = messageService.sendSms(SendSmsDTO.ofTemplate(
+        "+8613800138000", "VERIFY_CODE", Map.of("code", "123456"), MessageScope.TENANT));
+// Both ids point at Pending records; the delivery loop moves them on.
+```
+
+- **一个 DTO 一条消息。** 一封邮件可以有多个收件人，共用一条记录；一条短信只发一个号码。批量方法接受 1 到 500 条，先全部检查再写，按输入顺序返回 id。
+- **受理只查调用方的错。** 没有收件人、地址或号码格式不对、既没有内容也没有模板时，抛 `BusinessException`，什么都不写；邮件和短信的这种拒绝不会让调用方的事务只能回滚。不能因为一条提醒发不出去就让自己失败的调用方，捕获它并打 ERROR 日志，user-starter 的各类提醒就是这样做的。超出字段长度的值（主题 500 字、Reply-To 255 字、号码 50 字、短信内容 2000 字）要到写入时才报错，这时调用方的事务会被标记为只能回滚，批量里前面的几条已经写入。
+- **配置上的问题不在受理时报。** 没有服务器或提供商、模板缺失、月度额度用完，都在首次投递时让记录变为 <Status>Failed</Status>，带标记码并打 ERROR 日志，见[首次投递：准备记录](./delivery#首次投递准备记录)。调用方这时早已拿到记录 id。
+- **记录随调用方的事务提交。** 调用方回滚，记录也没有了，不会发出去。
+- **替别的租户发。** 记录属于发起调用时所在的租户。定时任务、带着租户信息的匿名链接要替某个租户发，在 `ContextUtils.inTenantContext(tenantId, …)` 里调用；没有租户上下文时发平台范围的消息（如登录验证码，这时还没有会话），记录记在平台层。
+
+<Dev title="依赖、谁在调用、为什么没有同步发送">
+
+```xml
+<dependency>
+  <groupId>io.softa</groupId>
+  <artifactId>message-starter</artifactId>
+  <version>${softa.version}</version>
+</dependency>
+```
+
+所有发邮件、短信的模块都直接依赖 message-starter 并调用 `MessageService`，中间没有请求事件，包括 user-starter 的登录验证码、邀请、账号变更提醒和订阅到期提醒。
+
+没有同步发送的变体：SMTP 返回 `250 OK` 不等于用户已经收到，而只有一条异步路径，请求线程就不会被外部服务拖住。写记录时从不跨租户（`TenantScopes.inRecordOwnerContext`），所以跨租户的调用方写下的记录也有租户。邮件、短信的受理方法声明了 `noRollbackFor = BusinessException`；站内信的没有，它的拒绝会让调用方的事务只能回滚。
+
+</Dev>
+
+## 租户层与平台层
+
+<Lead>
+
+开启多租户时，每个租户有自己的模板、发件服务器和短信提供商；平台层（`tenant_id = -1`）归平台运营方所有，对租户不可见。两层分开，不会合并：一次发送按它的范围，只在一层里找模板。
+
+</Lead>
+
+| 发送范围 | 用于 | 模板 | 服务器 / 提供商 | 月度额度 |
+|---|---|---|---|---|
+| `TENANT`（默认） | 租户的业务消息 | 当前租户自己的模板 | 租户自己的；没有时由平台层兜底（邮件看默认服务器，短信按国家） | 租户的额度 |
+| `PLATFORM` | 账单、安全、合规等平台消息 | 平台层模板 | 邮件：没有指定服务器时只用平台层的默认服务器；短信：照常按国家路由 | 平台自己的额度（`tenant_id = -1`） |
+
+- **模板不共享。** 每个租户开通时，由应用的租户种子文件得到自己的一套模板，之后自己维护。两层都要用的模板（如公开的密码重置）在两份种子里各写一份。
+- **服务器和提供商对租户不可见。** 租户只能看到、选用自己的配置；平台层的配置只在租户没有配置时由调度静默兜底：邮件看租户有没有默认服务器；短信按国家，先看租户有没有路由行，再看有没有默认提供商。
+- **后台任务在记录所属的租户里执行。** 投递、定时收信、卡住清理都跨租户扫描，但认领、发送、恢复都在记录或配置自己的租户里进行；投递还沿用提交请求时的 trace id。
+- **平台层的行在租户里写不进去。** 发件服务器配置的写接口会把这种情况报成带说明的错误，而不是静默不生效。
+- 多租户关闭时没有过滤和盖章，一切按单租户运行。
+- 死信表是共享的基础设施表，不分租户。
+
+<Dev title="模板种子怎样到达存量租户">
+
+模板由应用 `seed-manifest.yml` 里的租户文件种入，seed-starter 在租户开通时运行。同一个种子文件每个租户只跑一次，所以新模板以新的租户文件到达存量租户，由平台管理员运行。应用给模板文件标 `mode: append` 时，新模板直接加进该文件即可：平台管理员下次运行，只在缺这条模板的租户里创建；租户已有同 code 的模板、只是没有种子绑定（脚本插入或手工新建）时，按 code 补上绑定，原样保留，不再建第二条。修改存量租户已有的模板一律走数据迁移，同时修改种子文件，供之后开通的租户使用。
+
+</Dev>
+
+## 配置与依赖
+
+<Lead>
+
+message-starter 依赖数据库和 Redis，任何一个不可用，相关操作直接报错，不降级。发送不依赖 Pulsar：它只用于定时收信和归档其他消费者的毒消息。
+
+</Lead>
+
+| 依赖 | 谁用 | 不可用时 | 运维要求 |
+|---|---|---|---|
+| 数据库 | 全部：发送记录、状态转换、额度计数 | 操作报错，调用方收到 5xx | 高可用的数据库 |
+| Redis | 限流计数、服务器和提供商配置的缓存 | 操作报错，调用方收到 5xx | Sentinel 或 Cluster；K8s 就绪探针包含 `/actuator/health/redis`，Redis 不通时负载均衡把流量引走 |
+| Pulsar | 定时收信（`CronTaskMailFetchConsumer`）、毒消息归档（`DeadLetterConsumer`） | 收信和归档暂停，恢复后继续；发送不受影响 | 发送不依赖它 |
+| SMTP 服务器、短信提供商 | 外发 | 每条记录按错误类别重试或失败 | 把本地限流设在提供商的配额以下 |
+
+Redis 不可用时没有进程内的兜底，这是有意的：本地限流器会让每个实例各算各的，故障时间一长，就可能击穿提供商的日配额、产生真实费用。由就绪探针在负载均衡层面拒绝流量，比部分故障时悄悄放大发送量更安全。
+
+### 配置项
+
+前缀 `softa.message`。只有各部署之间确实不同的值才是配置：重试退避、卡住的判定时间、轮询间隔、邮件正文上限、SMTP 连接池的空闲时间和单连接封数、收信的批量与租约，都是代码里的常量。装了 message-starter 的实例都会发信，投递循环和卡住清理总是运行。
+
+```yml
+softa:
+  message:
+    quota:
+      mail-monthly-default: 10000   # monthly ceiling for buckets with no TenantMessageQuota row; unset = unlimited
+      sms-monthly-default: 10000
+    dlq:
+      topic: dev_demo_message_dlq   # unset = broker-poison archiving disabled
+      max-redeliver: 2              # broker nacks before dead-lettering
+      alert:
+        recipients: ops@example.com # comma-separated; empty = no alert mail
+    mail:
+      debug: false                  # Jakarta Mail protocol debug — never enable in prod (leaks AUTH)
+      send-concurrency: 4           # mails one instance sends in parallel (each worker holds an SMTP connection)
+      transport:
+        connection-timeout: 5s      # SMTP/IMAP/POP3 connect timeout
+        read-timeout: 30s           # SMTP/IMAP/POP3 read timeout
+    sms:
+      send-concurrency: 10          # SMS one instance sends in parallel
+      transport:
+        connection-timeout: 5s      # HTTPS RestClient connect timeout
+        read-timeout: 30s           # HTTPS RestClient read timeout
+```
+
+发送本身不用 Pulsar 主题。message-starter 只消费两个可选主题：`cron-task` 驱动定时收信，`softa.message.dlq.topic` 把其他消费者的毒消息收进死信表。
+
+```yml
+mq:
+  topics:
+    cron-task:
+      topic: dev_demo_cron_task
+      mail-fetch-sub: dev_demo_cron_task_mail_fetch_sub
+```
+
+### 启用与停用
+
+模板、发件服务器、收信服务器、短信提供商、国家路由和模板绑定都可以停用：停用的行不再被选为默认、不参与国家路由，按 code 也找不到停用的模板；但不删除，被发送记录引用的行仍在。按 id 指定的仍会用到停用的配置：调用方给的 `serverConfigId` / `providerConfigId`、模板的首选服务器，以及已准备记录的重放。管理页都有 **Active** 和 **All** 两个页签，停用的行在 All 里。
+
+<Dev title="active 控制怎样实现">
+
+这七个模型（`MailTemplate`、`MailSendServerConfig`、`MailReceiveServerConfig`、`SmsTemplate`、`SmsProviderConfig`、`SmsProviderRegion`、`SmsTemplateProviderBinding`）声明 `@Model(activeControl = true)`：`WhereBuilder` 给每次 FlexQuery 读取加上 `active = true`，所以解析、调度和列表的过滤一致，新写的查询也漏不掉它。All 页签用 `active IN (true, false)`，点名该字段从而抑制自动追加。必须读到停用行的地方用 `FilterControl.bypassActiveControl()`：按 id 解析（`findVisibleById`：调用方或模板指定的服务器、提供商，以及已准备记录的重放，所以停用的配置不会让进行中的重试变成 `CONFIG_NOT_RESOLVABLE`）、编辑器工具（`resolveAny`，模板启用前就能预览和提取变量）、平台行的写入探测，以及默认项的降级。普通 `getById` 不带这个过滤，不需要绕过。
+
+</Dev>
+
+### 敏感字段加密
+
+邮件发件、收信服务器的密码已声明为加密字段（`encrypted = true`）：落库加密，接口读取时全部打码，扫描器会把这个标记同步到 `SysField`。短信提供商的 `apiKey`、`apiSecret` 没有声明，部署时要在 `SysField` 元数据里把它们标为 encrypted，否则明文存储，见[字段元数据的 `encrypted` 属性](../metadata/field)。
+
+## 升级说明
+
+<Lead>
+
+2.9.12 起，发送记录本身就是投递队列，不再经过 `message_outbox` 表和 `mail-send`、`sms-send`、`mail-request`、`sms-request` 这四个 Pulsar 主题。从更早的版本升级时，逐条处理下面几项。
+
+</Lead>
+
+- 从应用配置里删掉这四个主题，已经没有代码读它们。
+- 下列配置项已删除，改成了代码常量，或者对应的行为总是开着：`softa.message.outbox.*`（`enabled`、`poll-interval-ms`；装了 message-starter 的实例都跑投递循环和卡住清理）、`softa.message.zombie.*`、`softa.message.retry.*`、`softa.message.mail.max-body-chars`、`softa.message.mail.smtp-pool.*`（连接复用改为每台发件服务器上的开关），以及 `softa.message.mail.fetch.*`。从应用配置里删掉；留着也会被忽略。
+- 三个默认值变了：`softa.message.mail.send-concurrency` 1 → 4、`softa.message.sms.send-concurrency` 1 → 10、`softa.message.dlq.max-redeliver` 5 → 2。邮件服务器对单个账号允许的并发连接数少于 4 时，把 `mail.send-concurrency` 调低。
+- 新增 `MailSendServerConfig.connectionReuseEnabled`（默认 true）。`scanner-scope` 覆盖 message-starter 的环境，扫描器会加上 `mail_send_server_config.connection_reuse_enabled` 列，已有的行取默认值；其他环境按该部署加目录列的方式加上这一列和它的目录行，加上之前所有服务器照旧复用连接。
+- 收信不再归档原始 EML，`MailReceiveRecord.emlFileId` 随之删除；解析出的正文和附件照旧保存。`scanner-scope` 覆盖的环境，扫描器会删掉 `mail_receive_record.eml_file_id` 列；其他环境这一列不再使用，可以手工删掉。
+- 框架事件 `MailRequestMessage` / `SmsRequestMessage`（softa-base）已删除。原来发布它们的代码改为调用 `MessageService`：`SendMailDTO.ofTemplate` / `SendSmsDTO.ofTemplate` 构造同样的模板发送；事件里指定了租户的，在 `ContextUtils.inTenantContext(tenantId, …)` 里调用。
+- 旧管道留下的 <Status>Pending</Status> / <Status>Retry</Status> 记录不需要迁移：投递循环按记录自己的 `status` 和 `next_retry_at` 认领。旧管道在受理时就准备了记录，所以多数已经准备好；服务器配置没有发件地址的邮件记录当时存的是空 `from_address`，在这里首次投递时会重新准备，月度额度会再扣一次。
+- 扫描器会给邮件发送记录加上 `platform_scope`、`template_id`、`template_code`、`template_variables`、`trace_id` 列，给短信发送记录加上 `platform_scope`、`template_variables`、`trace_id` 列，并把 `mail_send_record.body_mode` 改为可空。扫描器从不删除被删模型的表，所以 `message_outbox` 表和 `OutboxEntry` / `OutboxStatus` / `TopicRoute` 的目录行，要由部署应用在新 jar 启动之后用发版脚本删掉；那时 `message_outbox` 里还是 `NEW` 的行无害，对应的记录会从记录表直接投递。
+- 删掉基于 `OutboxEntry` 的页面（outbox 列表及其 Requeue 动作）；发送记录的 Retry 涵盖了 Requeue 的用途。

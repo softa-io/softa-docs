@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { FLOW_FIGURES, type FlowFigureName } from './flow-figures'
+import { MESSAGE_FIGURES, type MessageFigureName } from './message-figures'
 
 // Building blocks for docs pages, registered globally in `mdx-components.tsx` so a page uses them without
 // importing anything. Text goes in as children, not props, wherever it is prose: search indexes the rendered page
@@ -51,7 +52,12 @@ const TONES: Record<string, Tone> = {
   InProgress: 'info',
   Refused: 'bad',
   NoFlow: 'bad',
-  SeveralFlows: 'bad'
+  SeveralFlows: 'bad',
+  // A mail or SMS send record. Pending and Failed are the colours above.
+  Sending: 'info',
+  Sent: 'ok',
+  Retry: 'idle',
+  DeadLetter: 'bad'
 }
 
 /** A status value as a coloured chip; the tone comes from the value unless `tone` names one. */
@@ -65,6 +71,16 @@ export function FlowFigure({ name, children }: { name: FlowFigureName; children?
   return (
     <figure className="sd-figure">
       <div className="sd-figure-canvas" dangerouslySetInnerHTML={{ __html: FLOW_FIGURES[name] }} />
+      {children ? <figcaption>{children}</figcaption> : null}
+    </figure>
+  )
+}
+
+/** A Message diagram from `message-figures.ts`, with its caption as children. */
+export function MessageFigure({ name, children }: { name: MessageFigureName; children?: ReactNode }) {
+  return (
+    <figure className="sd-figure">
+      <div className="sd-figure-canvas" dangerouslySetInnerHTML={{ __html: MESSAGE_FIGURES[name] }} />
       {children ? <figcaption>{children}</figcaption> : null}
     </figure>
   )

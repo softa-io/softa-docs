@@ -40,7 +40,7 @@ flowchart LR
 |---|---|---|
 | `EntityChange` | 指定模型的数据被新增、修改或删除 | 可只监听其中几种事件（`events`，为空即全部），可加一个条件——按记录字段写的规则，或 AviatorScript 表达式，二选一——成立才启动；修改时条件只看得到被修改字段的新值。这个条件只读变化记录自身的字段；流程里连线的规则还可以经关联往下读，最多两层，启动时读取（见[条件的两种写法](./index#条件的两种写法)）。条件无法求值时不启动，事件日志里记一次失败。由变更日志驱动：`@Model(enableAuditLog = false)` 的模型不会触发。同一条变更日志对同一个流程最多启动一次 |
 | `Cron` | 到达流程自己的 Quartz 调度 | 需要 cron-starter 与 `mq.topics.cron-task.topic`；每次执行都是新的运行，见 [Cron 触发的流程](#cron-触发的流程) |
-| `Api` | 被显式按 id 启动 | `POST /flow/instances/start`，或进程内 `FlowClient.start`；不匹配任何事件 |
+| `Api` | 被显式按 id 启动 | `POST /flow/instances/start`；不匹配任何事件 |
 | `Subflow` | 被父流程的子流程节点调用 | 在调用方里一次跑完：不能含定时、异步任务这类会等待的节点（发布时检查，`SUBFLOW_WAITS`）；不能调回上层正在运行的流程 |
 
 `POST /flow/automation/trigger` 可以手动投递一个触发事件（`Submit`、`Cron`、`Api`、`Subflow` 类型会被拒绝）。
@@ -162,7 +162,7 @@ stateDiagram-v2
 - `outputVariable` 若存在，将原始执行器结果存入该变量名
 - 参数也可以直接平铺在 config 顶层，每个字段一个键，和节点自己的键（`outputVariable`、`outputMapping`、`options`）并列——设计器就是这样写的，按执行器描述（`getConfigSchema`）列出的字段逐个写入
 
-每种任务节点类型都注册有类型化的参数定义：编译器在发布时按它解析参数，并拒绝缺失的必填项，按字段实际所在的位置报出，因此配置错误的节点在发布时失败，而非执行中途。
+每种任务节点类型都注册有类型化的参数定义：编译器在发布时按它解析参数，并拒绝缺失的必填项，按字段实际所在的位置报出，因此配置错误的节点在发布时失败，而非执行中途。一项参数都没填的节点也一样，逐项报出缺的必填项。
 
 记录节点（`CreateRecord`、`GetRecord`、`UpdateRecord`、`DeleteRecord`、`QueryRecords`）还要按模型的元数据检查：模型必须是本应用的；筛选、排序、取数字段写的路径，要是这次查询用得上的——字段名写错、经过走不通的关联、按一对多字段排序、拿没有存储列的字段做条件，都在发布时报出，指到对应的设置项，而不是等运行到这个节点才失败。值里的占位符运行时才解析，不影响这项检查。
 
@@ -170,7 +170,7 @@ stateDiagram-v2
 
 - 没有 `input` 时，顶层其余的键就是参数（`NodeConfigParser`）；两种写法外面都可以再包一层 `task`。以前只从 `input` 读，设计器建的任务节点运行时拿不到参数，发布时也不检查必填项。
 - 占位符由 `TemplatePlaceholderValidator` 检查，不合格报 `INVALID_TEMPLATE_PLACEHOLDER`，指出的设置项形如 `to[1]`、`templateVariables.owner`。
-- 每种任务节点类型在 `TaskConfigTypes` 中注册有**类型化 input config DTO**：编译器在发布时将参数解析为该 DTO，并拒绝缺失的必填键（`MISSING_REQUIRED_INPUT`），按字段实际所在的位置报出——嵌套写法是 `config.input.url`，设计器的写法是 `config.url`。
+- 每种任务节点类型在 `TaskConfigTypes` 中注册有**类型化 input config DTO**：编译器在发布时将参数解析为该 DTO，并拒绝缺失的必填键（`MISSING_REQUIRED_INPUT`），按字段实际所在的位置报出——嵌套写法是 `config.input.url`，设计器的写法是 `config.url`。没有参数（config 为空，或只有节点自己的键）时按空参数检查，每个缺的必填键各报一条。以前只有 `CallService`、`CallWebhook`、`SendEmail`、`SendSms`、`SendInboxNotification`、`AsyncTask` 这 6 种报 `MISSING_TASK_CONFIG`，其余类型直接通过，运行到节点才失败；这个诊断码已经去掉。
 - `DefaultTaskExecutorRegistry` 在启动时断言每个已注册执行器的节点类型都有对应条目。
 - 记录节点的检查也在 `TaskConfigValidator`：模型不存在报 `UNKNOWN_MODEL`（`config.modelName`）；路径交给 softa-orm 的 `FieldPaths`，筛选按 WHERE、排序按 ORDER BY、取数字段按读取的规则判断，不能用的每条报一个 `INVALID_FIELD_PATH`（`config.filters` / `config.orders` / `config.fields`）；筛选或排序按执行器的方式（`AbstractTaskExecutor`）读不出来报 `INVALID_TASK_CONFIG`。`FieldPaths` 与查询构建器的规则由 softa-orm 的 `FieldPathsMatchBuildersTest` 保持一致。
 

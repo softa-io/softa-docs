@@ -1,0 +1,66 @@
+# Inbox
+
+<Lead>
+
+An inbox notification is a read-only notice to a system user, shown in the bell and the notification center. It does not go through the delivery loop: the call writes it straight into the recipient's inbox, and it commits with the caller's transaction. It has no retries and no send status, only read and unread.
+
+</Lead>
+
+## Sending inbox notifications
+
+<Lead>
+
+Send them through the same `MessageService`; querying and marking read are on `InboxNotificationService`, because they are not message submission.
+
+</Lead>
+
+```java
+@Autowired
+private MessageService messageService;
+@Autowired
+private InboxNotificationService inboxNotificationService;
+
+SendInboxDTO notification = new SendInboxDTO();
+notification.setRecipientId(userId);
+notification.setTitle("Order shipped");
+notification.setContent("Your order #1234 has been dispatched.");
+Long notificationId = messageService.sendInbox(notification);
+
+int unread = inboxNotificationService.countUnread(userId);
+inboxNotificationService.markAsRead(notificationId);
+inboxNotificationService.markAllAsRead(userId);
+```
+
+| Field | Description |
+|---|---|
+| `recipientId` | The recipient's user id; required |
+| `title` | The title; required, at most 200 characters |
+| `content` | The content; required |
+| `notificationType` | `System` (the default), `Workflow`, `Manual` |
+| `sourceModel`, `sourceId` | The object the notification is about (a model name of at most 50 characters); used to mark notifications read by object and to go from a notification to its object |
+| `expiredAt` | When it expires; optional |
+
+Flow's approval notices are inbox notifications: of type `Workflow`, with the approval instance as their source; automation flows also have a "Send inbox notification" task. When a user opens an approval, the frontend marks their unread notifications about it read, by source.
+
+## Your own notifications
+
+<Lead>
+
+The endpoints below only ever read and write the caller's own notifications. They are not subject to row scope and every signed-in user can use them: the bell needs them on every page.
+
+</Lead>
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/InboxNotification/myCountUnread` | Unread count |
+| GET | `/InboxNotification/myRecent?limit=` | Recent notifications, at most 50 |
+| POST | `/InboxNotification/myMarkAsRead?id=` | Mark one of the caller's notifications read |
+| POST | `/InboxNotification/myMarkAllAsRead` | Mark all of the caller's notifications read |
+| POST | `/InboxNotification/myMarkAsReadBySource?sourceModel=&sourceId=` | Mark the caller's unread notifications about one object read (an approval they opened, say) |
+| POST | `/InboxNotification/mySearch` | The notification center's table: one page of the caller's notifications at a time, body `{ filters, orders, pageNumber, pageSize }`, newest first by default |
+| POST | `/InboxNotification/myMarkAsReadByIds` | Of the ids in the body (a JSON array), mark the caller's unread ones read, passing over another user's ids; returns how many were marked |
+
+- The application has to open `/InboxNotification/my*` in `permission.authenticated-bypass-patterns`. Row scope is waived because `InboxNotification` has no anchor field that any business role is granted, so filtering by row scope could only empty the result.
+- `mySearch` ANDs its `filters` onto the caller's own notifications, so a filter on another recipient finds nothing; the search box matches the title and the content.
+- Since row scope is waived, `filters` and `orders` may name only fields the model stores: a dotted path (such as `createdId.…`) or a field that does not exist is refused with 400, rather than answered from data the caller could not otherwise read.
+- When the caller gives a sort, an `id` sort in the direction of the first sort key is added at the end, so pages never overlap; the index `(recipientId, createdTime)` serves the default order.

@@ -10,7 +10,7 @@ The REST APIs of `flow-starter`, the in-process `FlowClient`, the persistence mo
 
 <Lead>
 
-A business module calls approvals, and starts automation flows with an `Api` trigger, in-process through `FlowClient`, and everything else goes over REST; both resolve identity from the server-side context, and a refused request answers in the framework's envelope with its reason.
+A business module submits, withdraws and cancels records, and previews a record not saved yet, in-process through `FlowClient`, and everything else goes over REST; both resolve identity from the server-side context, and a refused request answers in the framework's envelope with its reason.
 
 </Lead>
 
@@ -28,12 +28,9 @@ A business module calls approvals, and starts automation flows with an `Api` tri
 | [Directory](#directory) | `/flow/directory` | What the people and department pickers list |
 | [Monitor](#monitor) | `/flow/monitor` | The administrators' console |
 
-**In-process: `FlowClient`.** Host applications embedding the engine in-process should integrate through the `FlowClient` facade (`io.softa.starter.flow.api`) rather than looping back over REST. The port covers what a business module does:
+**In-process: `FlowClient`.** Host applications embedding the engine in-process should integrate through the `FlowClient` facade (`io.softa.starter.flow.api`) rather than looping back over REST. The port covers what a business module does — a record's approval: `submitRecord`, `previewValues`, `withdrawRecord`, `cancelRecord`.
 
-- a record's approval: `submitRecord`, `previewRecord`, `previewValues`, `withdrawRecord`, `cancelRecord`, `recordApprovals`;
-- the start of an Automation flow with an `Api` trigger: `start`.
-
-Approvers act, and people read their tasks, through REST. `FlowAutoConfiguration` registers the default `InProcessFlowClient` only when the application defines no `FlowClient` bean of its own. Putting a business model through approval is described in [Integration](./integration).
+Approvers act, people read their tasks, a record's approval history and a saved record's approval preview are read, and an Automation flow with an `Api` trigger is started (`POST /flow/instances/start`), through REST. `FlowAutoConfiguration` registers the default `InProcessFlowClient` only when the application defines no `FlowClient` bean of its own. Putting a business model through approval is described in [Integration](./integration).
 
 **Identity is always resolved server-side.** `actorId` / `initiatorId` / `tenantId` are **never** sent by clients: every action request stamps them server-side from the login context (`@JsonProperty(READ_ONLY)`), and all query endpoints resolve the current actor from the context. The in-process `FlowClient` resolves actor / submitter / tenant identity the same way — never passed as call parameters — and calls the same services as these endpoints.
 
@@ -95,7 +92,7 @@ Base path: `/flow/bundles`
 | `GET` | `/flow/bundles/{bundleId}?include=design` | One revision's summary, optionally with the canvas-complete design snapshot |
 | `POST` | `/flow/bundles/{bundleId}/activate` | Make this revision the flow's effective one (rollback = roll-forward) |
 
-Each returns `FlowBundleSummaryView`: `bundleId`, `flowId`, `flowName`, `revision`, `scenario`, `triggerType`, `sync`, `rollbackOnFail`, `compiledAt`, `publishedAt`, `nodeCount`, `transitionCount`, `capabilitySummary`, and from the stored revision `active` — whether it is the flow's effective one (one per flow) — and `changeDescription`, as written when it was published. The list without `flowId` is read from the compiled revisions and leaves those two out.
+Each returns `FlowBundleSummaryView`: `bundleId`, `flowId`, `flowName`, `revision`, `scenario`, `triggerType`, `sync`, `rollbackOnFail`, `compiledAt`, `publishedAt`, `nodeCount`, `transitionCount`, and from the stored revision `active` — whether it is the flow's effective one (one per flow) — and `changeDescription`, as written when it was published. The list without `flowId` is read from the compiled revisions and leaves those two out.
 
 ### Node Descriptor APIs
 
@@ -306,7 +303,7 @@ Base path: `/flow/approvalTasks`
 | `POST` | `/flow/approvalTasks/search` | One page of the current actor's own tasks in a box: `{box, filters?, orders?, pageNumber?, pageSize?}` (`FlowApprovalTaskSearchRequest`; pages default to 1 and 50) → `Page<FlowApprovalTaskView>`. `box` is `Pending` — the approval tasks waiting on them, newest first; `Handled` — the approval tasks that closed, whatever closed them, latest closed first; or `Cc` — their CC tasks, read and unread, newest first. `filters` / `orders` on stored fields of `FlowApprovalTask`: see [Filtering and sorting a list](#filtering-and-sorting-a-list) |
 | `GET` | `/flow/approvalTasks/instance/{instanceId}` | All tasks for one runtime instance (participants / submitter only) |
 
-Each task (`FlowApprovalTaskView`) comes with its instance's context, every user, employee and department named:
+Each task `/search` lists (`FlowApprovalTaskView`) comes with its instance's context, every user, employee and department named; `/instance/{instanceId}` is the tasks an instance's own page reads, the instance already on the page, and carries the task's own fields only:
 
 | Field | Holds |
 |---|---|

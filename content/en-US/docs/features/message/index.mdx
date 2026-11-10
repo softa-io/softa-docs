@@ -1,0 +1,238 @@
+# Message
+
+<Lead>
+
+message-starter sends three kinds of message for an application: email, SMS and inbox notifications. Business code calls `MessageService`: for an email or an SMS it writes one **send record** and returns, and the delivery loop sends the message in the background, retrying or stopping by the cause when it fails; an inbox notification is written straight into its recipients' inboxes. Whether an email or an SMS went out, and why not, is all recorded on its send record.
+
+</Lead>
+
+<RoleCards>
+<RoleCard title="Administrators" href="/en-US/docs/features/message/email/">Configure send servers, SMS providers and templates; set tenants' monthly quotas</RoleCard>
+<RoleCard title="Developers" href="#sending-from-business-code">Call MessageService to send email, SMS and inbox notifications; send for another tenant; dependency and configuration</RoleCard>
+<RoleCard title="Operators" href="/en-US/docs/features/message/delivery/">How failed sends are retried, how stuck ones recover, when to resend by hand; which metrics and logs to watch</RoleCard>
+<RoleCard title='Troubleshooting "never arrived"' href="/en-US/docs/features/message/delivery/#monitoring-and-troubleshooting">Find the send record by recipient, read its status and error code, fix the cause and resend</RoleCard>
+</RoleCards>
+
+## Overview
+
+<Lead>
+
+Email and SMS take the same path: acceptance only writes a record, and delivery happens in the background. No message queue sits between the two — the send record itself is the queue.
+
+</Lead>
+
+### The parts
+
+- **Caller**: business modules, and framework modules such as user-starter and Flow's notifications. It calls `MessageService` and, once it has the record id, carries on with its own work.
+- **Acceptance** (`MessageService`): checks only what the caller got wrong — the recipients, the address or number format, whether there is content or a template — and writes one <Status>Pending</Status> record per message.
+- **Send record** (`MailSendRecord`, `SmsSendRecord`): everything that happens to one message — the request as it was made, the preparation result, the attempt count, the error code and reason, the send time.
+- **Delivery loop** (`DeliveryPoller`): a pool of workers per instance and per channel, claiming due records and handing them to the processor.
+- **Processor**: one for mail, one for SMS. On the first attempt it prepares the record (renders the template, chooses the server or provider, charges the monthly quota); then it rate-limits, sends and records the outcome.
+- **External services**: SMTP servers and SMS providers. A message counts as sent once they accept it; whether it then arrives shows in bounces or the provider's receipts.
+- **Stuck-send sweep** (`ZombieRecordSweeper`): every minute, puts records stuck in <Status>Sending</Status> for over 5 minutes back to retry.
+
+### The main path
+
+<MessageFigure name="sequenceEn">
+
+①–④ run in the caller's transaction: if the caller rolls back, the record does not exist either. When acceptance rejects a request, it throws at once and writes nothing, without marking the caller's transaction rollback-only. Every step after that runs in the background and has nothing to do with the caller.
+
+⑥ the claim, ⑨ the write-back and ⑫ the outcome are one short transaction each; ⑪ the send runs in no transaction and holds no database connection while it sends. ⑧ and ⑨ happen on the first attempt only: a retry replays the prepared content, server and provider as they are. When ⑪ has gone out but ⑫ was not written, the record stays Sending, is put back to retry after 5 minutes and is sent again: delivery is "at least once".
+
+</MessageFigure>
+
+<Dev title="Who implements each step">
+
+① ② ③: `MessageServiceImpl` hands the request to `MailMessageHandler` / `SmsMessageHandler`, which check it and build the record; the record is written in the tenant it belongs to (`TenantScopes.inRecordOwnerContext`). ⑤ ⑥ ⑦ ⑬: `DeliveryPoller`. ⑧–⑫: `MailDeliveryProcessor` / `SmsDeliveryProcessor`; ⑩ is `RateLimiter`, and a failure at ⑫ goes to `SendFailureHandler`, which decides on retry, failure or dead letter. Every status change goes through the framework's `versionLock` (`AbstractCasSendRecordServiceImpl`). Which transaction each step falls in: see [Design notes](./design#transaction-boundaries).
+
+</Dev>
+
+### Send record statuses
+
+Mail and SMS send records share one set of statuses. Only the delivery loop, the processors, the stuck-send sweep, bounce handling when mail is received, and an operator's Retry change a status; the caller never does.
+
+<MessageFigure name="recordStatesEn">
+
+Failures come in two kinds: <Status>Failed</Status> is one that retrying will not fix, such as a configuration, template or quota problem found during preparation; <Status>DeadLetter</Status> one that still fails after 5 retries. Both need a person: fix the cause, then press Retry on the record. Which errors count as which: see [Failures and retries](./delivery#failures-and-retries). When a bounce comes back for a sent mail, <Status>Sent</Status> becomes <Status>Failed</Status>.
+
+</MessageFigure>
+
+| Status | Meaning | Next |
+|---|---|---|
+| <Status>Pending</Status> | Accepted, waiting for delivery | Claimed at the next poll, or as soon as a worker is free |
+| <Status>Sending</Status> | A worker is preparing or sending it | Leaves once the outcome is recorded; stuck for over 5 minutes, it goes back to <Status>Retry</Status> |
+| <Status>Sent</Status> | The server or provider accepted it | Final; a mail that bounces becomes <Status>Failed</Status> |
+| <Status>Retry</Status> | A temporary failure, waiting until `next_retry_at` | Claimed again once that time comes |
+| <Status>Failed</Status> | A failure that retrying will not fix | Retry by hand after fixing the cause |
+| <Status>DeadLetter</Status> | All 5 retries failed | Retry by hand once the cause is found; it is also archived into the dead-letter table |
+
+## Three channels
+
+| Channel | Sent to | Record | Through the delivery loop | See |
+|---|---|---|---|---|
+| Email | Email addresses, possibly several | `MailSendRecord` | Yes | [Email](./email) |
+| SMS | One E.164 number | `SmsSendRecord` | Yes | [SMS](./sms) |
+| Inbox notification | System users | `InboxNotification` | No, written directly | [Inbox](./inbox) |
+
+One email may have several recipients, CCs and BCCs, all sharing one record; an inbox notification is written into the inbox during the call and has no send status.
+
+## Sending from business code
+
+<Lead>
+
+Inject `MessageService` and call it. It only accepts the message: the id it returns points at a <Status>Pending</Status> record and does not mean the message has gone out; the record tells how the send went.
+
+</Lead>
+
+| Channel | Single | Batch |
+|---|---|---|
+| Email | `sendMail(SendMailDTO)` | `sendMailBatch(List<SendMailDTO>)` |
+| SMS | `sendSms(SendSmsDTO)` | `sendSmsBatch(List<SendSmsDTO>)` |
+| Inbox notification | `sendInbox(SendInboxDTO)` | `sendInboxBatch(List<SendInboxDTO>)` |
+
+```java
+@Autowired
+private MessageService messageService;
+
+// A template of the sender's own tier, rendered with this recipient's variables.
+Long mailId = messageService.sendMail(SendMailDTO.ofTemplate(
+        List.of("alice@example.com"), "USER_WELCOME", Map.of("name", "Alice"), MessageScope.TENANT));
+Long smsId = messageService.sendSms(SendSmsDTO.ofTemplate(
+        "+8613800138000", "VERIFY_CODE", Map.of("code", "123456"), MessageScope.TENANT));
+// Both ids point at Pending records; the delivery loop moves them on.
+```
+
+- **One DTO, one message.** An email may have several recipients and still has one record; an SMS goes to one number only. Batch methods take 1 to 500 items, check them all before writing any, and return the ids in input order.
+- **Acceptance checks only the caller's mistakes.** With no recipient, a malformed address or number, or neither content nor a template, it throws `BusinessException` and writes nothing; for email and SMS, this rejection does not mark the caller's transaction rollback-only. A caller that must not fail because one notice cannot be sent catches it and logs it at ERROR, as user-starter's notices do. A value longer than its field (subject 500 characters, Reply-To 255, number 50, SMS content 2000) is reported only when the record is written: the caller's transaction is then marked rollback-only, and in a batch the items before it have already been written.
+- **Configuration problems are not reported at acceptance.** No server or provider, a missing template, a used-up monthly quota: each turns the record <Status>Failed</Status> on its first attempt, with a marker code and an ERROR log — see [First attempt: preparing the record](./delivery#first-attempt-preparing-the-record). By then the caller has long had the record id.
+- **The record commits with the caller's transaction.** If the caller rolls back, the record is gone too and nothing is sent.
+- **Sending for another tenant.** A record belongs to the tenant the call is made in. A scheduled job, or an anonymous link that carries its tenant, sends for a tenant by making the call inside `ContextUtils.inTenantContext(tenantId, …)`; a platform-scoped message sent with no tenant context (a login code, say, when no session exists yet) is filed under the platform tier.
+
+<Dev title="The dependency, who calls it, and why there is no synchronous send">
+
+```xml
+<dependency>
+  <groupId>io.softa</groupId>
+  <artifactId>message-starter</artifactId>
+  <version>${softa.version}</version>
+</dependency>
+```
+
+Every module that sends mail or SMS depends on message-starter directly and calls `MessageService`, with no request event in between — user-starter's login codes, invitations, account notices and subscription reminders included.
+
+There is no synchronous variant: an SMTP `250 OK` does not mean the user has received the message, and with a single asynchronous path, no request thread is held up by an external service. Writing a record never runs cross-tenant (`TenantScopes.inRecordOwnerContext`), so a record written by a cross-tenant caller still gets its tenant. The mail and SMS acceptance methods declare `noRollbackFor = BusinessException`; the inbox ones do not, so their rejection leaves the caller's transaction rollback-only.
+
+</Dev>
+
+## Tenant tier and platform tier
+
+<Lead>
+
+With multi-tenancy on, each tenant has its own templates, send servers and SMS providers; the platform tier (`tenant_id = -1`) belongs to the platform operator and is invisible to tenants. The two tiers are kept apart and never merged: a send looks for its template in one tier only, the one its scope names.
+
+</Lead>
+
+| Send scope | Used for | Template | Server / provider | Monthly quota |
+|---|---|---|---|---|
+| `TENANT` (default) | The tenant's business messages | The current tenant's own templates | The tenant's own; where it has none, the platform tier's stand in (for mail its default server, for SMS by country) | The tenant's quota |
+| `PLATFORM` | Platform messages such as billing, security and compliance | Platform-tier templates | Mail: with no server named, only the platform tier's default server; SMS: routed by country as usual | The platform's own quota (`tenant_id = -1`) |
+
+- **Templates are not shared.** Each tenant gets its own set of templates at provisioning, from the application's tenant seed files, and maintains them from then on. A template both tiers need (such as the public password reset) appears in both seed sets.
+- **Servers and providers are invisible to tenants.** A tenant sees and picks only its own configuration; the platform tier's is reached only by dispatch's silent fallback when the tenant has none: for mail, that depends on whether the tenant has a default server; for SMS, it goes by country, first on whether the tenant has route rows, then on whether it has a default provider.
+- **Background jobs run in the tenant the record belongs to.** Delivery, the scheduled mail fetch and the stuck-send sweep all scan across tenants, but claiming, sending and recovering take place in the record's or the configuration's own tenant; delivery also runs under the trace id of the request that submitted the record.
+- **Platform-tier rows cannot be written from a tenant.** The send server configuration's write endpoints report this as an error that says so, instead of silently doing nothing.
+- With multi-tenancy off, nothing is filtered or stamped, and everything runs single-tenant.
+- The dead-letter table is a shared infrastructure table, not split by tenant.
+
+<Dev title="How template seeds reach existing tenants">
+
+Templates are seeded by the tenant files in the application's `seed-manifest.yml`, which seed-starter runs when a tenant is provisioned. A tenant runs each seed file only once, so a new template reaches existing tenants as a new tenant file, run by the platform administrator. When the application gives its template file `mode: append`, a new template is simply added to that file: on the platform administrator's next run it is created only in tenants that lack it; where a tenant already has a template of that code but no seed binding (inserted by a script or created by hand), the binding is added by code and the template is kept as it is, never created a second time. A change to a template existing tenants already have always goes out as a data migration, with the seed file changed too, for tenants provisioned later.
+
+</Dev>
+
+## Configuration and dependencies
+
+<Lead>
+
+message-starter depends on the database and Redis: if either is unavailable, the operations that need it fail outright, with no degraded mode. Sending does not depend on Pulsar, which is used only for the scheduled mail fetch and for archiving other consumers' poison messages.
+
+</Lead>
+
+| Dependency | Used by | When it is unavailable | Operational requirement |
+|---|---|---|---|
+| Database | Everything: send records, status changes, quota counters | Operations fail; the caller gets a 5xx | A highly available database |
+| Redis | Rate-limit counters, the cache of server and provider configuration | Operations fail; the caller gets a 5xx | Sentinel or Cluster; the K8s readiness probe includes `/actuator/health/redis`, so the load balancer routes traffic away while Redis is unreachable |
+| Pulsar | Scheduled mail fetch (`CronTaskMailFetchConsumer`), poison-message archiving (`DeadLetterConsumer`) | Fetching and archiving pause, and carry on once it is back; sending is unaffected | Sending does not depend on it |
+| SMTP servers, SMS providers | Outbound sending | Each record retries or fails by its error category | Set the local rate limits below the provider's quota |
+
+There is deliberately no in-process fallback when Redis is down: local rate limiters would have each instance count on its own, and a long enough outage could blow through a provider's daily quota and cost real money. Refusing traffic at the load balancer through the readiness probe is safer than silently multiplying the send volume during a partial failure.
+
+### Properties
+
+Prefix `softa.message`. Only values that really differ between deployments are properties: the retry back-off, the time after which a send counts as stuck, the poll interval, the mail body cap, the SMTP pool's idle cut-off and messages per connection, and the mail fetch's batch and lease are constants in the code. Every instance with message-starter sends: the delivery loop and the stuck-send sweep always run.
+
+```yml
+softa:
+  message:
+    quota:
+      mail-monthly-default: 10000   # monthly ceiling for buckets with no TenantMessageQuota row; unset = unlimited
+      sms-monthly-default: 10000
+    dlq:
+      topic: dev_demo_message_dlq   # unset = broker-poison archiving disabled
+      max-redeliver: 2              # broker nacks before dead-lettering
+      alert:
+        recipients: ops@example.com # comma-separated; empty = no alert mail
+    mail:
+      debug: false                  # Jakarta Mail protocol debug — never enable in prod (leaks AUTH)
+      send-concurrency: 4           # mails one instance sends in parallel (each worker holds an SMTP connection)
+      transport:
+        connection-timeout: 5s      # SMTP/IMAP/POP3 connect timeout
+        read-timeout: 30s           # SMTP/IMAP/POP3 read timeout
+    sms:
+      send-concurrency: 10          # SMS one instance sends in parallel
+      transport:
+        connection-timeout: 5s      # HTTPS RestClient connect timeout
+        read-timeout: 30s           # HTTPS RestClient read timeout
+```
+
+Sending itself uses no Pulsar topic. message-starter consumes only two optional topics: `cron-task` drives the scheduled mail fetch, and `softa.message.dlq.topic` collects other consumers' poison messages into the dead-letter table.
+
+```yml
+mq:
+  topics:
+    cron-task:
+      topic: dev_demo_cron_task
+      mail-fetch-sub: dev_demo_cron_task_mail_fetch_sub
+```
+
+### Enabling and disabling
+
+Templates, send servers, receive servers, SMS providers, country routes and template bindings can all be disabled: a disabled row is no longer picked as a default and takes no part in country routing, and a disabled template is not found by code; but it is not deleted, so rows that send records refer to are still there. A disabled configuration is still used where it is named by id: the `serverConfigId` / `providerConfigId` a caller gives, a template's preferred server, and the replay of a prepared record. Each admin page has two tabs, **Active** and **All**; disabled rows are under All.
+
+<Dev title="How active control is implemented">
+
+These seven models (`MailTemplate`, `MailSendServerConfig`, `MailReceiveServerConfig`, `SmsTemplate`, `SmsProviderConfig`, `SmsProviderRegion`, `SmsTemplateProviderBinding`) declare `@Model(activeControl = true)`: `WhereBuilder` adds `active = true` to every FlexQuery read, so resolution, dispatch and list filtering agree, and a newly written query cannot miss it. The All tab uses `active IN (true, false)`, which names the field and so suppresses the automatic condition. Reads that must reach disabled rows use `FilterControl.bypassActiveControl()`: resolution by id (`findVisibleById`: the server or provider a caller or template names, and the replay of a prepared record, so disabling a config does not turn an in-flight retry into `CONFIG_NOT_RESOLVABLE`), the editor tools (`resolveAny`, so a template can be previewed and its variables extracted before it is enabled), the write probe for platform rows, and demoting a default. A plain `getById` does not carry the filter and needs no bypass.
+
+</Dev>
+
+### Encrypting sensitive fields
+
+The passwords of mail send and receive servers are declared as encrypted fields (`encrypted = true`): they are encrypted when stored, fully masked when read through the API, and the scanner syncs this flag to `SysField`. The SMS provider's `apiKey` and `apiSecret` are not declared: at deployment, mark them encrypted in the `SysField` metadata, or they are stored in plaintext — see the [field metadata `encrypted` attribute](../metadata/field).
+
+## Upgrade notes
+
+<Lead>
+
+From 2.9.12 on, the send record itself is the delivery queue: sends no longer pass through the `message_outbox` table and the four Pulsar topics `mail-send`, `sms-send`, `mail-request` and `sms-request`. When upgrading from an earlier release, work through the items below one by one.
+
+</Lead>
+
+- Remove these four topics from the application config; no code reads them any more.
+- These properties are gone — they are code constants now, or the behaviour they controlled is always on: `softa.message.outbox.*` (`enabled`, `poll-interval-ms`; every instance with message-starter runs the delivery loop and the stuck-send sweep), `softa.message.zombie.*`, `softa.message.retry.*`, `softa.message.mail.max-body-chars`, `softa.message.mail.smtp-pool.*` (connection reuse is now a switch on each send server), and `softa.message.mail.fetch.*`. Remove them from the application config; any left there are ignored.
+- Three defaults changed: `softa.message.mail.send-concurrency` 1 → 4, `softa.message.sms.send-concurrency` 1 → 10, `softa.message.dlq.max-redeliver` 5 → 2. Where the mail server allows one account fewer than 4 concurrent connections, set `mail.send-concurrency` lower.
+- New: `MailSendServerConfig.connectionReuseEnabled` (default true). In environments whose `scanner-scope` covers message-starter, the scanner adds the `mail_send_server_config.connection_reuse_enabled` column, existing rows taking the default; other environments add the column and its catalog row the way that deployment adds catalog columns, and until then every server reuses connections as before.
+- Received mail is no longer archived as raw EML, and `MailReceiveRecord.emlFileId` is gone with it; the parsed bodies and attachments are kept as before. In environments `scanner-scope` covers, the scanner drops the `mail_receive_record.eml_file_id` column; elsewhere the column is no longer used and can be dropped by hand.
+- The framework events `MailRequestMessage` / `SmsRequestMessage` (softa-base) are gone. Code that published them calls `MessageService` instead: `SendMailDTO.ofTemplate` / `SendSmsDTO.ofTemplate` build the same templated send; where the event named a tenant, make the call inside `ContextUtils.inTenantContext(tenantId, …)`.
+- <Status>Pending</Status> / <Status>Retry</Status> records left by the old pipeline need no migration: the delivery loop claims them by their own `status` and `next_retry_at`. The old pipeline prepared records at acceptance, so most are already prepared; a mail record whose server config had no from address was stored with an empty `from_address`, and is prepared again on its first attempt here, which charges the monthly quota a second time.
+- The scanner adds the columns `platform_scope`, `template_id`, `template_code`, `template_variables` and `trace_id` to the mail send record and `platform_scope`, `template_variables` and `trace_id` to the SMS send record, and makes `mail_send_record.body_mode` nullable. The scanner never drops a removed model's table, so the `message_outbox` table and the catalog rows of `OutboxEntry` / `OutboxStatus` / `TopicRoute` are removed by the deploying application with a release script, after the new jar has started; rows still `NEW` in `message_outbox` by then are harmless, as their records are delivered straight from the record tables.
+- Remove pages built on `OutboxEntry` (an outbox list and its Requeue action); the send record's Retry covers what Requeue was for.

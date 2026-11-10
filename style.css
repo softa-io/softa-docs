@@ -134,7 +134,7 @@ body{
 
 /* --------------------------------------------------------------------------
    Doc blocks (components/docs/doc-blocks.tsx): Lead, Dev, Status, FlowFigure,
-   RoleCards. One colour per status everywhere; the diagrams draw with the same
+   MessageFigure, RoleCards. One colour per status everywhere; the diagrams draw with the same
    tokens, so they follow the light / dark theme. The accent is the blue of the
    site's links (Nextra's primary hue 212), written out: the site does not
    define Nextra's primary-colour variables on the root element.
@@ -332,7 +332,7 @@ h1 + .sd-lead {
   line-height: 1.6;
 }
 
-/* FlowFigure: inline SVG diagrams. */
+/* FlowFigure, MessageFigure: inline SVG diagrams. */
 .sd-figure {
   margin: 1.25rem 0 1.75rem;
 }

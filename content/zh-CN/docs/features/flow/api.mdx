@@ -10,7 +10,7 @@
 
 <Lead>
 
-业务模块在进程内经 `FlowClient` 调用审批、启动触发器为 `Api` 的自动化流程，其余都走 REST；两者都从服务端上下文解析身份，被拒绝的请求按框架的响应格式返回原因。
+业务模块在进程内经 `FlowClient` 提交、撤回、作废单据，预览尚未保存的单据，其余都走 REST；两者都从服务端上下文解析身份，被拒绝的请求按框架的响应格式返回原因。
 
 </Lead>
 
@@ -28,12 +28,9 @@
 | [通讯录](#通讯录) | `/flow/directory` | 人员和部门选择框列出的内容 |
 | [监控](#监控) | `/flow/monitor` | 管理员的监控台 |
 
-**进程内：`FlowClient`。** 宿主应用若在进程内嵌入引擎，应通过 `FlowClient` 门面（`io.softa.starter.flow.api`）集成，而不是绕回 REST。它只覆盖业务模块要做的事：
+**进程内：`FlowClient`。** 宿主应用若在进程内嵌入引擎，应通过 `FlowClient` 门面（`io.softa.starter.flow.api`）集成，而不是绕回 REST。它只覆盖业务模块要做的事——单据的审批：`submitRecord`、`previewValues`、`withdrawRecord`、`cancelRecord`。
 
-- 单据的审批：`submitRecord`、`previewRecord`、`previewValues`、`withdrawRecord`、`cancelRecord`、`recordApprovals`；
-- 启动触发器为 `Api` 的 Automation 流程：`start`。
-
-审批人处理任务、用户查看自己的待办，都经由 REST。只有当应用没有定义自己的 `FlowClient` bean 时，`FlowAutoConfiguration` 才注册默认的 `InProcessFlowClient`。让业务模型走审批的步骤见[业务接入](./integration)。
+审批人处理任务、用户查看自己的待办、读取单据的审批历史和预览已保存单据的审批，以及启动触发器为 `Api` 的 Automation 流程（`POST /flow/instances/start`），都经由 REST。只有当应用没有定义自己的 `FlowClient` bean 时，`FlowAutoConfiguration` 才注册默认的 `InProcessFlowClient`。让业务模型走审批的步骤见[业务接入](./integration)。
 
 **身份始终从服务端上下文解析。** `actorId` / `initiatorId` / `tenantId` **从不**由客户端发送：每个操作请求从登录上下文服务端盖章（`@JsonProperty(READ_ONLY)`），所有查询端点从上下文解析当前 actor。进程内的 `FlowClient` 以同样方式解析 actor / initiator / tenant 身份——绝不作为调用参数传入——并调用与这些端点相同的服务。
 
@@ -95,7 +92,7 @@
 | `GET` | `/flow/bundles/{bundleId}?include=design` | 一个修订版摘要，可选含画布完整设计快照 |
 | `POST` | `/flow/bundles/{bundleId}/activate` | 使此修订版成为流程的生效修订版（回滚 = 向前滚动） |
 
-它们都返回 `FlowBundleSummaryView`：`bundleId`、`flowId`、`flowName`、`revision`、`scenario`、`triggerType`、`sync`、`rollbackOnFail`、`compiledAt`、`publishedAt`、`nodeCount`、`transitionCount`、`capabilitySummary`，以及来自保存的修订版的 `active`——是否为流程的生效修订版（每个流程一个）——和发布时填写的 `changeDescription`。不带 `flowId` 的列表从编译后的修订版读取，没有这两项。
+它们都返回 `FlowBundleSummaryView`：`bundleId`、`flowId`、`flowName`、`revision`、`scenario`、`triggerType`、`sync`、`rollbackOnFail`、`compiledAt`、`publishedAt`、`nodeCount`、`transitionCount`，以及来自保存的修订版的 `active`——是否为流程的生效修订版（每个流程一个）——和发布时填写的 `changeDescription`。不带 `flowId` 的列表从编译后的修订版读取，没有这两项。
 
 ### 节点描述符 API
 
@@ -306,7 +303,7 @@
 | `POST` | `/flow/approvalTasks/search` | 当前 actor 本人在某个任务箱里的任务，一页：`{box, filters?, orders?, pageNumber?, pageSize?}`（`FlowApprovalTaskSearchRequest`；页码默认 1，每页默认 50）→ `Page<FlowApprovalTaskView>`。`box` 为 `Pending`——等其处理的审批任务，最新在前；`Handled`——已经关闭的审批任务，不论因何关闭，最近关闭的在前；或 `Cc`——其抄送任务，已读未读都有，最新的在前。`filters` / `orders` 针对 `FlowApprovalTask` 的存储字段：见[筛选与排序列表](#筛选与排序列表) |
 | `GET` | `/flow/approvalTasks/instance/{instanceId}` | 一个运行时实例的所有任务（仅参与者 / 提交人） |
 
-每个任务（`FlowApprovalTaskView`）带有其实例的上下文，所有用户、员工和部门都显示名称：
+`/search` 列出的每个任务（`FlowApprovalTaskView`）带有其实例的上下文，所有用户、员工和部门都显示名称；`/instance/{instanceId}` 是实例页自己读的任务，实例已在页面上，只返回任务自身的字段：
 
 | 字段 | 内容 |
 |---|---|

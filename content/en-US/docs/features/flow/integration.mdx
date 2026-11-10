@@ -68,16 +68,14 @@ An approval starts with every field of the record a route can compare, under the
 
 ### Calling from business code
 
-Business code submits, withdraws and cancels records, and reads their approval history and previews, through `FlowClient`:
+Business code submits, withdraws and cancels records, and previews a record not saved yet, through `FlowClient`; a record's approval history and a saved record's preview go over REST (`GET /flow/instances/by-record`, `GET /flow/instances/preview`):
 
 | `FlowClient` | What happens |
 |---|---|
 | `submitRecord(modelName, rowId)` | Submits the record and starts its approval; the steps follow the table |
 | `withdrawRecord(modelName, rowId, comment)` | Withdraws the waiting approval (the engine checks the actor is the submitter and the flow's `withdrawPolicy` permits it); the record is a draft again. When the record's approval **failed**, its submitter takes the record back the same way — the handler is told it was withdrawn; the failed instance stays for flow monitoring. Refused when the record has no approval in progress |
 | `cancelRecord(modelName, rowId)` | Cancels a draft for good: the submitter must reach the record within the range they may edit it in, as for `submitRecord`, it must be a draft, and `handler.validateCancel` must pass. The record becomes `Cancelled` and `handler.afterOutcome` gets a `Cancelled` result with no instance. In the caller's transaction |
-| `recordApprovals(modelName, rowId)` | The approval history, as `GET /flow/instances/by-record` |
-| `previewRecord(modelName, rowId)` | The approval a submission would start, as `GET /flow/instances/preview` — see [Previewing a record's approval](./approval#previewing-a-records-approval). Call it outside a transaction |
-| `previewValues(modelName, values)` | The same for a record not saved yet: its field values, as they are stored (ids, codes) and the employee among them, stand for the row — a draft, so only the employee and the handler's `validate` / `submission` are worked out, from the values alone. For a record the application files as it submits it (a pay run's approval request), whose route shows before it exists. No endpoint serves it: the caller's own endpoint decides who may ask. Outside a transaction, as `previewRecord` |
+| `previewValues(modelName, values)` | The approval preview of a record not saved yet, as `GET /flow/instances/preview` gives it for a saved one (see [Previewing a record's approval](./approval#previewing-a-records-approval)): its field values, as they are stored (ids, codes) and the employee among them, stand for the row — a draft, so only the employee and the handler's `validate` / `submission` are worked out, from the values alone. For a record the application files as it submits it (a pay run's approval request), whose route shows before it exists. No endpoint serves it: the caller's own endpoint decides who may ask. Call it outside a transaction |
 
 `submitRecord`, in order:
 
@@ -270,7 +268,7 @@ An application bean of the same type replaces or adds to the default.
 |---|---|---|
 | `ModelApprovalHandler<T>` | none; one per approval model | The record's business part: checks, title and routing variables, what a result sets off (see [Approving Business Records](#approving-business-records)) |
 | `OrganizationService` | `FlowOrgService` | Finding approvers in the organization, whether an account can act, the directory (see [Approver Resolution](./approval#approver-resolution)) |
-| `ApprovalNotificationService` | `CompositeApprovalNotificationService` (inbox + email) | Replaces all notices; to add a channel, declare a `CompositeApprovalNotificationService` of your own (see [Notifications](./approval#notifications)) |
+| `ApprovalNotificationService` | `MessageApprovalNotificationService` (inbox + email) | Replaces all notices; to add a channel, declare a bean of your own that calls the default first, then sends yours (see [Notifications](./approval#notifications)) |
 | `FlowClient` | `InProcessFlowClient` | The in-process port business modules approve records through (see [API & Data](./api#api-overview)) |
 | `TaskExecutor` | the bundled executors | One executor per task node type — two for one type fail the boot; to replace the bundled `QueryRecords`, switch it off first (see [Configuration](#configuration)) |
 | `FlowValidator` | the built-in validators | Further publish checks, reported with the built-in diagnostics; an `Error` stops a publish |

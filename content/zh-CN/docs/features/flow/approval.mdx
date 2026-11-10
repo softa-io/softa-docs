@@ -465,12 +465,12 @@
 
 <Dev title="通道实现、模板变量与已读标记">
 
-- 默认的 `ApprovalNotificationService` 是 `CompositeApprovalNotificationService`，分别通知两个通道：站内信 `InboxApprovalNotificationService`、邮件 `MailApprovalNotificationService`。由一个映射（`ApprovalNotices`）决定在两个通道上通知谁、通知什么。
+- 默认的 `ApprovalNotificationService` 是 `MessageApprovalNotificationService`，经 message-starter 发站内信和邮件。由一个映射（`ApprovalNotices`）决定通知谁、通知什么，每个事件只算一次；两个通道各自写入、各在自己的事务里，一个写不进去只记日志，另一个照发。
 - 站内信经由 message-starter 发送 Workflow 类型的站内消息（`sourceModel` = `FlowInstance`，`sourceId` = 其实例 id；客户端打开实例并从那里继续）。超过收件箱 200 字符上限的标题会被截断；文本翻译为租户的默认语言。
 - 邮件经由 message-starter 发往 `UserAccount.email`。模板变量为 `subject`（实例标题，否则为流程名）、`content`（意见或理由，如有）、`flowName`、`recordCode` 和 `link`——审批页面，即 `system.site-url` + `/home/approvals/{instanceId}`，未配置站点 URL 时为空。
 - `InboxReadMarker`：审批人采取行动后，其关于该实例的未读站内消息（待审批或抄送本身、催办、超时提醒）在动作提交后标为已读；催办、评论或发出抄送不算采取行动。
 - 打开审批也算看过：不论从哪里进来（「我的待办」、铃铛、邮件或链接），前端在审批的页面打开时调用 `POST /InboxNotification/myMarkAsReadBySource`（`sourceModel=FlowInstance`、`sourceId` 为实例 id），把用户关于该实例的未读站内消息标为已读，并对发给他的每份未读抄送记一次阅读（`/flow/instances/cc/read`）。审批的页面指审批中心的单据页、实例页，以及在业务页上审批的单据的业务页（如薪资批次页）。在业务页上，实例取自用户自己在这张单据上的任务：轮到他审批的任务，或未读的抄送。待审批的任务不因打开而改变，仍等他处理。
-- 应用提供的 `ApprovalNotificationService` bean 会替换默认实现，连同两个通道一起；若要增加通道——短信、IM——请声明自己的 `CompositeApprovalNotificationService`，把站内信和邮件通道与你的通道一并列入。
+- 应用提供的 `ApprovalNotificationService` bean 会整体替换默认实现，连同两个通道一起；若要增加通道——短信、IM——请声明自己的 bean，在其中先调用默认的 `MessageApprovalNotificationService`，再发自己的通道。
 
 </Dev>
 
@@ -503,7 +503,7 @@
 
 ### 预览记录的审批
 
-`GET /flow/instances/preview?modelName=&rowId=`（`FlowClient.previewRecord`）回答现在提交该记录会发生什么，而不真正提交——供记录页面在任何人按下「提交」之前展示审批路径。它执行提交本身的检查与流程选择：记录的审批状态及其审批、以请求者自己的权限执行 `handler.validate` 和 `handler.submission`、提交触发器。`afterSubmitted` 从不被调用。结果在 `status` 里报告，而不是抛出；提交会被拒绝时，`message` 是提交时的那条消息：
+`GET /flow/instances/preview?modelName=&rowId=` 回答现在提交该记录会发生什么，而不真正提交——供记录页面在任何人按下「提交」之前展示审批路径。它执行提交本身的检查与流程选择：记录的审批状态及其审批、以请求者自己的权限执行 `handler.validate` 和 `handler.submission`、提交触发器。`afterSubmitted` 从不被调用。结果在 `status` 里报告，而不是抛出；提交会被拒绝时，`message` 是提交时的那条消息：
 
 | `status` | 含义 |
 |---|---|
@@ -533,7 +533,7 @@
 
 - 对进行中的审批，推演基于实例自身的变量和审批、在实例的副本上进行——从不触碰实例本身。
 - `ApprovalPathPreviewer` 按引擎的运行方式从开始节点推演：路由由 `FlowGatewayRouter` 基于提交将带入的变量决定，审批人由 `PendingApprovalFactory`（含自动委托）决定，自动通过由 `ApproverDedupService` 决定，所用状态从不保存。
-- 预览不在自己的事务中运行，`FlowClient.previewRecord` 应在事务之外调用：通过事务方法抛出的拒绝会把它所加入的事务标记为只能回滚。
+- 预览不在自己的事务中运行，进程内的 `FlowClient.previewValues` 应在事务之外调用：通过事务方法抛出的拒绝会把它所加入的事务标记为只能回滚。
 
 </Dev>
 
@@ -661,8 +661,8 @@
 - 结构：`MISSING_DEFINITION` `MISSING_FLOW_NAME` `MISSING_SCENARIO` `EMPTY_GRAPH` `NO_START_NODE` `MULTIPLE_START_NODES` `MISSING_NODE_ID` `MISSING_NODE_TYPE` `DUPLICATE_NODE_ID` `MISSING_EDGE_ID` `MISSING_EDGE_ENDPOINT` `DUPLICATE_EDGE_ID` `UNKNOWN_EDGE_SOURCE` `UNKNOWN_EDGE_TARGET` `GRAPH_CYCLE` `UNREACHABLE_NODE` `MISSING_NODE_LABEL`
 - 场景与触发器：`INVALID_SCENARIO_NODE` `MISSING_TRIGGER` `TRIGGER_NOT_ALLOWED` `MISSING_MODEL` `MODEL_NOT_APPROVABLE` `CONFLICTING_TRIGGER_CONDITIONS` `INVALID_TRIGGER_CONDITION` `CRON_MISSING_EXPRESSION` `CRON_INVALID_EXPRESSION` `APPROVAL_SETTING_OUTSIDE_APPROVAL` `INVALID_URGE_INTERVAL` `INVALID_REMIND_AFTER_HOURS` `INVALID_CC_RULE` `SYNC_OUTSIDE_AUTOMATION` `SYNC_FLOW_WAITS` `SUBFLOW_WAITS` `ROLLBACK_WITHOUT_SYNC`
 - 审批节点：`UNKNOWN_APPROVER_SOURCE_TYPE` `INVALID_SUPERVISOR_LEVEL` `INVALID_RELATIVE_TO` `INVALID_DEPT_SCOPE` `MISSING_DEPT_IDS` `MISSING_DEPT_VARIABLE` `MISSING_ROLE_IDS` `MISSING_POSITION_IDS` `BLANK_APPROVER` `DUPLICATE_APPROVER` `MISSING_APPROVERS` `INVALID_MIN_COUNT` `INVALID_PERCENTAGE` `MISSING_FIELD_PERMISSION` `UNREADABLE_CONFIG` `MISSING_EMPTY_APPROVER_ROLES`
-- 路由：`INVALID_CONDITION_EXPR` `CONFLICTING_EDGE_CONDITIONS` `RULE_WITHOUT_RECORD` `INVALID_RULE_CONDITION` `UNKNOWN_ROUTING_EDGE` `INSUFFICIENT_GATEWAY_EDGES` `MULTIPLE_DEFAULT_EDGES` `INCLUSIVE_JOIN_UNPAIRED` `DEFAULT_EDGE_NOT_LAST` `NO_DEFAULT_EDGE` `CONCURRENT_BRANCHES_MEET` `JOIN_MULTIPLE_OUTGOING` `BRANCH_ENTERS_JOIN_TWICE` `BRANCH_SKIPS_JOIN`
+- 路由：`INVALID_CONDITION_EXPR` `CONFLICTING_EDGE_CONDITIONS` `RULE_WITHOUT_RECORD` `INVALID_RULE_CONDITION` `INSUFFICIENT_GATEWAY_EDGES` `MULTIPLE_DEFAULT_EDGES` `INCLUSIVE_JOIN_UNPAIRED` `DEFAULT_EDGE_NOT_LAST` `NO_DEFAULT_EDGE` `CONCURRENT_BRANCHES_MEET` `JOIN_MULTIPLE_OUTGOING` `BRANCH_ENTERS_JOIN_TWICE` `BRANCH_SKIPS_JOIN`
 - 警告（不阻止发布）：`UNUSABLE_APPROVER` `UNUSABLE_CC_RECIPIENT` `NO_APPROVAL_STEP`
-- 任务与定时节点：`MISSING_TASK_CONFIG` `INVALID_TASK_CONFIG` `MISSING_REQUIRED_INPUT` `ARG_TYPES_ARITY` `UNKNOWN_MODEL` `INVALID_FIELD_PATH` `INVALID_TEMPLATE_PLACEHOLDER` `INVALID_TIMER_CONFIG` `INVALID_TIMER_CRON` `INVALID_TIMER_DEADLINE`
+- 任务与定时节点：`INVALID_TASK_CONFIG` `MISSING_REQUIRED_INPUT` `ARG_TYPES_ARITY` `UNKNOWN_MODEL` `INVALID_FIELD_PATH` `INVALID_TEMPLATE_PLACEHOLDER` `INVALID_TIMER_CONFIG` `INVALID_TIMER_CRON` `INVALID_TIMER_DEADLINE`
 
 </Dev>

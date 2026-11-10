@@ -1,0 +1,236 @@
+# Email
+
+<Lead>
+
+Mail goes out over SMTP. One email can have several recipients, CCs and BCCs, all sharing one send record. Each tenant maintains its own send servers, templates and receive servers; with receiving configured, bounces and read receipts are also matched back to the send record of the original mail.
+
+</Lead>
+
+## Sending mail
+
+<Lead>
+
+Call `MessageService.sendMail`, with the content itself or with a template and its variables. The id returned points at a record waiting to be sent; rendering and the SMTP send both happen in the delivery loop, and the outcome is on the record.
+
+</Lead>
+
+```java
+@Autowired
+private MessageService messageService;
+
+// Plain text.
+SendMailDTO plain = new SendMailDTO();
+plain.setTo(List.of("alice@example.com"));
+plain.setSubject("Hello");
+plain.setTextBody("Welcome to Softa.");
+Long recordId = messageService.sendMail(plain);
+
+// Several recipients share one MIME message and one send record.
+SendMailDTO offer = new SendMailDTO();
+offer.setTo(List.of("a@x.com", "b@x.com"));
+offer.setCc(List.of("manager@example.com"));
+offer.setSubject("Offer Letter");
+offer.setHtmlBody("<p>Dear Alice...</p>");
+offer.setAttachments(List.of(attachment)); // FileInfo from file-starter
+messageService.sendMail(offer);
+
+// A template, rendered at delivery with these variables.
+SendMailDTO welcome = SendMailDTO.ofTemplate(List.of("alice@example.com"), "USER_WELCOME",
+        Map.of("name", "Alice", "activationUrl", "https://app.example.com/activate/abc123"), MessageScope.TENANT);
+messageService.sendMail(welcome);
+
+// Independent messages in one call: one record each, ids in input order.
+List<Long> ids = messageService.sendMailBatch(List.of(
+        SendMailDTO.ofTemplate(List.of("alice@example.com"), "ORDER_CONFIRMATION", Map.of("orderNo", "SO-1001"), MessageScope.TENANT),
+        SendMailDTO.ofTemplate(List.of("bob@example.com"), "ORDER_CONFIRMATION", Map.of("orderNo", "SO-1002"), MessageScope.TENANT)));
+```
+
+> [!NOTE]
+>
+> Mail can only be sent asynchronously. An SMTP `250 OK` only means the server accepted the message, not that the user has it; the user often still waits seconds to minutes. Problems such as no server or a missing template show on the record (<Status>Failed</Status>, with the reason); the caller gets no exception.
+
+| Field | Description |
+|---|---|
+| `to` / `cc` / `bcc` | Recipient lists; at least one `to` |
+| `subject`, `htmlBody`, `textBody` | Content given directly. With a subject given, the subject is not rendered; with either body given, neither body is rendered from the template |
+| `bodyMode` | The shape of the body, see [Body modes](#body-modes); when not given, inferred from which bodies are given |
+| `templateCode` / `templateId`, `templateVariables` | The template and its variables; `templateId` names the exact row and takes precedence over `templateCode` |
+| `attachments` | Attachments: upload them through file-starter first, then pass in the resulting `FileInfo` |
+| `serverConfigId` | Names the send server, see [Send servers](#send-servers) |
+| `replyTo`, `readReceiptRequested`, `priority` | Reply-to address, whether to request a read receipt, priority. When not given, the reply-to address comes from the template's setting, then the server's; the priority from the template's; the read receipt from the server's setting |
+| `scope` | `TENANT` (default) or `PLATFORM`, see [Tenant tier and platform tier](./index#tenant-tier-and-platform-tier) |
+
+### Address rules
+
+Addresses are checked at acceptance. A wrong address is an error straight away, naming the field and the entry, rather than an SMTP failure that only turns up on the record at send time.
+
+- Each entry of `to`, `cc` and `bcc` must be exactly one mailbox address, which may carry a display name (`Alice <alice@x.com>`); an entry holding several addresses is refused.
+- `replyTo` is one string holding one or more addresses, separated by commas, semicolons or newlines, and normalized to a comma-separated list at acceptance. Input separated by commas only is never rewritten, so quoted display names containing commas (`"Smith, John" <j@x.com>`) stay intact.
+
+## Send servers
+
+<Lead>
+
+An email goes through one server only: the one the caller names, else the one its template prefers, else the default server. Once chosen, the server is fixed on the record: a failed send is retried on the same server only and never switches to another.
+
+</Lead>
+
+1. `SendMailDTO.serverConfigId`: named by the caller.
+2. The template's `preferredServerConfigId`: the template's preference.
+3. The default server: the server the current tenant marks as default, the one with the smallest `sequence` when there are several; when the tenant has none, the platform tier's default server. A `PLATFORM`-scope send with no server named uses only the platform tier's default server, and never falls through to the tenant's own servers.
+4. None of these: the record fails with `CONFIG_NOT_RESOLVABLE`.
+
+A server the caller names takes precedence over the send scope, and may be a platform-tier server or one of the current tenant's own; a server named by id is used even when it is disabled.
+
+| Field | Used for | Not used for |
+|---|---|---|
+| `MailSendServerConfig.isDefault` | Marking the candidates for the default server | Failover: only the first default is taken |
+| `MailSendServerConfig.sequence` | Deciding which one to use when several are default; also the list order | Failover priority |
+| `MailTemplate.preferredServerConfigId` | The template's preferred server; only a server of the template's own tenant can be chosen | A hard binding: a server the caller names still comes first |
+| `MailSendServerConfig.dailySendLimit`, `rateLimitPerMinute` | This server's daily and per-minute windows, see [Rate limits](./delivery#rate-limits) | Monthly quotas |
+
+Common uses of a template's preferred server: marketing templates through a provider with open tracking and transactional mail through a high-deliverability one; a split by sender domain (HR templates from `hr@company.com` through the corporate Exchange, brand templates from `noreply@brand.com`); legal disclosure templates locked to an internal server. It is a preference, not a requirement: during a provider outage, operators can name a backup server at the call site without changing the templates one by one.
+
+### Connection reuse and authentication
+
+- **Sender**: the from address and name come from the server configuration (its from address, or the username when it has none), read at each send.
+- **When changes take effect**: server configs are cached for 5 minutes. After the host, password, active status or connection reuse is changed in the admin UI, it takes up to 5 minutes before sends use the change.
+- **Connection reuse**: consecutive mail through the same server reuses the logged-in connection, so the TCP connection, the TLS handshake and AUTH happen only once. When a server does not accept a second message on the same connection, turn off `connectionReuseEnabled` on its config (on by default), and each message through it opens and closes its own connection.
+- **Authentication**: user name and password. Where a provider takes an API key as the SMTP credential (SendGrid, Amazon SES, Postmark, Mailgun), put the key in the password. Where the mailbox has two-step verification, use an app password issued by the mailbox provider. A self-hosted MTA (such as Stalwart or Postfix) takes its account and password as usual.
+- **Connectivity test**: `POST /MailSendServerConfig/testConnectivity?id=` opens a new connection with this server's settings and returns whether it could connect and log in.
+
+<Dev title="SMTP connection pool and config cache">
+
+`SmtpMailTransport` keeps a small connection pool for each server config. An idle connection is probed with `NOOP` before it is reused; a connection that has had an error, has sent 100 messages or has been idle for more than 30 seconds is closed instead. This idle limit is below the idle timeout of common NATs and load balancers; should a connection be dropped silently anyway, only the probe's read times out, and nothing is sent wrongly. The pool is keyed by the settings the connection was opened with, so once a changed config (a new host, a new password) is read, a new connection is opened. For a server with connection reuse turned off, its existing pool is closed on the next send.
+
+Server configs are cached in Redis for 5 minutes. Only a change made through `MailSendServerConfigService.updateOne` / `deleteById` evicts the cache; the admin UI's save endpoints write to the database directly without evicting it, so a change made in the UI takes up to 5 minutes to be used for sending (when a server is made the default, the old default server is demoted through the service, and that step evicts the default server's cache entry). The platform default server is cached under the platform's key, so the tenant's own default cache entry is neither read nor poisoned. The field is called `sequence`, not `priority`: on the mail side it only orders the defaults and the list, and is not a retry chain; the SMS side calls it `priority` because country routing and template bindings both pick providers by it.
+
+</Dev>
+
+## Templates
+
+<Lead>
+
+Reusable content goes into templates, looked up by `code` in the tier the send scope names: `TENANT` looks only at the current tenant's own templates, `PLATFORM` only at the platform tier's, and a template not found in one tier is not looked for in the other.
+
+</Lead>
+
+- The subject gets a simple `{{ variable }}` substitution, leaving a placeholder as it is when its variable is missing; the body is rendered with Pebble, so `{% for %}` loops can be used, and variables output in an HTML body are escaped automatically (use `| raw` where HTML really must be output).
+- A lookup by code only finds active templates; given a `templateId`, that row is used whether or not it is active (for test sends from the editor).
+- A missing template or a rendering error fails the record with `TEMPLATE_NOT_RESOLVABLE`; the caller gets no exception.
+
+```bash
+POST /MailTemplate/createOne
+{
+  "code": "USER_WELCOME",
+  "name": "User Welcome Email",
+  "subject": "Welcome, {{ name }}!",
+  "bodyHtml": "<h1>Welcome, {{ name }}</h1><p><a href='{{ activationUrl }}'>Activate</a></p>",
+  "bodyMode": "HTML",
+  "active": true
+}
+```
+
+### Body modes
+
+`bodyMode` sets the MIME shape of a template (and of every record sent from it): the editor shows the inputs that go with it, and the send assembles the MIME from it.
+
+| bodyMode | Sent as | HTML body | Plain-text body |
+|---|---|---|---|
+| `HTML` | single `text/html` | authored | — |
+| `PLAIN` | single `text/plain` | — | authored |
+| `HTML_WITH_DERIVED_PLAIN` | `multipart/alternative` | authored | derived from the HTML when the template is rendered on the first attempt |
+| `HTML_WITH_AUTHORED_PLAIN` | `multipart/alternative` | authored | authored; when empty, derived from the HTML instead, and the record is truthfully marked `HTML_WITH_DERIVED_PLAIN` |
+
+Switching `bodyMode` in the editor moves the existing body into the input the new mode actually uses (HTML to text, text to escaped HTML paragraphs; a target input that already has content is not overwritten) and clears the input the new mode does not use. This changes only the form: nothing is stored before saving, and Cancel restores it.
+
+### Editor tools
+
+The template editor's Preview & Send Test dialog is backed by three operations. `id` targets the row being edited, with no resolution and no active-status filter, so a disabled template can be fully checked and test-sent before it is enabled; `code` resolves within the caller's own tier, for programmatic callers.
+
+- `GET /api/mail/templates/variables?id=|code=`: the variables the template uses, in order of first appearance and classified for the input UI: `VARIABLE` (a plain name, one line of text), `COLLECTION` (a collection a loop iterates, entered as JSON), `EXPRESSION` (an operand in an expression, entered as JSON), `RESERVED_FIELD` (resolved server-side). Names internal to the template — loop variables, Pebble's built-in `loop`, the targets of `{% set %}` — are not listed.
+- `POST /api/mail/templates/preview`: renders the subject and body with the given variables, without sending.
+- Test send: `SendMailDTO.templateId` names this row and goes through the full production path: what was previewed is what goes out.
+
+## Receiving, bounces and read receipts
+
+<Lead>
+
+With a receive server configured, a scheduled job pulls new mail into receive records (`MailReceiveRecord`). Bounce reports and read receipts are matched to the original send record by Message-ID: a bounce changes <Status>Sent</Status> to <Status>Failed</Status> and records the bounce code; a read receipt records when the mail was read.
+
+</Lead>
+
+```mermaid
+sequenceDiagram
+    participant C as Scheduled job (cron-starter)
+    participant M as Receiving
+    participant S as Receive server (IMAP / POP3)
+    participant RR as Receive records
+    participant SR as Send records
+    C->>M: mail-fetch cron message
+    loop Each active receive config, in its own tenant
+        M->>S: Fetch new mail
+        M->>M: Parse, classify by the rules
+        M->>RR: Save (once per server and Message-ID)
+        M->>SR: Match bounces and read receipts by Message-ID
+    end
+```
+
+- **Scheduled fetch** needs cron-starter: register a cron job in it whose name starts with `mail-fetch`. It fires through the `cron-task` topic, and each run fetches every active receive config of every tenant, each config in its own tenant. This one global cron job sets the cadence; a cadence per inbox is not supported.
+- **Manual fetch**: inject `MailReceiveService`.
+
+```java
+@Autowired
+private MailReceiveService mailReceiveService;
+
+int fetched = mailReceiveService.fetchNewMails();                // the tenant's default receive config, else the platform default
+int fromOne = mailReceiveService.fetchNewMails(serverConfigId);  // one config
+mailReceiveService.markAsRead(recordId);
+mailReceiveService.markAsRead(List.of(id1, id2, id3));
+```
+
+- **Classification**: each message is checked against the rules in turn, and the first rule that recognizes it decides its type; a few flag checks then add flags such as encrypted, mailing list and spam.
+
+| Type | What it is | Effect on the send record |
+|---|---|---|
+| `ReadReceipt` | A read receipt (MDN) | The original send record is marked read, with the time it was read |
+| `CalendarInvite` | A calendar invitation | — |
+| `AutoReply` | An automatic or out-of-office reply | — |
+| `Bounce` | A bounce report (DSN); mail from mailer-daemon or postmaster; mail whose subject or body contains words such as Undeliverable, rejected or 未送达 | When matched to its original send record, that record goes from <Status>Sent</Status> to <Status>Failed</Status>, with the bounce code recorded |
+| `Normal` | Ordinary mail: no rule recognized it | — |
+| `Unknown` | A rule failed with an error during classification | — |
+
+<Dev title="How fetching works, and the classification rules">
+
+IMAP keeps a UID watermark per folder. Before fetching, it takes a soft lease so that two instances do not fetch the same folder at once (a lease held for over 1 hour means its holder is taken to be down); when UIDVALIDITY changes, the watermark goes back to zero, and duplicate messages are removed by Message-ID. POP3 deletes what it fetches. Each run handles at most 100 messages per folder.
+
+`MailClassifier` is a chain of responsibility over the `MailClassificationRule` beans; the built-in rules, in `@Order`, are: read receipt (10) → calendar invite (15) → auto-reply (18) → DSN (20) → mailer-daemon (30) → keywords (99). For bounces and receipts, `BounceReceiptLinker` finds the send records by Message-ID in one batch, then moves each on with a version check (`markBounced`, `markReadReceiptReceived`). To recognize a provider's own formats (an older Exchange's bounces, the bounce formats of Chinese ISPs), add a rule:
+
+```java
+@Component
+@Order(25)  // between DsnRule (20) and MailerDaemonRule (30)
+public class ExchangeNdrRule implements MailClassificationRule {
+    @Override
+    public Optional<MailClassification> match(MimeMessage message) throws Exception {
+        // ... return MailClassification.bounce(info) if it matches
+        return Optional.empty();
+    }
+}
+```
+
+There is no HTTP callback for receiving delivery events. For delivery events a provider pushes (an ESP's mail events), the application adds a controller that calls the send record service's status transitions.
+
+</Dev>
+
+## Status reference
+
+For the statuses of a **send record**, see [Send record statuses](./index#send-record-statuses). Mail records have a few more fields: `bounced` and `bounceCode` (written when a bounce arrives), `readReceiptReceived` and `readReceiptReceivedAt` (written when a read receipt arrives), `messageId` (the SMTP Message-ID, which bounces and receipts are matched by), and `sentAt` and `sendDurationMs` (when the successful attempt was sent, and how long it took).
+
+**Receive records**:
+
+| Status | Meaning |
+|---|---|
+| `Unread` | Newly fetched mail |
+| `Read` | Read |
+| `Archived` | Archived |
+| `Deleted` | Deleted |

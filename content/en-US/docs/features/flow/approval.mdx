@@ -465,12 +465,12 @@ Every notice goes over two channels, each on its own — one failing neither sil
 
 <Dev title="Channel implementations, template variables and read marking">
 
-- The default `ApprovalNotificationService` is `CompositeApprovalNotificationService`, which tells the two channels each on its own: the inbox, `InboxApprovalNotificationService`, and email, `MailApprovalNotificationService`. One mapping (`ApprovalNotices`) decides who is told what, on both channels.
+- The default `ApprovalNotificationService` is `MessageApprovalNotificationService`, which sends inbox messages and emails through message-starter. One mapping (`ApprovalNotices`) decides who is told what, once per event; each channel writes on its own, in a transaction of its own, so one that cannot write is logged and the other is still sent.
 - The inbox channel sends Workflow-type inbox messages through message-starter that point at the flow instance (`sourceModel` = `FlowInstance`, `sourceId` = its instance id; the client opens the instance and goes on from there). Titles longer than the inbox's 200 characters are cut; texts are translated into the tenant's default language.
 - The email channel sends a mail through message-starter to `UserAccount.email`. The template's variables are `subject` (the instance title, else the flow name), `content` (the comment or reason, when there is one), `flowName`, `recordCode` and `link` — the approval's page, `system.site-url` + `/home/approvals/{instanceId}`, empty when the site URL is not configured.
 - `InboxReadMarker`: once an approver acts, their unread inbox messages about that instance (the pending approval or the CC itself, an urge, a timeout reminder) are marked read after the action commits; an urge, a comment or a CC sent does not count as acting.
 - Opening an approval counts as seeing it, however the user got there — My Tasks, the bell, an email or a link: as an approval's page opens, the frontend calls `POST /InboxNotification/myMarkAsReadBySource` (`sourceModel=FlowInstance`, `sourceId` the instance id), which marks their unread inbox messages about that instance read, and reads each unread CC of it sent to them (`/flow/instances/cc/read`). An approval's page is the request's page or an instance's page in the approval center, or the business page an approval is decided on (a pay run's); there the instance is taken from the user's own tasks on the record — the task waiting on them, or an unread CC. A task to approve is left as it is, still waiting on them.
-- An application `ApprovalNotificationService` bean replaces the default, both channels with it; to add a channel — SMS, IM — declare a `CompositeApprovalNotificationService` of your own that lists the inbox and email channels with yours.
+- An application `ApprovalNotificationService` bean replaces the default as a whole, both channels with it; to add a channel — SMS, IM — declare a bean of your own that calls the default `MessageApprovalNotificationService` first, then sends yours.
 
 </Dev>
 
@@ -503,7 +503,7 @@ Once an approval ends, the framework writes the outcome back to the record, then
 
 ### Previewing a record's approval
 
-`GET /flow/instances/preview?modelName=&rowId=` (`FlowClient.previewRecord`) answers what submitting the record would do now, without submitting it — for a record page that shows the approval path before anyone presses Submit. It makes the submission's own checks and choice of flow: the record's approval status and its approvals, `handler.validate` and `handler.submission` with the caller's own permissions, the submit triggers. `afterSubmitted` is never called. The result is reported in `status` rather than raised; where the submission would be refused, `message` is the message it would be refused with:
+`GET /flow/instances/preview?modelName=&rowId=` answers what submitting the record would do now, without submitting it — for a record page that shows the approval path before anyone presses Submit. It makes the submission's own checks and choice of flow: the record's approval status and its approvals, `handler.validate` and `handler.submission` with the caller's own permissions, the submit triggers. `afterSubmitted` is never called. The result is reported in `status` rather than raised; where the submission would be refused, `message` is the message it would be refused with:
 
 | `status` | Meaning |
 |---|---|
@@ -533,7 +533,7 @@ The walk assumes every approval step approved; `steps` lists the approval steps 
 
 - For an approval in progress, the walk goes from the instance's own variables and approvals, on a copy of the instance — never the instance itself.
 - `ApprovalPathPreviewer` walks from the start node the way the engine runs: routes are decided by `FlowGatewayRouter` over the variables the submission would start with, approvers by `PendingApprovalFactory` (auto-delegation included) and automatic approvals by `ApproverDedupService`, on a state that is never saved.
-- The preview runs in no transaction of its own, and `FlowClient.previewRecord` should be called outside one: a refusal thrown through a transactional method marks the transaction it joins rollback-only.
+- The preview runs in no transaction of its own, and the in-process `FlowClient.previewValues` should be called outside one: a refusal thrown through a transactional method marks the transaction it joins rollback-only.
 
 </Dev>
 
@@ -661,8 +661,8 @@ Only **warned** of, never stopping a publish: the specific people of a step or a
 - Structure: `MISSING_DEFINITION` `MISSING_FLOW_NAME` `MISSING_SCENARIO` `EMPTY_GRAPH` `NO_START_NODE` `MULTIPLE_START_NODES` `MISSING_NODE_ID` `MISSING_NODE_TYPE` `DUPLICATE_NODE_ID` `MISSING_EDGE_ID` `MISSING_EDGE_ENDPOINT` `DUPLICATE_EDGE_ID` `UNKNOWN_EDGE_SOURCE` `UNKNOWN_EDGE_TARGET` `GRAPH_CYCLE` `UNREACHABLE_NODE` `MISSING_NODE_LABEL`
 - Scenario and trigger: `INVALID_SCENARIO_NODE` `MISSING_TRIGGER` `TRIGGER_NOT_ALLOWED` `MISSING_MODEL` `MODEL_NOT_APPROVABLE` `CONFLICTING_TRIGGER_CONDITIONS` `INVALID_TRIGGER_CONDITION` `CRON_MISSING_EXPRESSION` `CRON_INVALID_EXPRESSION` `APPROVAL_SETTING_OUTSIDE_APPROVAL` `INVALID_URGE_INTERVAL` `INVALID_REMIND_AFTER_HOURS` `INVALID_CC_RULE` `SYNC_OUTSIDE_AUTOMATION` `SYNC_FLOW_WAITS` `SUBFLOW_WAITS` `ROLLBACK_WITHOUT_SYNC`
 - Approval nodes: `UNKNOWN_APPROVER_SOURCE_TYPE` `INVALID_SUPERVISOR_LEVEL` `INVALID_RELATIVE_TO` `INVALID_DEPT_SCOPE` `MISSING_DEPT_IDS` `MISSING_DEPT_VARIABLE` `MISSING_ROLE_IDS` `MISSING_POSITION_IDS` `BLANK_APPROVER` `DUPLICATE_APPROVER` `MISSING_APPROVERS` `INVALID_MIN_COUNT` `INVALID_PERCENTAGE` `MISSING_FIELD_PERMISSION` `UNREADABLE_CONFIG` `MISSING_EMPTY_APPROVER_ROLES`
-- Routing: `INVALID_CONDITION_EXPR` `CONFLICTING_EDGE_CONDITIONS` `RULE_WITHOUT_RECORD` `INVALID_RULE_CONDITION` `UNKNOWN_ROUTING_EDGE` `INSUFFICIENT_GATEWAY_EDGES` `MULTIPLE_DEFAULT_EDGES` `INCLUSIVE_JOIN_UNPAIRED` `DEFAULT_EDGE_NOT_LAST` `NO_DEFAULT_EDGE` `CONCURRENT_BRANCHES_MEET` `JOIN_MULTIPLE_OUTGOING` `BRANCH_ENTERS_JOIN_TWICE` `BRANCH_SKIPS_JOIN`
+- Routing: `INVALID_CONDITION_EXPR` `CONFLICTING_EDGE_CONDITIONS` `RULE_WITHOUT_RECORD` `INVALID_RULE_CONDITION` `INSUFFICIENT_GATEWAY_EDGES` `MULTIPLE_DEFAULT_EDGES` `INCLUSIVE_JOIN_UNPAIRED` `DEFAULT_EDGE_NOT_LAST` `NO_DEFAULT_EDGE` `CONCURRENT_BRANCHES_MEET` `JOIN_MULTIPLE_OUTGOING` `BRANCH_ENTERS_JOIN_TWICE` `BRANCH_SKIPS_JOIN`
 - Warnings (never stop a publish): `UNUSABLE_APPROVER` `UNUSABLE_CC_RECIPIENT` `NO_APPROVAL_STEP`
-- Task and timer nodes: `MISSING_TASK_CONFIG` `INVALID_TASK_CONFIG` `MISSING_REQUIRED_INPUT` `ARG_TYPES_ARITY` `UNKNOWN_MODEL` `INVALID_FIELD_PATH` `INVALID_TEMPLATE_PLACEHOLDER` `INVALID_TIMER_CONFIG` `INVALID_TIMER_CRON` `INVALID_TIMER_DEADLINE`
+- Task and timer nodes: `INVALID_TASK_CONFIG` `MISSING_REQUIRED_INPUT` `ARG_TYPES_ARITY` `UNKNOWN_MODEL` `INVALID_FIELD_PATH` `INVALID_TEMPLATE_PLACEHOLDER` `INVALID_TIMER_CONFIG` `INVALID_TIMER_CRON` `INVALID_TIMER_DEADLINE`
 
 </Dev>

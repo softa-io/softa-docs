@@ -96,7 +96,7 @@ flowchart LR
 | `Submit` | 只能由提交记录启动（`FlowClient.submitRecord`）——见[审批业务记录](./integration#审批业务记录) |
 | `EntityChange` | 只能由它的事件启动 |
 | `Cron` | 只能按自己的调度启动——见[Cron 触发的流程](./automation#cron-触发的流程) |
-| `Api` | 只能按 id 显式启动：`POST /flow/instances/start`、`FlowClient.start` |
+| `Api` | 只能按 id 显式启动：`POST /flow/instances/start` |
 | `Subflow` | 只能被父流程的 Subflow 节点调用 |
 
 显式启动和 Subflow 调用运行的都是 Automation 流程，因此 `Api` 和 `Subflow` 只属于 Automation。

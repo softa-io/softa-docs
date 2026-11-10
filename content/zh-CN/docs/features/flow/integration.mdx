@@ -68,16 +68,14 @@
 
 ### 从业务代码调用
 
-业务代码经由 `FlowClient` 提交、撤回、作废记录，读取审批历史和预览：
+业务代码经由 `FlowClient` 提交、撤回、作废记录，预览尚未保存的记录；审批历史和已保存记录的预览走 REST（`GET /flow/instances/by-record`、`GET /flow/instances/preview`）：
 
 | `FlowClient` | 会发生什么 |
 |---|---|
 | `submitRecord(modelName, rowId)` | 提交记录并启动它的审批，依次做的事见表下 |
 | `withdrawRecord(modelName, rowId, comment)` | 撤回正在等待的审批（引擎检查 actor 是提交人，且流程的 `withdrawPolicy` 允许）；记录重新成为草稿。若记录的审批**失败**，其提交人也以同样方式取回记录——处理器得知它被撤回；失败的实例保留供流程监控。记录没有进行中的审批时拒绝 |
 | `cancelRecord(modelName, rowId)` | 永久作废草稿：和 `submitRecord` 一样，提交人必须在自己能修改这条记录的范围内够到它，记录必须是草稿，且 `handler.validateCancel` 必须通过。记录变为 `Cancelled`，`handler.afterOutcome` 收到一个没有实例的 `Cancelled` 结果。在调用方事务中完成 |
-| `recordApprovals(modelName, rowId)` | 审批历史，同 `GET /flow/instances/by-record` |
-| `previewRecord(modelName, rowId)` | 提交将启动的审批，同 `GET /flow/instances/preview`——见[预览记录的审批](./approval#预览记录的审批)。应在事务之外调用 |
-| `previewValues(modelName, values)` | 尚未保存的记录的同一预览：以字段值（按存储形态：id、code，含当事员工字段）代替记录行——视作草稿，只按这些值算当事员工和处理器的 `validate` / `submission`。用于应用在提交时才建的记录（如薪酬批次的审批申请单由批次自己的提交建出），让审批路线在记录存在之前就能显示。没有对应的 HTTP 接口：由调用方自己的接口决定谁能查。与 `previewRecord` 一样在事务外调用 |
+| `previewValues(modelName, values)` | 尚未保存的记录的审批预览，同 `GET /flow/instances/preview`（见[预览记录的审批](./approval#预览记录的审批)）：以字段值（按存储形态：id、code，含当事员工字段）代替记录行——视作草稿，只按这些值算当事员工和处理器的 `validate` / `submission`。用于应用在提交时才建的记录（如薪酬批次的审批申请单由批次自己的提交建出），让审批路线在记录存在之前就能显示。没有对应的 HTTP 接口：由调用方自己的接口决定谁能查。应在事务之外调用 |
 
 `submitRecord` 依次：
 
@@ -270,7 +268,7 @@ flow-starter 读取的配置项如下；默认组织服务读取的模型和字�
 |---|---|---|
 | `ModelApprovalHandler<T>` | 无，每个审批模型一个 | 单据的业务部分：校验、标题与路由变量、结果的后续动作（见[审批业务记录](#审批业务记录)） |
 | `OrganizationService` | `FlowOrgService` | 从组织里找审批人、判断账号能否办理、通讯录（见[审批人解析](./approval#审批人解析)） |
-| `ApprovalNotificationService` | `CompositeApprovalNotificationService`（站内信 + 邮件） | 替换整个通知；要加通道时声明自己的 `CompositeApprovalNotificationService`（见[通知](./approval#通知)） |
+| `ApprovalNotificationService` | `MessageApprovalNotificationService`（站内信 + 邮件） | 替换整个通知；要加通道时声明自己的 bean，先调用默认实现再发自己的（见[通知](./approval#通知)） |
 | `FlowClient` | `InProcessFlowClient` | 业务模块调用审批的进程内端口（见[接口与数据](./api#api-概览)） |
 | `TaskExecutor` | 内置执行器 | 每种任务节点一个执行器，同一种注册两个会启动失败；要换掉内置的 `QueryRecords`，先关掉它（见[配置项](#配置项)） |
 | `FlowValidator` | 内置校验器 | 追加的发布校验，诊断与内置的一起报告，`Error` 阻止发布 |

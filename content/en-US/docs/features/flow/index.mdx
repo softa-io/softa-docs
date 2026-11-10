@@ -96,7 +96,7 @@ Every flow declares a trigger, and **the trigger is the flow's start contract** 
 | `Submit` | Only by submitting a record (`FlowClient.submitRecord`) — see [Approving Business Records](./integration#approving-business-records) |
 | `EntityChange` | Only by its events |
 | `Cron` | Only on its own schedule — see [Cron-triggered flows](./automation#cron-triggered-flows) |
-| `Api` | Only explicitly, by id: `POST /flow/instances/start`, `FlowClient.start` |
+| `Api` | Only explicitly, by id: `POST /flow/instances/start` |
 | `Subflow` | Only from a parent flow's Subflow node |
 
 An explicit start and a Subflow call both run an Automation flow, so `Api` and `Subflow` belong to Automation alone.
