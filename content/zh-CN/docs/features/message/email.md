@@ -51,7 +51,7 @@ Preview & Send Test 弹窗背后是三个可按 id 寻址的操作。`id` 指向
 
 #### 投递管道
 
-每次接受的发送恰好产生一条 `MailSendRecord`。状态转换通过 CAS 辅助，因此 broker 重复投递会自我拒绝，无需去重表：
+每次接受的发送恰好产生一条 `MailSendRecord`。状态转换通过 CAS 辅助，因此竞争失败的认领会自我拒绝，无需去重表：
 
 ```text
 PENDING → SENDING → SENT
@@ -59,16 +59,17 @@ PENDING → SENDING → SENT
                RETRY → SENDING → SENT
                    ↓
                    DEAD_LETTER（重试耗尽）
-               FAILED（提供商永久拒绝：错误收件人、畸形输入）
-               DEAD_LETTER（不可重试且非永久：认证失败或配置无法解析——
-                            首败即入，不烧重试预算）
+               FAILED（永久失败：错误收件人、畸形输入、认证失败、
+                       没有服务器或模板、额度用完——首败即入，不烧重试预算）
 ```
 
-失败时，`ErrorClassifier` 将提供商错误映射为 `ErrorCategory`（TRANSIENT / PERMANENT / INVALID_INPUT / AUTH / QUOTA / UNKNOWN），重试策略（`ExponentialBackoffPolicy`）决定：
+首次投递会准备记录（见*异步投递*）：模板加载不到或渲染出错、服务器解析不出来、月度额度用完、渲染出空正文，记录分别以 `TEMPLATE_NOT_RESOLVABLE`、`CONFIG_NOT_RESOLVABLE`、`MONTHLY_QUOTA_EXCEEDED`、`CONTENT_INVALID` 失败。
 
-- **Retry** → `markRetry(nextRetryAt = now + backoff)` + 在 `mail-send` 上入队延迟 outbox 行，使同一投递消费者重新驱动
-- **Fail** → `markFailed`（终态；不重试；提供商永久拒绝）
-- **DeadLetter** → `markDeadLetter` + 归档 `dead_letter_message` 行（`source = SendExhausted`）——重试预算耗尽到达，或不可重试且非永久的失败（AUTH 类）**首败直达**。配置解析失败以标记码 `CONFIG_NOT_RESOLVABLE` 走首败直达路线：配坏的 config 重试永远不会好——修复配置后用手动 Retry 重新入队。
+失败时，`ErrorClassifier` 将错误映射为 `ErrorCategory`（TRANSIENT / PERMANENT / INVALID_INPUT / AUTH / CONFIG / QUOTA / UNKNOWN），重试策略（`ExponentialBackoffPolicy`）决定：
+
+- **Retry** → `markRetry(nextRetryAt = now + backoff)`；`next_retry_at` 到期后投递循环重新认领
+- **Fail** → `markFailed`（终态；不重试）——PERMANENT / INVALID_INPUT / AUTH / CONFIG 都不会因重试而好转：修好原因后用手动 Retry 重发
+- **DeadLetter** → `markDeadLetter` + 归档 `dead_letter_message` 行（`source = SendExhausted`）——重试预算耗尽时到达
 
 业务代码通常无需显式选择邮件服务器。默认应由平台或租户管理员准备。
 
@@ -131,11 +132,11 @@ dto.setSubject("Offer Letter");
 dto.setHtmlBody("<p>Dear Alice...</p>");
 dto.setAttachments(List.of(attachment));
 Long fullRecordId = messageService.sendMail(dto);
-// IDs point at PENDING records; the consumer flips them to SENT/FAILED.
+// IDs point at PENDING records; the delivery loop moves them on to SENT/FAILED.
 // To check terminal status, query MailSendRecordService.getById(recordId).
 ```
 
-> **所有邮件发送均为异步。** `sendMail / sendMailBatch` 在一个 DB 事务中持久化 `MailSendRecord (PENDING)` + outbox 行并立即返回；SMTP 投递在 broker 驱动的消费者中发生。刻意无同步变体：SMTP `250 OK` **不等于**「用户已收到邮件」——用户仍须等待数秒到数分钟由提供商投递，因此约 500 ms 的 broker 延迟不可见，而单一异步路径避免阻塞 HTTP 线程及 stranded-`RETRY` 边界情况。
+> **所有邮件发送均为异步。** `sendMail / sendMailBatch` 在调用方事务中持久化 `MailSendRecord (PENDING)` 并立即返回；渲染与 SMTP 投递在投递循环中发生。刻意无同步变体：SMTP `250 OK` **不等于**「用户已收到邮件」——用户仍须等待数秒到数分钟由提供商投递，因此最多 500 ms 的轮询不可见，而单一异步路径避免阻塞 HTTP 线程。因此没有服务器或模板会体现在记录上（`FAILED`，带原因），而不是调用方收到异常。
 
 #### 地址规则
 
@@ -243,11 +244,11 @@ Pending -> Sending -> Sent
                   -> Failed
 ```
 
-- `Pending` — 记录已创建，等待消费者或 outbox 发布者
-- `Sending` — 通过 CAS 被消费者认领；SMTP 发送进行中
+- `Pending` — 记录已创建，等待投递循环
+- `Sending` — 通过 CAS 被投递循环认领；准备或 SMTP 发送进行中
 - `Sent` — SMTP 服务器已接受消息
 - `Retry` — 瞬态失败；`next_retry_at` 到期后重新驱动
-- `Failed` — 永久 SMTP 拒绝或校验失败（错误收件人、认证、畸形输入）
+- `Failed` — 永久 SMTP 拒绝、认证失败，或无法准备的发送（没有服务器、模板缺失或出错、额度用完、内容为空）
 - `DeadLetter` — 重试预算耗尽；需运维介入
 
 关联入站退信时，记录可从 `Sent → Failed` 转换。

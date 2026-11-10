@@ -31,8 +31,10 @@ Template placeholders use the unified Softa syntax: `{{ variable }}`.
 
 Identical to mail. Each recipient becomes one `SmsSendRecord`; the state machine
 is the same six-state CAS flow (`PENDING → SENDING → SENT / FAILED / RETRY /
-DEAD_LETTER`). Provider routing is resolved before persistence, and retry
-replays the same provider/template parameters stored on the record.
+DEAD_LETTER`). Provider routing happens when the record is prepared (its first
+delivery attempt), and retry replays the same provider/template parameters
+stored on the record. No provider for the recipient's country fails the record
+with `CONFIG_NOT_RESOLVABLE`.
 
 ### Sending SMS
 
@@ -56,13 +58,13 @@ SendSmsDTO second = new SendSmsDTO();
 second.setPhoneNumber("+2222222222");
 second.setContent("System maintenance tonight at 10pm.");
 List<Long> ids = messageService.sendSmsBatch(List.of(first, second));
-// ids point at PENDING records; the consumer flips them to SENT/FAILED.
+// ids point at PENDING records; the delivery loop moves them on to SENT/FAILED.
 ```
 
 > **All SMS sends are asynchronous** — same contract as Mail. `sendSms /
-> sendSmsBatch` enqueue an `SmsSendRecord (PENDING)` + outbox row and
-> return immediately; the broker-driven consumer performs the provider
-> call.
+> sendSmsBatch` persist an `SmsSendRecord (PENDING)` in the caller's
+> transaction and return immediately; the delivery loop renders, routes and
+> performs the provider call.
 
 ### Send Modes
 
@@ -232,8 +234,9 @@ overrides on the binding.
 
 ### SMS Provider Selection and Retry
 
-When a template is bound to multiple eligible SMS providers, enqueue-time
-planning selects one provider in `priority` order (lower = preferred):
+When a template is bound to multiple eligible SMS providers, planning at the
+first delivery attempt selects one provider in `priority` order (lower =
+preferred):
 
 ```text
 country route candidates ∩ template bindings -> selected provider
