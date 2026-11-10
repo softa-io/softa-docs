@@ -30,7 +30,7 @@ A record in approval has two statuses: the record's own approval status, and the
 | Approver | The login account a step resolved | Approve, reject, return, transfer, CC, comment; batch approve / return / reject |
 | CC recipient | Someone an approver CC'd by hand, or the flow settings' CC rules CC'd | View, mark read, comment |
 | Delegate | The stand-in a delegation rule names | While the delegation is active, tasks arriving for the delegator go to them (those already waiting stay); while their account cannot act, the delegation does not apply and the task stays with the delegator |
-| Administrator | A user granted the monitor, within their `FlowInstance` data scope | Monitor instances; terminate, run the steps after an approval again, reassign, delegate on someone's behalf, urge as an administrator |
+| Administrator | A user granted the monitor: instances within their `FlowInstance` data scope, delegations whatever their data scope | Monitor instances; terminate, run the steps after an approval again, reassign, urge as an administrator; see every delegation of the tenant, delegate on someone's behalf, cancel any delegation |
 
 The submitter and everyone the instance gives or gave a task to — approvers, whether or not they acted, CC recipients, transfer / delegation targets, and the approvers whose step closed without them — are the instance's **participants**: they view it without any configured permission, and comment on it while it runs. An administrator's urge, termination or reassignment makes them no participant. See [Who can see an approval](#who-can-see-an-approval).
 
@@ -409,10 +409,12 @@ In the [monitor](./api#monitor), within the caller's own `FlowInstance` permissi
 | Terminate | Instance running, waiting or failed; reason required; up to 100 at a time | Closes the pending approvals, instance <Status>Cancelled</Status>, record cancelled; a `TERMINATE` entry; submitter notified. The approvers whose tasks it closed still open the approval through those tasks |
 | Reassign | From-approver, to-approver (not the same) and a reason; the new approver's account can act (the preview refuses them too); affected tasks can be previewed first | Moves the from-approver's current pending tasks to the new approver, recorded as the from-approver's `TRANSFER` with the administrator as `operatorId`; merges the two seats when the new approver is already on the step, and a step the merge leaves with every approval it needs passes there and then, the approval going on; steps not yet reached are untouched |
 | Run the steps after the approval again | The instance failed after an approval, the record still waiting on it; on the same grant as terminating | See [When a step after an approval fails](#when-a-step-after-an-approval-fails) |
-| Delegate on behalf | A permission of its own, not limited by data scope; checked as the approver's own rule is | Creates a delegation rule for an approver, who sees it among their own delegations and can cancel it |
+| Delegate on behalf | A permission of its own, not limited by data scope, which also cancels any delegation of the tenant; checked as the approver's own rule is | Creates a delegation rule for an approver, who sees it among their own delegations and can cancel it; it routes only the tasks that arrive from then on — the ones already waiting are reassigned |
 | Urge as administrator | Can read the instance; not bound by the flow's `urgeEnabled` | As the submitter's urge, sharing its interval; each row of the monitoring list says whether an administrator may urge it now |
 
 None of these makes the administrator a participant of the instance: they view it and read its record with their own permissions, and do not comment on it.
+
+Every delegation of the tenant is seen with a permission of its own, also whatever the data scope: filtered by approver, delegate and status, the ended and cancelled ones included, each with who set it up and how many tasks it has routed (`POST /flow/monitor/delegations/search`).
 
 ### Batch actions
 

@@ -238,6 +238,7 @@ Design cases as combinations of status × role × configuration; each point belo
 - Terminate only a running, waiting or failed approval; a reason is required; the record is cancelled and the submitter told; an approver whose task the termination closed can still open the approval from the email.
 - Reassign: the preview counts the affected tasks; a reason is required; the original approver can be someone who left; a new approver already on the step merges with the old seat, and when that leaves the step with every approval it needs (an all-approve step of A, B and C, A and B approved, C reassigned to A) the step passes there and then and the approval goes on; the history shows the administrator.
 - Delegation on behalf: the approver sees the rule among theirs and can cancel it.
+- Every delegation: each rule of the tenant is listed (the ended and cancelled ones included), filtered by approver, delegate and status; a status filter holds the rules showing that status; one set up on someone's behalf shows the administrator as who set it up.
 
 ### Notices and CC
 

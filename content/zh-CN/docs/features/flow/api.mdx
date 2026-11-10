@@ -371,7 +371,7 @@
 - **生效期与状态**：规则在它的期间内生效——从开始时间起（不填则从创建起），到结束时间为止（不填则直到被取消）；期间内新到达的任务转给受托人，已在等待的任务不动。状态不存储，每次由规则本身算出（`FlowDelegationStatus`）：<Status tone="info">Scheduled</Status>（开始时间未到）、<Status tone="ok">Active</Status>（在期间内）、<Status tone="idle">Ended</Status>（结束时间已过）、<Status>Cancelled</Status>（委托人或管理员取消了）。任务路由和列表用同一个判断，列表里显示 Active 的，就是此刻会转任务的规则；没有任何东西会去关掉规则，存储的 `active` 只表示有没有被取消。
 - **校验**：规则必须有审批人和受托人、且是两个不同的人，受托人的账号要能使用（见[审批人解析](./approval#审批人解析)），起止都填时结束必须晚于开始，范围为 `Flow` 或 `Node` 时流程（及步骤）要在 `GET /flow/delegations/flows` 列出的范围内；否则不论谁创建都会被拒绝（`400`）。
 - **受托人不能使用时规则不生效**：任务到达时受托人的账号已不能使用（比如后来被冻结），任务留给审批人（委托链上则留给最后一个能使用的受托人），实例的 trace 里写明原因，不通知任何人。审批预览按同样的规则推演。
-- **列表**返回 `FlowDelegationView`：规则本身加上 `delegatorName`、`delegateName` 和此刻的 `status`。
+- **列表**返回 `FlowDelegationView`：规则本身加上 `delegatorName`、`delegateName`、此刻的 `status`，以及建立人 `createdBy`（委托人本人，或代他建的管理员）。
 
 ### 通讯录
 
@@ -431,7 +431,7 @@
 | `POST` | `/flow/monitor/approvers/reassign/preview` | 一次转派（`fromActorId` → `toActorId`）会移动该审批人在调用方权限可读实例上的多少个待审批任务：`FlowReassignPreview`（`tasks`、`instances`）。新审批人账号不能使用时拒绝（`400`），并写明是谁 |
 | `POST` | `/flow/monitor/approvers/reassign` | 以 `reason`（必填）把这些任务逐个移交给新审批人，每个各在自己的事务中处理：记为原审批人的 `TRANSFER`，调用方为 `operatorId`；新审批人获得该任务，提交人会被告知现在由谁处理。新审批人已在该步骤上时，与原审批人的位置合并（见[通过门槛](./approval#通过门槛)）；合并后这一步已经够票——新审批人已经同意过，被合并掉的又是最后一个还没同意的位置——这一步当场通过，实例接着往下走，和凑够票的那次同意一样。只移动实例当前等待的步骤——尚未到达的步骤在到达时才解析审批人；抄送任务保持不变。新审批人账号不能使用时整体拒绝（`400`），一个任务都不移动。返回 `FlowBatchActionResult` |
 | `POST` | `/flow/monitor/delegations` | 代某位审批人创建委托规则（请求体指明 `delegatorId` 与 `delegateId`），校验与他本人创建时相同（见[委托](#委托)）：此后到达其名下的任务转给受托人，该审批人也能在自己的委托中看到这条规则。它影响该审批人的全部任务，不受调用方数据范围限制，因此是一项单独的权限 |
-| `GET` | `/flow/monitor/delegations` | 租户的所有委托规则，最新在前，返回 `FlowDelegationView`（带双方姓名和此刻的状态） |
+| `POST` | `/flow/monitor/delegations/search` | 租户的全部委托规则，分页（`FlowDelegationMonitorSearchRequest`）：不论是谁的、谁建的，也不受调用方数据范围限制，最新的在前，返回 `FlowDelegationView`。`filters` 可以用 `FlowDelegation` 的存储字段，以及 `status`——用 `=`，表示此刻处于这个状态的规则，服务端按规则的生效期和是否取消换算成存储字段上的条件，和列表显示的状态是同一个判断；`orders` 只能用存储字段；其他字段 `400` |
 | `POST` | `/flow/monitor/delegations/{id}/cancel` | 停用租户的任意一条委托规则 |
 
 ## 持久化模型
