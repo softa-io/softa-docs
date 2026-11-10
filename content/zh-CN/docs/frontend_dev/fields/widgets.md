@@ -15,7 +15,7 @@
 
 | FieldType     | 默认行为                       | 支持的 WidgetType                                                              |
 | ------------- | ------------------------------ | ------------------------------------------------------------------------------- |
-| `String`      | 单行文本输入                   | `URL`, `Email`, `Phone`, `PlainText`, `RichText`, `TemplateEditor`, `Markdown`, `Code`, `Color`, `yyyy-MM`, `MM-dd`, `CronEditor` |
+| `String`      | 单行文本输入                   | `URL`, `Email`, `Phone`, `PlainText`, `RichText`, `TemplateEditor`, `Markdown`, `Code`, `Color`, `yyyy-MM`, `MM-dd`, `CronEditor`, `ModelName`, `ModelField` |
 | `Text`        | 多行文本域                     | `RichText`, `Markdown`, `Code`, `TemplateEditor`                                  |
 | `MultiString` | 标签式逗号/回车输入            | -                                                                                 |
 | `Integer`     | 数字输入                       | `Monetary`, `Percentage`, `Slider`                                                |
@@ -236,29 +236,50 @@
 
 ### `CronEditor`
 
-可视化 Cron 表达式编辑器。存储标准 cron 字符串（5 段或 6 段）。打开弹出面板，各 cron 位置（秒、分、时、日、月、周）为分标签页编辑。每个标签支持四种模式：Every（通配符）、Specific values（多选网格）、Range（起止区间）、Interval（从 X 起每 N）。面板显示实时表达式预览与后续若干次计划执行时间。
+Quartz cron 表达式，也就是后端调度器运行的写法（cron-starter 的 `SysCron`、flow-starter 的 Cron 触发器和定时节点）：`second minute hour day-of-month month day-of-week [year]`，星期 1–7 = SUN–SAT，日、周两个字段有一个写 `?`。字段显示为一个按钮，上面是服务端给出的调度含义，下面是表达式；点开面板，用 **Repeat** 选择编辑方式：
+
+- 常用调度——Every few minutes（1、2、3、4、5、6、10、12、15、20 或 30 分钟，都能整除一小时）、Every hour（第 mm 分）、Every day、Every weekday（周一到周五）、Every week（勾选星期几）、Every month（每月第 d 天），后四种再选时间 hh:mm；
+- Custom——按字段逐个设置，分 Minute、Hour、Day、Month 四个页签，每个字段可选 Every / Specific / Range / Interval。Day 页签先选**按每月几号还是按星期几**：Quartz 只取其中一个，另一个写 `?`；
+- Expression——直接输入表达式，用于面板表达不了的写法（`L`、`W`、`#`、年份、不是单个值的秒位）。
+
+秒位不提供编辑：始终是一个值（原表达式有别的值就保留，否则为 0），所以面板写出的调度每分钟最多触发一次。打开已有的值时按它的类型进入（`0 */15 * * * ?` 进 Every few minutes，`0 0 9 ? * MON-FRI` 进 Every weekday，`0 30 2 1 1 ?` 进 Custom，`0 0 9 L * ?` 进 Expression）；切换类型时，时间、星期和各字段会带过去。星期写成名称（`MON,WED`），读取时名称和 Quartz 数字都认。
+
+浏览器里不做任何计算：表达式是否被接受、含义和接下来的运行时间都来自服务端预览，草稿停止变化 400 ms 后请求——默认是 `GET /toolkit/previewCron`（调度器的规则），调用方也可以换成自己的预览。面板按服务器时区列出接下来的运行时间，显示被拒绝的原因，被拒绝时 **Apply** 不可点；**Clear** 清空字段。面板关闭后，拒绝原因仍显示在字段下方。用这个控件的页面需要在权限里带上预览接口（一条 bundle 进 `view` 的自定义权限，System › Scheduled Jobs 就是这样）。
 
 ```tsx
 <Field fieldName="cronExpression" widgetType="CronEditor" />
 ```
 
-```tsx
-<Field
-  fieldName="schedule"
-  widgetType="CronEditor"
-  widgetProps={{ format: "5-part" }}
-/>
-```
-
 `CronEditor` widget props：
 
-| Prop           | 类型                   | 默认值   | 说明                                           |
-| -------------- | ---------------------- | -------- | ---------------------------------------------- |
-| `format`       | `"6-part" \| "5-part"` | `"6-part"` | 6 段包含「秒」标签；5 段隐藏「秒」标签。     |
-| `showPreview`  | `boolean`              | `true`   | 是否在面板中显示后续执行时间预览。             |
-| `previewCount` | `number`               | `5`      | 展示的后续执行时间条数。                       |
+| Prop           | 类型     | 默认值 | 说明                                         |
+| -------------- | -------- | ------ | -------------------------------------------- |
+| `previewCount` | `number` | `5`    | 面板列出的后续运行次数（服务端允许 1–10）。 |
 
-值契约：标准 cron 格式的 `string`（例如 6 段 `"0 30 9 * * *"`，5 段 `"30 9 * * *"`），清空时为空字符串。
+值契约：Quartz 表达式 `string`（例如 `"0 30 9 * * ?"`），清空时为空字符串。
+
+表单之外，同一个编辑器是 `CronEditor`（`widgets/string/cron/CronEditor.tsx`）：`value` / `onChange` / `onBlur`，以及 `preview`——一个 `CronPreviewSource`（`{ key, load(expression, count) }`），指定由谁判断表达式。流程设计器的调度（`components/flow/panel/cron-input.tsx`）传入 `GET /flow/cron/preview`，它还会拒绝每分钟触发不止一次的调度。
+
+### `ModelName` / `ModelField` —— 选模型、选它的字段
+
+给"指定一个模型及其字段"的配置记录用的两个 widget，例如导入、导出模板。两者都存纯名称；后端 `WidgetType` 枚举里没有它们，由页面在 `<Field>` 上声明。
+
+```tsx
+<Field fieldName="modelName" widgetType="ModelName" />
+
+{/* 导出模板页：筛选、排序、导出列都针对上面选的模型。 */}
+<ModelFieldSourceProvider modelName={modelName} cascade>
+  <Field fieldName="filters" />
+  <Field fieldName="orders" />
+  {/* 每一行：<Field fieldName="fieldName" widgetType="ModelField" /> */}
+  <Field fieldName="exportFields" tableView={ExportTemplateFieldsTableView} />
+</ModelFieldSourceProvider>
+```
+
+- `ModelName` 从模型目录（`SysModel`，列表滚到底时再读下一页）里选一个模型，存它的 `modelName`。只能选目录里有的模型：手输的错名字能保存，要到有人用这条记录时才出错。流程设计器的模型选择框是同一个控件（`ModelCombobox`），在那里还允许输入目录里暂时没有的模型名。
+- `ModelField` 从外层 `ModelFieldSourceProvider` 指定的模型里选一个字段，存字段名；在关联下选的则存点路径。没有 provider 时退回普通文本框：页面没说自己在编辑哪个模型，就不算启用，猜一个会把别的模型的字段当成有效选项给人选。
+- `ModelFieldSourceProvider`（`components/fields/core/model-field-source.tsx`）一次性声明里面的选择器针对哪个模型，所以在独立弹窗里编辑的子表行也知道（context 能穿过弹窗的 portal）。`modelName` 是该模型——还没有时，选择器在选定之前什么都不提供；`country` 把 `ModelField` 收窄到该国家用到的字段；`cascade` 还提供该模型多对一 / 一对一关联下一层的字段（`deptId.code`），每个关联在点开或开始搜索时才读取。`Filters`、`Orders` 构建器也读同一个 provider（见下文）。
+- 只有在服务端会解析这种路径的地方才打开 `cascade`。导出会：筛选、排序靠连表，导出列靠读关联记录。导入模板不打开：导入列用"按哪个键查找关联记录"来指定关联，这个更窄的选择由导入对话框负责。
 
 ### `Markdown`
 
@@ -817,11 +838,14 @@ JSON 编辑器 widget props：
 <Field fieldName="filters" />
 ```
 
+规则针对字段所属模型的字段；放在 `ModelFieldSourceProvider` 里时则针对它指定的模型，未指定时不提供字段——导出模板的 `filters` 针对的是它导出的模型，而不是 `ExportTemplate`。provider 开了 `cascade` 时，规则还可以选多对一 / 一对一关联下一层的字段，存为点路径；已保存规则用到的关联会随字段一起读取，所以按标签显示，读完之前构建器不能打开。流程的数据节点（Get data、Query records、Update data、Delete data）的 `filters` 也这样展开关联，因为它们按节点模型做查询。`allowedFields` 里的点路径（`employeeId.departmentId`）只展开这些关联、只列出点名的字段，有没有 provider 都一样：流程规则只提供后端为它列出的路径。只列条件能读的字段：没有级联的 `dynamic` 字段没有列，查询和内存规则都判断不了它；经关联走到的字段必须是存储字段——后端只在条件直接写级联字段名时才改写成路径（`isFilterablePathLeaf`）。
+
 `Filters` widget props：
 
 | Prop            | 类型       | 默认值 | 说明                   |
 | --------------- | ---------- | ------ | ---------------------- |
-| `allowedFields` | `string[]` | -      | 可搜索字段白名单。     |
+| `allowedFields` | `string[]` | -      | 可搜索字段白名单；点路径（`employeeId.departmentId`）同时展开该关联、只列出点名的字段；两层的路径（`employeeId.departmentId.costCentreId`）在第一层关联里面再展开第二层。 |
+| `dialogDescription` | `string` | - | 条件能读什么，显示在 Advanced Filter 弹窗标题下方，用于与列表筛选不同的场景（流程规则写明读什么、何时读值）。 |
 | `excludeFields` | `string[]` | -      | 在构建器中隐藏的字段。 |
 
 ### `Orders`
@@ -829,6 +853,8 @@ JSON 编辑器 widget props：
 ```tsx
 <Field fieldName="orders" />
 ```
+
+字段来源与 `Filters` 构建器相同：字段所属模型，或 `ModelFieldSourceProvider` 指定的模型；开了 `cascade` 时可以按多对一 / 一对一关联下一层的字段排序（`deptId.code`），查询会连表。
 
 `Orders` widget props：
 

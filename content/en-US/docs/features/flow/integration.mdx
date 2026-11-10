@@ -1,0 +1,277 @@
+# Integration
+
+<Lead>
+
+This page is for developers integrating Flow: putting a business model through approval (approving business records), publishing default flows, what to confirm before enabling `flow-starter` in a host application, and its configuration and extension points.
+
+</Lead>
+
+For the triggers and messaging automation flows need, see [Automation](./automation#trigger-and-messaging-integration).
+
+## Approving Business Records
+
+<Lead>
+
+A business record is approved by an Approval flow of its document: its model, controller and handler each plug in once; the framework keeps the approval state, and the handler holds what only the business knows.
+
+</Lead>
+
+A business record — a leave request, an expense claim — is approved by an Approval flow of its document: its trigger is a `SubmitTrigger` naming the record's model (`modelName`) and, optionally, which of its records it takes. The business side plugs in at three places:
+
+| Part | How | In place of |
+|---|---|---|
+| Model | Extends `ApprovalModel` (`entity`) | `AuditableModel` |
+| Controller | Extends `ApprovalModelController` | `EntityController` |
+| Handler | The host implements one `ModelApprovalHandler<T>` per model (`runtime/spi`, a Spring bean) | — |
+
+`ApprovalModelController` gives every such model the same three endpoints, granted per model like any other: `POST /{Model}/submit?id=`, `POST /{Model}/withdraw?id=` (body `{comment}`, optional) and `POST /{Model}/cancel?id=`, through `FlowClient`. What a submission would do is answered for every model by `GET /flow/instances/preview`.
+
+Every record has an **employee**: the employee it is about, whom the organization-relative approver sources start from (see [Approver Resolution](./approval#approver-resolution)). It is the model's `employeeId` unless the handler's `subject()` names another field (`Transfer::getTransfereeId`); either way a many-to-one onto the employee model (`softa.flow.org.employee-model`), which the boot checks. A record whose employee is empty is not submitted. The submission carries it to the flow as the start variable `_subjectId`.
+
+### Framework and handler
+
+The framework keeps the approval state, the same for every model:
+
+- The approval fields — `approvalStatus` (`ApprovalStatus`), `submitterId`, `submittedTime` — and every write of them
+- The one state machine (see [Record approval status](./approval#record-approval-status)): only a draft is submitted or cancelled; one approval of a record at a time
+- Freezing every record that is not a draft (`ApprovalLockValidator`)
+- Writing each result back, once
+- Writing an approver's edits — only the fields their step lets them change
+- What a submission records on the instance: the employee, department, effective date, number
+
+The handler holds what only the business knows:
+
+| When | Method | What it does |
+|---|---|---|
+| Submission | `validate(record)` | The checks a submission must pass — who may submit the record, what it must hold |
+| Submission | `submission(record)` | An `ApprovalSubmission(title, variables, effectiveDate, code, summary)` — the instance title and the routing variables it adds to the record's own fields, worked out from the record alone, and, when the model has them, the date the record takes effect, its own number and a one-line summary (256 characters at most), which the approval lists show and filter on |
+| Submission | `afterSubmitted(record)` | What a submission sets off, such as reserving a leave balance |
+| An approver's edits | `afterApproverEdit(record, editedFields)` | The model's own rules on what an approver changed, as its page applies them on save — values the server works out, lines that must stay consistent; throwing refuses the approve, the edits with it |
+| The outcome | `afterOutcome(record, outcome)` | The follow-up actions of a result, such as deducting the balance — or releasing it after a rejection or a cancellation |
+| Cancelling a draft | `validateCancel(record)` | Who may cancel the draft beyond seeing it, such as only its claimant |
+| After approval | `effectStatuses(rowIds)` | For a model whose approval takes effect later, where each approved record's change stands (`RecordEffectStatus`: `Scheduled`, `Applied`, `Failed`), read from the records themselves, never guessed from dates. Empty by default, for a model whose approval takes effect at once |
+
+<FlowFigure name="sequenceEn">
+
+Where the handler sits on the main path: ③ `validate`, ④ `submission` and ⑦ `afterSubmitted` run in the submission — ⑦ once the record is `Pending`, before its approval instance starts; ⑩ calls `afterApproverEdit` when an approver changed fields; ⑬ `afterOutcome` comes after the result is written back. ①–⑧ all run in the caller's transaction.
+
+</FlowFigure>
+
+### Routing variables
+
+An approval starts with every field of the record a route can compare, under the field's name. The designer offers the same fields, so a rule condition on an edge can read every one of them.
+
+- **In**: its own columns of a plain type — text, numbers, booleans, dates and times (as ISO text), options and multi-options (item codes), multi-strings, to-one relations (the id).
+- **Out**: its identity, bookkeeping and approval state (`id`, `tenantId`, `version`, `deleted`, the audit fields, `approvalStatus`, `submitterId`, `submittedTime`); any field declared sensitive — encrypted, or masked when read — since an instance's variables are not read through the record's field permissions; a field with no value.
+- **Read through a relation**: when the flow's rules name a path (`employeeId.departmentId`, or up to two levels on, as `employeeId.departmentId.costCentreId`), the start reads those fields from the related records and carries them under the path; only the paths the rules use — the rule and when it is read are in [Routing: edge conditions](./index#the-two-kinds-of-condition).
+- **Added by the handler**: the handler's `submission` adds what it works out from the record on top — a value read through another model, such as the company's currency — and one of the same name replaces the field's. To branch on a related record's field, write the path in the rule; the handler need not add a variable for it.
+
+### Calling from business code
+
+Business code submits, withdraws and cancels records, and reads their approval history and previews, through `FlowClient`:
+
+| `FlowClient` | What happens |
+|---|---|
+| `submitRecord(modelName, rowId)` | Submits the record and starts its approval; the steps follow the table |
+| `withdrawRecord(modelName, rowId, comment)` | Withdraws the waiting approval (the engine checks the actor is the submitter and the flow's `withdrawPolicy` permits it); the record is a draft again. When the record's approval **failed**, its submitter takes the record back the same way — the handler is told it was withdrawn; the failed instance stays for flow monitoring. Refused when the record has no approval in progress |
+| `cancelRecord(modelName, rowId)` | Cancels a draft for good: the submitter must reach the record within the range they may edit it in, as for `submitRecord`, it must be a draft, and `handler.validateCancel` must pass. The record becomes `Cancelled` and `handler.afterOutcome` gets a `Cancelled` result with no instance. In the caller's transaction |
+| `recordApprovals(modelName, rowId)` | The approval history, as `GET /flow/instances/by-record` |
+| `previewRecord(modelName, rowId)` | The approval a submission would start, as `GET /flow/instances/preview` — see [Previewing a record's approval](./approval#previewing-a-records-approval). Call it outside a transaction |
+| `previewValues(modelName, values)` | The same for a record not saved yet: its field values, as they are stored (ids, codes) and the employee among them, stand for the row — a draft, so only the employee and the handler's `validate` / `submission` are worked out, from the values alone. For a record the application files as it submits it (a pay run's approval request), whose route shows before it exists. No endpoint serves it: the caller's own endpoint decides who may ask. Outside a transaction, as `previewRecord` |
+
+`submitRecord`, in order:
+
+1. **The submitter reaches the record**: the submitter must reach the record within the range they may edit it in: submitting writes it, so the range counted is that of the submitter's roles holding the model's update action, not the wider one of every role that may view it — a role that only views a department's requests submits none of them. A submitter none of whose roles holds the update action keeps the range they read in.
+2. **Only a draft**: only a draft with no approval in progress is submitted.
+3. **The business checks**: `handler.validate` then checks the whole record as the submitter, and `handler.submission` returns the instance title and the routing variables it adds to the record's fields.
+4. **The flow is chosen** from the document's enabled Approval flows: exactly one whose submit condition holds, else, when none does, the flow without a condition (the document's default) takes it; with no default either, or with several holding, the submission is refused naming why.
+5. **The approval starts**: the record becomes `Pending`, with its submitter and the time, `handler.afterSubmitted` runs, and the record's approval starts.
+
+All in the caller's transaction. Every submission starts a new approval from the beginning — after a return too, on the revision effective now — and marks the record's earlier approvals `superseded`.
+
+### A record's approval
+
+- **Only the instance a submission starts is the record's approval**: an automation run on the same record is not, and is never written back (an API start of an Approval flow is refused — its trigger is `Submit`).
+- **A record has at most one approval in progress**: a second submission is refused even when two arrive at once.
+- **A submission also records on its instance**, as they stand at submission, what the approval lists show and filter on (see [Instance search](./api#instance-search)): `subjectId` — the employee the record is about — and `departmentId`, that employee's department (read past the submitter's permissions), the department data scopes narrow by (see [Monitor](./api#monitor)); `effectiveDate`, `recordCode` and `summary` from the handler's `ApprovalSubmission`.
+- **The `summary`** is a line saying what the record asks for (a leave's days and dates, a claim's amount), worded with `ApprovalSummaries`' pieces (a date as `12 Nov 2026`, a range `12 Nov 2026 – 14 Nov 2026`, a quantity `1.5 days`, an amount `SGD 1,234.50`), kept on the instance (`FlowInstance.summary`, at most 256 characters, cut beyond) and worked out again after an approver's edits. Like the title it is shown to everyone the approval reaches, past the fields its steps hide, so it names only what all of them may see — never a sensitive field such as pay.
+- **Each submission marks the record's earlier approvals `superseded`**, so an approval `Returned` and not superseded is one whose record still waits to be edited and submitted again (`awaitingRevision`).
+
+<Dev title="Internals: telling the record's approval apart, refusing a second submission">
+
+- The record's approval is marked by `FlowExecutionState.recordApproval`.
+- `FlowInstance.openRecordId` holds the record's id while its approval is unfinished, under a unique index with the model, so a second submission is refused even when two arrive at once.
+- The employee's department is read with `OrganizationService.getDeptIdOfEmployee`.
+
+</Dev>
+
+## Steps
+
+<Lead>
+
+Using a leave request as the example, a document takes five steps: its model, controller, handler, default flows and grants.
+
+</Lead>
+
+1. **The model extends `ApprovalModel`** (instead of `AuditableModel`) and gets `approvalStatus`, `submitterId` and `submittedTime`; the record needs an employee field pointing at the employee model (`employeeId` by default). For record numbers, add an auto-numbered field: a record submitted again after a return keeps its number, and the number is recorded on the approval instance for lists to show and filter.
+2. **The controller extends `ApprovalModelController`** (instead of `EntityController`) and gets the `submit`, `withdraw` and `cancel` endpoints, authorised per model.
+3. **Implement `ModelApprovalHandler<T>`** as a Spring bean:
+
+```java
+@Component
+public class LeaveRequestApprovalHandler implements ModelApprovalHandler<LeaveRequest> {
+    public Class<LeaveRequest> modelClass() { return LeaveRequest.class; }
+
+    public void validate(LeaveRequest r) { /* enough balance? overlapping dates? */ }
+
+    public ApprovalSubmission submission(LeaveRequest r) {
+        return new ApprovalSubmission(
+            "Leave · " + r.getEmployeeName(),                           // instance title, shown in lists and notifications
+            Map.of(),                                                    // routing variables beyond the record's own fields — none here
+            r.getStartDate(),                                            // effective date
+            r.getCode());                                                // record number
+    }
+
+    public void afterOutcome(LeaveRequest r, ApprovalOutcome outcome) {
+        // Approved → deduct the balance; Rejected / Cancelled → release the reservation
+    }
+}
+```
+
+4. **Publish the default flows**: each default flow is one `FlowDesign` row in a tenant seed file (scenario `Approval`, `"enabled": true`, trigger `{"type": "Submit", "modelName": "LeaveRequest"}` naming its document; several of one document each say by their submit condition which records they take, as a leave and its cancellation do by `leaveRequestType`) — see [Default flows as seeds](#default-flows-as-seeds) below. Name built-in roles by role code, and never make a role nobody holds a default approver, or the step resolves no one in every tenant.
+5. **Grant access**: authorise the `submit` and `withdraw` endpoints (cancelling a draft comes with `submit`); grant the monitor endpoints and a data scope on `FlowInstance` to administrators' roles.
+
+For the frontend's submit and withdraw buttons, the approval path preview and the approval history panel, see [Form view](../../frontend_dev/views/form).
+
+> [!WARNING]
+>
+> `afterOutcome` does only what belongs to the outcome and is written to this database. Anything that leaves it — a payment, an external system — goes after the commit, or a rolled-back approval cannot take it back.
+
+## Default flows as seeds
+
+<Lead>
+
+Default flows reach tenants as tenant seed files and are published as they load; tenants then edit their own copy, and only a platform admin's reapply of the file brings the template back over it, on purpose.
+
+</Lead>
+
+- **One `FlowDesign` row per file**: its Submit trigger naming the document it approves (`{"type": "Submit", "modelName": ...}`) and the row saying `"enabled": true` (the column is required, and a seed row is written as it is); publishing puts the document into the `FlowDesign.modelName` lookup column.
+- **Published as it loads**: when seed-starter announces the rows a file wrote, each new design is published; a design that does not compile fails the file in that tenant.
+- **Then the tenant's own**: tenants edit their own copy in the designer, and a run never brings the template back over it.
+- **A reapply overwrites**: a reapply of the file by the platform admin does, on purpose, and the designs it rewrites are published again, so the instances started afterwards follow what the design now says.
+
+<Dev title="Who publishes them (SeedFlowPublisher)">
+
+seed-starter announces the rows a file wrote with `SeedFileLoadedEvent`, and `SeedFlowPublisher` publishes each new design from it.
+
+</Dev>
+
+## Host Application Integration Checklist
+
+<Lead>
+
+Before enabling `flow-starter` in a real app, verify each item below, grouped as dependencies, business records, organization and directory, permissions, notifications, and the message queue and task nodes.
+
+</Lead>
+
+**Dependencies**
+
+- add `flow-starter` to the application classpath
+- create and expose `FlowDesign` drafts through the generic model APIs
+
+**Business records**
+
+- for business records: extend `ApprovalModel` (with an `employeeId`, or a `subject()` naming the employee field) and `ApprovalModelController`, implement a `ModelApprovalHandler<T>` per model — with `effectStatuses` when its approval takes effect later — and ship each default flow as a tenant seed file
+
+**Organization and directory**
+
+- check the organization follows the default HR conventions, or override `softa.flow.org.*`, or provide your own `OrganizationService` — implementing `getUnusableAccounts` too, or every account counts as able to act, and `getRoleNames`, or a step handed to roles (`AssignToRole`) names them by id and code
+- point `softa.flow.org.directory-model` at a projection of the employees that shows only what a directory does, and give every role a scope on it — a role without one finds nobody in the pickers; an application with its own `OrganizationService` implements the five directory methods, or the pickers find nobody
+
+**Permissions**
+
+- list `GET /flow/delegations/flows` with the permission that reads delegation rules (the Flow and step dropdowns of a rule scoped to one flow or step, and the step a listed rule names)
+- list the directory reads — `GET /flow/directory/people` and `/people/by-ids` for people, `/departments` and `/departments/by-ids` for departments — in the permissions of the pages whose pickers use them (approving, managing one's delegations, the designer, the monitor), and `/people/all` and `/people/all/by-ids` in the designer's and the monitor's alone, not in `permission.authenticated-bypass-patterns`, where they would skip the endpoint gate (see [Directory](./api#directory))
+- grant the monitoring console's endpoints and a data scope on `FlowInstance` to the administrators' roles (a department scope narrows by the department of the employee the record is about)
+- list the per-instance reads the approval page makes — `GET /flow/instances/{instanceId}` and its `/summary`, `/design`, `/record`, `/overlay`, `/trace`, `/urge`, `/withdraw` — and, for a page keyed by the record, `GET /flow/instances/by-record/record`, in the permissions that open approvals: the endpoint gate refuses an endpoint no permission lists, and the access guard decides the rest
+- list `POST /flow/approvalTasks/search` in the permission that reads the user's own tasks — it replaced `GET /flow/approvalTasks/pending`, `/completed` and `/cc` — and ship the SQL that fills the task list fields of existing rows (see [Approval Tasks](./api#approval-tasks))
+
+**Notifications**
+
+- for approval emails: set `system.site-url` (the link in each email) and give each tenant the `flow.*` mail templates — or turn `emailNotification` off on the flows; provide your own `ApprovalNotificationService` for SMS or IM
+- set `flow.notification.failure-role-codes` if failed approvals should reach roles other than `TENANT_ADMIN`
+
+**Message queue and task nodes**
+
+- enable Pulsar topics if using triggers or async tasks
+- for `Timer` nodes, set `mq.topics.flow-timer.topic` (a Timer node schedules its own wake-up) and switch on the maintenance cron `flow_timer_sweep` for wake-ups lost on the way (see [Automation](./automation#trigger-and-messaging-integration))
+- enable `CALL_SERVICE` explicitly (plus its bean-name allow-list) if flows need to invoke Spring beans; all other task node types ship working executors, conditionally registered on their capability beans
+
+## Configuration
+
+<Lead>
+
+These are the properties flow-starter reads; the models and fields the default organization service reads sit under `softa.flow.org.*`, each one overridable.
+
+</Lead>
+
+| Property | Default | What it does |
+|---|---|---|
+| `flow.notification.failure-role-codes` | `TENANT_ADMIN` | The roles whose holders are told, besides the submitter, when a record's approval fails |
+| `flow.trigger-cache-ttl-seconds` | `60` | How long the trigger-matching cache keeps an entry (see [Persistence Model](./api#persistence-model)) |
+| `flow.automation.retention-days` | `30` | How many days a finished automation run is kept before the maintenance cron `flow_automation_purge` deletes it |
+| `flow.task.builtin.call-service.enabled` | `false` | Turns the `CallService` task node on |
+| `flow.task.call-service.allow-list` | empty | Required once `CallService` is on: the bean-name prefixes it may call, comma-separated |
+| `flow.task.builtin.query-records.enabled` | `true` | `false` to register your own `QueryRecords` executor |
+| `softa.flow.org.*` | see below | The models and fields the default `FlowOrgService` reads the organization from (`OrganizationServiceProperties`) |
+| `system.site-url` | none | The prefix of the link in approval emails (`/home/approvals/{instanceId}`); empty when unset |
+| `mq.topics.*` | none | Each producer and consumer registers only when its topic is set — see [Trigger And Messaging Integration](./automation#trigger-and-messaging-integration) |
+
+<Dev title="softa.flow.org.* and its defaults">
+
+| Property | Default |
+|---|---|
+| `employee-model` | `Employee` |
+| `directory-model` | unset: the employee model; see [Directory](./api#directory) |
+| `account-id-field` | `userId` |
+| `name-field` | `fullName` |
+| `code-field` | `code` |
+| `dept-id-field` | `departmentId` |
+| `position-id-field` | `jobPositionId` |
+| `supervisor-id-field` | `piEmployeeId` |
+| `department-model` | `Department` |
+| `dept-name-field` | `name` |
+| `dept-code-field` | `code` |
+| `dept-leader-id-field` | `picEmpId` |
+| `dept-hrbp-id-field` | `hrbpEmpId` |
+| `parent-dept-id-field` | `parentId` |
+| `role-model` | `UserRoleRel` |
+| `role-id-field` | `roleId` |
+| `role-user-id-field` | `userId` |
+| `role-definition-model` | `Role` |
+| `role-code-field` | `code` |
+| `role-name-field` | `name` |
+| `account-model` | `UserAccount` |
+| `account-status-field` | `status` |
+| `approver-account-statuses` | `Active` |
+| `max-dept-depth` | `10`, how far a department lookup walks up or down, against cycles |
+
+</Dev>
+
+## Extension Points
+
+<Lead>
+
+An application bean of the same type replaces or adds to the default.
+
+</Lead>
+
+| Bean | Default | What it is for |
+|---|---|---|
+| `ModelApprovalHandler<T>` | none; one per approval model | The record's business part: checks, title and routing variables, what a result sets off (see [Approving Business Records](#approving-business-records)) |
+| `OrganizationService` | `FlowOrgService` | Finding approvers in the organization, whether an account can act, the directory (see [Approver Resolution](./approval#approver-resolution)) |
+| `ApprovalNotificationService` | `CompositeApprovalNotificationService` (inbox + email) | Replaces all notices; to add a channel, declare a `CompositeApprovalNotificationService` of your own (see [Notifications](./approval#notifications)) |
+| `FlowClient` | `InProcessFlowClient` | The in-process port business modules approve records through (see [API & Data](./api#api-overview)) |
+| `TaskExecutor` | the bundled executors | One executor per task node type — two for one type fail the boot; to replace the bundled `QueryRecords`, switch it off first (see [Configuration](#configuration)) |
+| `FlowValidator` | the built-in validators | Further publish checks, reported with the built-in diagnostics; an `Error` stops a publish |
+| `flowDeadLetterPolicy` | at most 3 redeliveries | The dead-letter policy every flow-starter Pulsar consumer shares; a message still failing goes to the broker's default DLQ topic (`<topic>-<subscription>-DLQ`) |

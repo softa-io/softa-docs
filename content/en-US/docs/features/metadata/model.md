@@ -70,12 +70,23 @@ In scenarios where model data is paginated, when the client specifies a sorting 
 
 For example, `name ASC` means sorting by the `name` field in ascending order. Multiple fields can have different sorting conditions, and multiple sorting conditions are separated by commas, such as `name ASC, amount DESC`. When ASC or DESC sorting is not specified, ASC ascending order is used by default, equivalent to `name, amount DESC`.
 
-Sorting priority when paginating model data:
+Sorting priority:
 * (1) Sorting conditions specified by the client;
-* (2) Model's default sorting rule;
-* (3) Global default sorting rule ``id ASC``.
+* (2) The model's default sorting rule, for paged and non-paged queries alike;
+* (3) The global default sorting rule ``id DESC`` (newest first), for paged queries only;
+* (4) The ONE_TO_MANY lines and MANY_TO_MANY tags a record's read expands come in entry order (`id` ascending, then `sliceId` on a timeline model). Any other non-paged query on a model with no default sorting rule is not sorted.
 
-No default sorting rule is specified for non-paginated queries.
+In the `@Model` annotation each element of `defaultOrder` is one sort, written `"field"` or `"field:dir"`: `{"sequence", "name"}` sorts by `sequence`, then `name`. `{"id", "desc"}` names two fields, `id` and `desc`, and fails the boot.
+
+A paged query (a list, an export, the name search `/searchName`, a batch job reading page by page) then ends the order with the model's physical primary key (`sliceId` on a timeline model), in the direction of the first sort, so the order is total: where the sort fields repeat a value, pages still neither repeat nor skip a row, and the page size and total stay as they were.
+
+Conventions for declaring it:
+* A model with an ordering number (`sequence`, `sortOrder`, `priority` and the like) sorts by it, after its parent record when it belongs to one, such as `{"optionSetCode", "sequence"}` — unless the number is only a running count assigned as rows are written;
+* Other master data (departments, positions, employees, and other data people pick): by name or display fields, such as `{"name"}`, or `{"fullName", "code"}` for employees;
+* Records (requests, records, logs, send records and the like): no declaration — a paged read falls back to newest first. The id is unique and indexed, so there are no ties; do not sort them by `createdTime`;
+* Detail lines and sub-tables: entry order by default, no declaration; only a business order is declared, such as a line number `{"lineNo"}`, a sequence, or the effective date, newest first `{"effectiveStartDate:desc"}`.
+
+A backend read that depends on the order (taking the first row, processing in sequence) states its own order instead of relying on the default.
 
 ### 2.5 `displayName` Display Name
 
@@ -172,7 +183,7 @@ Whether creates / updates / deletes on this model build change logs — the reco
 
 Set it to `false` on reports and derived data that are rewritten in bulk: their rows have no history worth keeping, because the source data's own change log is the audit trail. The model then has no Audit Log history, its rows no longer appear in a parent record's history, and no data-change flow fires on it, so check that no flow is bound to the model first. In the frontend, the Form view renders no Audit Log panel for such a model (see [Form](../../frontend_dev/views/form#built-in-behavior)).
 
-Upgrading an existing database: an environment that runs with an empty `scanner-scope` adds the column by hand with migration V41; see [Audit log switch](../../backend_dev/model_dev/annotation#audit-log-switch-enableauditlog).
+Upgrading an existing database: an environment that runs with an empty `scanner-scope` adds the column by hand, with SQL the deploying app ships in its release; see [Audit log switch](../../backend_dev/model_dev/annotation#audit-log-switch-enableauditlog).
 
 ### 2.20 `multiCountry` Multi-country
 

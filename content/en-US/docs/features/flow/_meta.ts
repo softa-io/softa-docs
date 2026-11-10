@@ -4,4 +4,5 @@ export default {
   automation: "Automation",
   integration: "Integration",
   api: "API & Data",
+  design: "Design notes",
 }

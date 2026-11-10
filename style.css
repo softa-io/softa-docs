@@ -131,3 +131,299 @@ body{
 .dark .nextra-mobile-nav {
   background-color: rgba(17, 17, 17, 0.97) !important;
 }
+
+/* --------------------------------------------------------------------------
+   Doc blocks (components/docs/doc-blocks.tsx): Lead, Dev, Status, FlowFigure,
+   RoleCards. One colour per status everywhere; the diagrams draw with the same
+   tokens, so they follow the light / dark theme. The accent is the blue of the
+   site's links (Nextra's primary hue 212), written out: the site does not
+   define Nextra's primary-colour variables on the root element.
+   -------------------------------------------------------------------------- */
+
+:root {
+  --sd-fg: #17212b;
+  --sd-muted: #5b6573;
+  --sd-line: #dde1e7;
+  --sd-surface: #ffffff;
+  --sd-sunken: #f1f3f6;
+  --sd-accent: #006be6;
+  --sd-accent-soft: rgba(0, 107, 230, 0.08);
+  --sd-ok: #17754b;
+  --sd-ok-soft: #e1f3e9;
+  --sd-warn: #9a5500;
+  --sd-warn-soft: #fbeedb;
+  --sd-bad: #b3261e;
+  --sd-bad-soft: #fbe4e1;
+  --sd-info: #2455c3;
+  --sd-info-soft: #e4ebfb;
+  --sd-idle: #626c7c;
+  --sd-idle-soft: #e9ecf0;
+}
+
+.dark {
+  --sd-fg: #e3e8ee;
+  --sd-muted: #9aa6b3;
+  --sd-line: rgba(255, 255, 255, 0.14);
+  --sd-surface: #161a1f;
+  --sd-sunken: #1f252c;
+  --sd-accent: #60a5fa;
+  --sd-accent-soft: rgba(96, 165, 250, 0.14);
+  --sd-ok: #4fc48d;
+  --sd-ok-soft: #13301f;
+  --sd-warn: #e6a446;
+  --sd-warn-soft: #33250f;
+  --sd-bad: #f07f70;
+  --sd-bad-soft: #3b1a16;
+  --sd-info: #82a6f5;
+  --sd-info-soft: #182645;
+  --sd-idle: #a1aab8;
+  --sd-idle-soft: #262c34;
+}
+
+/* Lead: the conclusion before the details. Nextra spaces paragraphs with
+   `not-first:mt` utilities, so spacing inside the blocks is set firmly. */
+.sd-lead {
+  margin: 0.75rem 0 1.5rem;
+  max-width: 46em;
+  color: var(--sd-muted);
+  font-size: 1.0625rem;
+  line-height: 1.8;
+}
+h1 + .sd-lead {
+  font-size: 1.125rem;
+}
+.sd-lead p {
+  margin: 0 !important;
+  line-height: inherit !important;
+}
+.sd-lead p + p {
+  margin-top: 0.5rem !important;
+}
+
+/* Dev: collapsed implementation detail. */
+.sd-dev {
+  margin: 1rem 0 1.5rem;
+  border: 1px dashed var(--sd-line);
+  border-radius: 10px;
+  background: var(--sd-surface);
+}
+.sd-dev > summary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.875rem;
+  cursor: pointer;
+  list-style: none;
+  color: var(--sd-muted);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.sd-dev > summary::-webkit-details-marker {
+  display: none;
+}
+.sd-dev > summary::before {
+  content: '▸';
+  display: inline-block;
+  width: 0.75em;
+  transition: transform 0.15s;
+}
+.sd-dev[open] > summary::before {
+  transform: rotate(90deg);
+}
+.sd-dev > summary:hover .sd-dev-title {
+  color: var(--sd-fg);
+}
+.sd-dev-tag {
+  padding: 0 0.5rem;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  color: var(--sd-accent);
+  font-size: 0.75rem;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+.sd-dev-tag::before {
+  content: '开发者';
+}
+:lang(en) .sd-dev-tag::before {
+  content: 'Developer';
+}
+.sd-dev-body {
+  padding: 0.125rem 0.875rem 0.875rem 2.125rem;
+  font-size: 0.875rem;
+  line-height: 1.75;
+}
+.sd-dev-body p {
+  line-height: inherit !important;
+}
+.sd-dev-body > :first-child {
+  margin-top: 0 !important;
+}
+.sd-dev-body p:not(:first-child),
+.sd-dev-body ul:not(:first-child),
+.sd-dev-body ol:not(:first-child),
+.sd-dev-body table:not(:first-child) {
+  margin-top: 0.75rem !important;
+}
+
+/* Status: one chip colour per status. */
+.sd-status {
+  display: inline-block;
+  padding: 0 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.8;
+  white-space: nowrap;
+  vertical-align: 0.05em;
+}
+.sd-idle { background: var(--sd-idle-soft); color: var(--sd-idle); }
+.sd-info { background: var(--sd-info-soft); color: var(--sd-info); }
+.sd-ok { background: var(--sd-ok-soft); color: var(--sd-ok); }
+.sd-bad { background: var(--sd-bad-soft); color: var(--sd-bad); }
+.sd-warn { background: var(--sd-warn-soft); color: var(--sd-warn); }
+.sd-cancel { background: var(--sd-idle-soft); color: var(--sd-fg); }
+
+/* RoleCards: where each reader starts. */
+.sd-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 1.25rem 0 0.5rem;
+}
+@media (max-width: 640px) {
+  .sd-cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.sd-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.875rem 1rem;
+  border: 1px solid var(--sd-line);
+  border-radius: 10px;
+  background: var(--sd-surface);
+  color: inherit;
+  text-decoration: none !important;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+.sd-card:hover {
+  border-color: var(--sd-accent);
+  background: var(--sd-accent-soft);
+}
+.sd-card-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  color: var(--sd-fg);
+  font-weight: 600;
+}
+.sd-card-arrow {
+  color: var(--sd-accent);
+  transition: transform 0.15s;
+}
+.sd-card:hover .sd-card-arrow {
+  transform: translateX(2px);
+}
+.sd-card-body {
+  color: var(--sd-muted);
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+
+/* FlowFigure: inline SVG diagrams. */
+.sd-figure {
+  margin: 1.25rem 0 1.75rem;
+}
+.sd-figure-canvas {
+  overflow-x: auto;
+  padding: 12px;
+  border: 1px solid var(--sd-line);
+  border-radius: 10px;
+  background: var(--sd-surface);
+}
+.sd-figure svg {
+  display: block;
+  width: 100%;
+  min-width: 660px;
+  height: auto;
+  font-family: inherit;
+}
+.sd-figure figcaption {
+  max-width: 60em;
+  margin-top: 0.5rem;
+  color: var(--sd-muted);
+  font-size: 0.8125rem;
+  line-height: 1.75;
+}
+.sd-figure figcaption p {
+  margin: 0 !important;
+  line-height: inherit !important;
+}
+.sd-figure figcaption p + p {
+  margin-top: 0.375rem !important;
+}
+.sd-figure .life { stroke: var(--sd-muted); stroke-opacity: 0.55; stroke-dasharray: 3 4; }
+.sd-figure .who rect { fill: var(--sd-sunken); stroke: var(--sd-line); }
+.sd-figure .who-t { fill: var(--sd-fg); font-size: 13.5px; font-weight: 600; }
+.sd-figure .edge { fill: none; stroke: var(--sd-fg); stroke-width: 1.3; }
+.sd-figure .edge.notice { stroke-dasharray: 5 4; }
+.sd-figure .edge.writes { stroke: var(--sd-muted); stroke-dasharray: 2 3; }
+.sd-figure .edge.off { stroke: var(--sd-muted); stroke-dasharray: 4 4; }
+.sd-figure .ah { fill: var(--sd-fg); }
+.sd-figure .ah-muted { fill: var(--sd-muted); }
+.sd-figure .lbl { fill: var(--sd-fg); font-size: 12.5px; }
+.sd-figure .lbl-sub { fill: var(--sd-muted); font-size: 11.5px; }
+.sd-figure .hdr { fill: var(--sd-muted); font-size: 12px; font-weight: 600; letter-spacing: 0.04em; }
+.sd-figure .dot { fill: var(--sd-fg); }
+.sd-figure .badge { fill: var(--sd-accent); }
+.sd-figure .badge-t { fill: var(--sd-surface); font-size: 11px; font-weight: 700; }
+.sd-figure .frame { fill: var(--sd-accent-soft); stroke: var(--sd-accent); stroke-opacity: 0.6; stroke-dasharray: 4 3; }
+.sd-figure .frame-t { fill: var(--sd-accent); font-size: 12px; font-weight: 600; }
+.sd-figure .group { fill: var(--sd-sunken); fill-opacity: 0.6; stroke: var(--sd-line); }
+.sd-figure .sn rect { stroke-width: 1.3; }
+.sd-figure .sn .name { font-size: 14px; font-weight: 600; }
+.sd-figure .sn .code { fill: var(--sd-muted); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; }
+.sd-figure .wb-t { font-size: 12px; font-weight: 600; }
+.sd-figure g.wb rect { stroke: none; }
+.sd-figure .s-idle rect { fill: var(--sd-idle-soft); stroke: var(--sd-idle); }
+.sd-figure .s-idle .name, .sd-figure .s-idle .wb-t { fill: var(--sd-idle); }
+.sd-figure .s-info rect { fill: var(--sd-info-soft); stroke: var(--sd-info); }
+.sd-figure .s-info .name { fill: var(--sd-info); }
+.sd-figure .s-ok rect { fill: var(--sd-ok-soft); stroke: var(--sd-ok); }
+.sd-figure .s-ok .name, .sd-figure .s-ok .wb-t { fill: var(--sd-ok); }
+.sd-figure .s-bad rect { fill: var(--sd-bad-soft); stroke: var(--sd-bad); }
+.sd-figure .s-bad .name, .sd-figure .s-bad .wb-t { fill: var(--sd-bad); }
+.sd-figure .s-warn rect { fill: var(--sd-warn-soft); stroke: var(--sd-warn); }
+.sd-figure .s-warn .name { fill: var(--sd-warn); }
+.sd-figure .s-cancel rect { fill: var(--sd-idle-soft); stroke: var(--sd-fg); }
+.sd-figure .s-cancel .name, .sd-figure .s-cancel .wb-t { fill: var(--sd-fg); }
+.sd-figure .nd rect { fill: var(--sd-surface); stroke: var(--sd-fg); stroke-opacity: 0.5; stroke-width: 1.2; }
+.sd-figure .nd .t { fill: var(--sd-fg); font-size: 13px; font-weight: 600; }
+.sd-figure .nd .s { fill: var(--sd-muted); font-size: 11.5px; }
+.sd-figure .chip rect { stroke-width: 1.2; }
+.sd-figure .chip text { font-size: 12.5px; font-weight: 600; }
+.sd-figure .chip.bad rect { fill: var(--sd-bad-soft); stroke: var(--sd-bad); }
+.sd-figure .chip.bad text { fill: var(--sd-bad); }
+.sd-figure .chip.ok rect { fill: var(--sd-ok-soft); stroke: var(--sd-ok); }
+.sd-figure .chip.ok text { fill: var(--sd-ok); }
+.sd-figure .txn { fill: var(--sd-accent-soft); stroke: var(--sd-accent); stroke-width: 1.2; }
+.sd-figure .txn.warn { fill: var(--sd-warn-soft); stroke: var(--sd-warn); }
+.sd-figure .txn-t { fill: var(--sd-accent); font-size: 12px; font-weight: 600; }
+.sd-figure .txn-t.warn { fill: var(--sd-warn); }
+.sd-figure .lane { fill: var(--sd-sunken); fill-opacity: 0.5; stroke: var(--sd-line); }
+.sd-figure .lane.bad { fill: var(--sd-bad-soft); fill-opacity: 0.55; stroke: var(--sd-bad); stroke-opacity: 0.45; }
+.sd-figure .lane-t { fill: var(--sd-fg); font-size: 13.5px; font-weight: 600; }
+.sd-figure .lane-t.bad { fill: var(--sd-bad); }
+.sd-figure .nd.off rect { stroke-dasharray: 4 3; stroke-opacity: 0.35; }
+.sd-figure .nd.off .t { fill: var(--sd-muted); font-weight: 500; }
+.sd-figure .nd.end rect { fill: var(--sd-idle-soft); stroke: var(--sd-idle); stroke-opacity: 1; }
+.sd-figure .nd.end .t { fill: var(--sd-idle); }
+.sd-figure .gw { fill: var(--sd-surface); stroke: var(--sd-fg); stroke-opacity: 0.7; stroke-width: 1.3; }
+.sd-figure .gw-g { fill: none; stroke: var(--sd-fg); stroke-width: 1.6; stroke-linecap: round; }
+.sd-figure .pill rect { fill: var(--sd-surface); stroke: var(--sd-line); }
+.sd-figure .pill text { fill: var(--sd-fg); font-size: 12px; }
+.sd-figure .pill.off text { fill: var(--sd-muted); }
+.sd-figure .xmark { fill: none; stroke: var(--sd-bad); stroke-width: 2.6; stroke-linecap: round; }
+.sd-figure .mono { fill: var(--sd-muted); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; }

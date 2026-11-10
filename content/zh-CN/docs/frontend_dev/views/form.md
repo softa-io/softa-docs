@@ -788,7 +788,7 @@ resolver 的上下文（`@mode`、`USER_ID`、声明的字段类型）在 **reso
 
 推荐默认布局：
 
-- Header：标题 + 描述
+- Header：标题，模型描述放在标题后的帮助图标里；页面可在标题下加一行这条记录的说明
 - 粘性工具栏：
   - 左侧：内置 `FormEditStatus + FormPrimaryActions`（`ModelForm/ModelSideForm enableWorkflow=true` 时还有 `FormWorkflowActions`）
   - 右侧：业务动作区（自定义动作 + 内置 Duplicate/Delete + More Actions）
@@ -817,6 +817,8 @@ resolver 的上下文（`@mode`、`USER_ID`、声明的字段类型）在 **reso
 | `enableDelete`         | `boolean`                 | No       | auto                                  | 内置删除动作开关。三态解析与 `enableCreate` 相同。 |
 | `enableUpdate`         | `boolean`                 | No       | auto                                  | 路由只读模式下工具栏 `Edit` 按钮的开关。`false` 隐藏该按钮；不影响表单自身的只读状态。受 `update`（或 `updatePermissionId`）门控。 |
 | `updatePermissionId`   | `string`                  | No       | -                                     | 授权在本页编辑的权限 id，覆盖 `MODEL_PERMISSIONS` 中按模型查找的 `update`。用于由另一模型上的 `customPermission` 管理的页面（工作流草稿页）。 |
+| `submitPermissionId`   | `string`                  | No       | -                                     | 审批类单据已保存记录上 **Submit**（**Cancel Draft** 随它）的权限 id，覆盖按模型查找的 `submit`。同一模型的 submit 在多个页面声明时——审批中心也提交的单据（LeaveRequest、OvertimeRequest、ExpenseClaim、AttendanceExceptionRequest）——按模型查不出结果，按钮会对所有人显示，由页面自己指定。 |
+| `withdrawPermissionId` | `string`                  | No       | -                                     | 同上，用于 **Withdraw**，覆盖按模型查找的 `withdraw`。 |
 | `confirmDeleteMessage` | `string`                  | No       | `Delete this {modelLabel}? This action cannot be undone.` | 内置删除动作的确认文案。 |
 | `timeline`      | `ModelFormTimelineConfig` | No       | -                                     | 时间轴模型行为开关（`enableAddVersion` / `enableVersionPanel` / `versionSummaryFields`，均可选）。仅当 `metaModel.timeline` 为 true 时生效；见下文「时间轴模型」。 |
 | `sliceId`       | `string \| null`          | No       | `?sliceId=` 搜索参数                  | 仅时间轴模型的编辑模式：加载指定版本（切片）而非 as-of 行（按 `sliceId` 跨时间轴 `searchList`）。整页表单通常用 `?sliceId=<x>` 搜索参数（对话框模式忽略）；嵌入式表单直接传该 prop。 |
@@ -852,9 +854,9 @@ resolver 的上下文（`@mode`、`USER_ID`、声明的字段类型）在 **reso
 | Prop          | Type        | Required | Default                                      | Notes                                     |
 | ------------- | ----------- | -------- | -------------------------------------------- | ----------------------------------------- |
 | `title`       | `string`    | No       | `metaModel.label` (fallback `pageTitle`) | 可选覆盖。                        |
-| `description` | `string`    | No       | `metaModel.description`                      | 可选覆盖。                        |
+| `description` | `string`    | No       | -                                            | 标题下关于这条记录的一行：编号、期间、状态等。不传时，模型描述（`metaModel.description`）改放在标题后的帮助图标里：它在每条记录上都一样，不单占一行，与字段描述放在标签后的图标里同理。传 `""` 两者都不显示。 |
 | `extras`      | `ReactNode` | No       | -                                            | 标题附近渲染的额外 header 内容。时间轴模型在编辑模式下，header 会在 `extras` 之前自动渲染 `FormSliceBadge`：当前加载版本的生效区间（`Current · 2026-01-01 → ongoing`，`9999-12-31` 显示为 `ongoing`），带 Current / Past / Future 色调，回答"我正在看哪个版本"；非时间轴模型或新建模式不渲染。 |
-| `children`    | `ReactNode` | No       | -                                            | 描述下方的展示模式内容。`Field` 子节点通过 `FieldDisplayScope` 以只读值渲染。行内布局使用 `Group`。 |
+| `children`    | `ReactNode` | No       | -                                            | 标题下方的展示模式内容（有 `description` 行时在其后）。`Field` 子节点通过 `FieldDisplayScope` 以只读值渲染。行内布局使用 `Group`。 |
 
 **带展示模式子节点的 FormHeader：**
 
@@ -985,6 +987,7 @@ import { FormBody, FormTab } from "@/components/views/form/components/FormBody";
 | `children`  | `ReactNode` | No       | -       | 自定义动作。推荐：`<Action type="..." />`。 |
 | `className` | `string`    | No       | -       | 工具栏容器的额外 wrapper class。           |
 | `leading`   | `ReactNode` | No       | -       | 填充左侧区域，如紧凑的记录摘要。此时放在工具栏的动作移到右侧区域，位于 Edit / Save 之后、Create New / More 之前。 |
+| `trailing`  | `ReactNode` | No       | -       | 页面自己放在右侧区域的控件，位于记录的审批按钮之后（传了 `leading` 时还在工具栏动作之后）、紧挨 Create New / More 之前——用于 `<Action>` 表达不了的按钮，如审批人带对话框的 Approve / Reject，它们因此和表单自带的 Submit / Withdraw 处在同一位置。放在工具栏的动作仍留在左侧区域。和其他内容一样，只有它渲染出的按钮才会让工具栏保持可见。 |
 
 空工具栏不绘制。工具栏内什么都没渲染时——没有按钮、没有新增版本的日期输入框、没有编辑状态标签——外框（边框、内边距、粘性栏）也一并隐藏，这样页面上没有任何可用动作的读者看到的是标题直接衔接内容，而不是一个空框。每个控件仍各自决定可见性（Edit 取决于 update 权限，Create New / More Actions 取决于各自的权限，Save / Cancel 取决于模式）；工具栏通过 `src/styles/globals.css` 中的 `[data-form-toolbar]` 规则检查实际渲染出了什么，而不是重新计算这些条件。新放进工具栏的内容只要渲染出 `button` 或 `input` 就自动适用；纯文本项需要加上同样的 `data-form-edit-status` 标记才能让工具栏保持可见。以 `leading` 传入的内容（如记录摘要）同样会让工具栏保持可见，因此没有可用动作的读者仍能看到它。
 

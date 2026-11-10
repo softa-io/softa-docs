@@ -43,6 +43,17 @@ File Starter 支持三种导出模式：
 | `sequence` | Integer | `null` | 导出中的字段顺序 |
 | `ignored` | Boolean | `null` | 是否在输出中忽略该字段 |
 
+### 保存时检查
+
+导出模板在写入时按它的 `modelName` 检查，用的是导出运行时的规则——softa-orm 的 `FieldPaths`，它说明 WHERE、ORDER BY 和级联读取各自接受什么：
+
+- `modelName` 必须是元数据里的模型；
+- `filters` 里的每个字段必须能放进 WHERE：经多对一 / 一对一关联连表，或经一对多 / 多对多关联走子查询，最后落在存储字段上；
+- `orders` 里的每个字段必须能放进 ORDER BY：只能经多对一 / 一对一关联，最后落在存储字段上；
+- 每一列的 `fieldName` 必须能读取：只能经多对一 / 一对一关联，最多四层——导出解析列标题和取值用的就是这条规则。
+
+和导入模板一样，字段在写入设置它时检查；模板改用另一个模型时，会重新检查 filters、orders 和这次写入保留下来的列。
+
 ### 级联字段导出
 三种导出模式均支持使用点分路径语法的**级联字段引用**（如 `deptId.name`、`deptId.companyId.code`）。
 这允许通过 ManyToOne/OneToOne 关联导出关联模型的字段。

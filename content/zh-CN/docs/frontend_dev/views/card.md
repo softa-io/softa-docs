@@ -323,6 +323,10 @@ import { SideTree } from "@/components/views/shared/side-panel/SideTree";
 
 活动过滤/排序状态在工具栏下方以可清除徽章显示。
 
+Filter 与 Sort 对话框提供的字段与 `ModelTable` 的相同：模型可筛选的字段（含级联字段），去掉调用者永远看不到的敏感字段（已有规则用到的除外）；Filter 对话框还能展开模型的多对一、一对一关联，下一层字段以点路径列出（`useListFilterFields`，见 [表格](./table#字段能力规则)）。活动筛选徽章按标签显示这类规则。
+
+这一行由共用的 [ListToolbar](../components/list-toolbar) 排布，与 `ModelTable` 的相同：Filter / Sort / Refresh 和 Create 放不进搜索框旁边时换到单独一行并靠右，而不是挤压搜索框。
+
 ## 核心属性
 
 | 属性          | 类型                                                          | 必填 | 默认值 | 说明                                                                                                        |

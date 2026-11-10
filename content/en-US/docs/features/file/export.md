@@ -43,6 +43,17 @@ Front-end export is limited to `100000` records for a single request; over-limit
 | `sequence` | Integer | `null` | Field order in export |
 | `ignored` | Boolean | `null` | Whether to ignore the field in output |
 
+### Checked when saved
+
+An export template is checked against its `modelName` when it is written, by the rules the export applies when it runs — `FieldPaths` in softa-orm, which states what the WHERE builder, the ORDER BY builder and the cascaded read accept:
+
+- `modelName` must be a model of the metadata;
+- every field of `filters` must be able to stand in a WHERE: through to-one relations by a join, or a to-many one by a sub-query, ending on a stored field;
+- every field of `orders` must be able to stand in an ORDER BY: through to-one relations only, ending on a stored field;
+- each column's `fieldName` must be readable: through to-one relations only, up to four levels — what the export resolves its headers and values with.
+
+As for import templates, a field is checked when the write sets it, and moving a template to another model re-checks its filters, orders and the columns the write keeps.
+
 ### Cascaded Field Export
 All three export modes support **cascaded field references** using dotted-path syntax (e.g. `deptId.name`, `deptId.companyId.code`).
 This allows exporting fields from related models through ManyToOne/OneToOne associations.

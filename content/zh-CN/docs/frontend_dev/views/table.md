@@ -14,6 +14,7 @@
 - [Dialogs](./dialogs)
 - [ModelForm](./form)
 - [Actions](../actions)
+- [ListToolbar](../components/list-toolbar) — 工具栏这一行的布局与固定筛选的药丸，不是 ModelTable 的列表也用它
 ## 快速开始
 
 ```tsx
@@ -68,7 +69,7 @@ type ModelTableRowData = { id: string };
 - 顶层查询 `fields` 从这些声明自动生成
 - 顶层 `orders` 是声明默认排序的推荐方式
 - `initialParams` 是非列查询参数（如 `filters`、`pageSize`、`groupBy`、`effectiveDate`）的高级逃生舱
-- `children` 可混合 `<Field />`、`<Action />` 与 `<BulkAction />`
+- `children` 可混合 `<Field />`、`<Action />`、`<BulkAction />` 与 `<PinnedFilter />`（见 [固定筛选](#固定筛选)）
 - 至少需要一条可见 `<Field />` 声明
 
 示例：
@@ -219,8 +220,8 @@ import { dependsOn, Field } from "@/components/fields";
 行为：
 
 - 默认 `inlineEdit={false}`
-- `false`：点击行以只读模式导航到详情页（除非 `enableClick={false}` 完全禁用行点击）
-- `true`：点击行激活该行行内编辑（优先于 `enableClick`）
+- `false`：每行是指向其只读详情页的链接，或指向 `rowHref` 给出的地址（见 [行链接](#行链接)）；`enableClick={false}` 时行不响应点击，给出 `onRowClick` 时改为回调页面
+- `true`：点击行激活该行行内编辑，行不是链接（优先于 `rowHref`、`onRowClick` 与 `enableClick`）
 - 可编辑单元格在表格单元格内直接渲染 `Field`
 - 活动行显示行级 `Save` / `Cancel`
 - 活动行有实际变更前 `Save` 保持禁用
@@ -294,6 +295,36 @@ type UserAccountRow = ModelTableRowWith<{
 完整参考（props、插槽、自定义面板）见
 [Side Panel](../components/side-panel)。
 
+## 固定筛选
+
+列表始终要按它读取的筛选 —— 我的待办上的申请类型与提交人、报表的天数窗口或期间 —— 声明为表格的 `<PinnedFilter>` 子节点，显示为工具栏里、搜索框之后的药丸：一个按钮里是筛选名和当前值，点开就是控件。它是侧栏在工具栏里的对应物：表格把它的值和列表其余查询状态放在一起，把它带来的条件 AND 合并进查询，按 tab 记住，并随 Clear all 复位。
+
+```tsx
+import { PinnedFilter } from "@/components/views/table/pinned-filter";
+
+<ModelTable modelName="FlowApprovalTask" dataSource={source}>
+  <PinnedFilter fieldName="flowId" label="Type" control={FlowTypeSelect} defaultValue={null} />
+  <PinnedFilter fieldName="initiatorId" label="Submitter" control={SubmitterPicker} defaultValue={null} />
+  <Field fieldName="instanceTitle" label="Request" />
+</ModelTable>
+
+// 不对应某个字段的筛选给自己起 id，并说明它的值给列表带来什么条件。
+<ModelTable modelName="BirthdayCountdown" filters={["status", "=", "Active"]}>
+  <PinnedFilter id="days" label="Days Until Birthday" control={DaysWithinFilter} defaultValue={30} toFilter={buildBirthMonthDayFilter} />
+  <Field fieldName="fullName" />
+</ModelTable>
+```
+
+- `control` 是取值控件，一个接收 `PinnedFilterControlProps<TValue>` 的组件：`value`、`onChange`、`label`、`options`，以及给药丸用的 `active` 和 `onReset`。值的类型从它读出，而不是从 `defaultValue`。控件用 `src/components/views/shared/list-toolbar/` 里的药丸画出自己（见 [ListToolbar](../components/list-toolbar)）—— `PinnedFilterPopover`（要勾选的项、要挑的日期 —— 弹层里放控件）、`PinnedFilterSelect`（几个值里选一个，子节点是 `SelectItem`）或 `PinnedFilterSearch`（搜索后选一条记录，列表只在弹层打开时挂载，所以只在那时搜索）—— 传入 `label`、`active`、`onReset` 和值在药丸上的读法（`summary`："All types"、"2026-01-01 – 2026-03-31"）。日期范围不必自己写控件：用同一目录的 `DateRangeFilter`，配 `toFilter={(range) => dateRangeCondition("field", range)}`。`options` 从声明原样传入，用于页面给下拉列表的选项（报表列出的证件类型）。
+- `toFilter(value)` 是某个值给列表带来的条件，没有条件时返回 null / undefined。不给时，筛选把 `fieldName` 与值比较：单个值用 `=`，值的列表用 `IN`，引用（`{ id, displayName }`）比较其 id，空值（null、`""`、`[]`）不带条件。不对应字段的筛选给出 `id` 和 `toFilter`；既无 `fieldName` 也无 `id`、无字段又无 `toFilter`、两个筛选同 id，都会在表格渲染时被拒绝。
+- `defaultValue` 是列表开始时的值。值不等于默认值的药丸会高亮，旁边有一个 × 把它恢复为默认值；Clear all 把所有药丸都恢复。选过的值以 JSON 存进该 tab 记住的视图（快照上的 `pinnedFilters`，见 [视图状态持久化](#视图状态持久化)），因此从记录返回、切换 tab 或刷新后，列表仍按离开时的筛选读取。从未动过或已恢复的筛选每次都读默认值，所以随日期变化的默认值（本月）会跟着变；记住的值与默认值不是同一种（默认是范围、记住的是文本）时，说明来自旧版页面，会被丢弃。
+- 这些条件像其他筛选一样并入查询（见 [筛选优先级与合并行为](#筛选优先级与合并行为)）：改值后列表从第一页重新读取，数据源的 `fetch` 在 `filters` 里收到它们，导出也带上。它们不生成标签 —— 药丸自己显示着值 —— 数据源的 `queryFields` 也不限制它们：它们是页面的声明，不是用户在通用控件里挑的字段。
+- 用 × 或 Clear all 恢复某个筛选时，会重新绘制它的控件，控件自己的草稿（自定义天数、尚未有效的日期范围）也一并重来。保存草稿的控件在挂载时从 `value` 取初值即可，无需别的处理。
+- 依赖某个固定筛选的单元格用 `usePinnedFilterValue(id)` 读它的值：名册报表的离职日期，在工具栏上选的期间到达之前保持空白。
+- 工具栏这一行是一个 `ListToolbar`，所以每个表格放不下时都换行而不是挤压，任何东西都不会重叠：搜索框和药丸保持自身宽度；按钮 —— 表格自己的和页面的（Create、`<Action placement="toolbar">`、选中行时的批量操作）—— 放不进同一行时整组换到下一行并靠右；一行连两组按钮都放不下时，两组再各占一行。有固定筛选的表格还会在工具栏宽度小于 64rem 时（工具栏上的 container query，`collapseLabels`）让表格自己的按钮（Filter、Sort、Group、Columns、More）只显示图标，无障碍名称和悬停提示仍在，More 保留选中数；页面的按钮始终保留文字。所以药丸和按钮都多时，会是一行筛选、下面一行按钮；在较窄的屏幕上选中行，按钮也可能换到第二行（My Tasks 在 1440px 下出现批量操作时）。没有固定筛选的表格按钮保留文字，放不下时更早换到第二行。
+
+在用的控件：`FlowTypeSelect` 与 `SubmitterPicker`（`src/app/flow/approval-inbox/components/approval-list-filters.tsx`），`FlowDesignPicker`、`FlowStatusSelect`、`EmployeePicker` 与 `DepartmentFilter`（`src/app/flow/flow-instance/components/monitor-filters.tsx`），`DaysWithinFilter`、`DocumentTypeFilter` 与 `PeriodPicker`（`src/app/corehr/report/components/`），以及共用的 `DateRangeFilter`（PCP 报表、Flow Instances）。
+
 ## 列头筛选
 
 每列表头暴露筛选 popover（漏斗图标），产生 `ColumnFilterValue`。列筛选与顶层 `filters`、workspace、侧栏与工具栏筛选进入同一合并管道 —— 见 [筛选优先级](#filter-precedence-and-merge-behavior)。
@@ -306,15 +337,20 @@ type UserAccountRow = ModelTableRowWith<{
 
 字段是否出现在工具栏的 filter / sort / groupby 选择器，以及列头是否渲染筛选 / 排序图标，由 `src/components/views/table/utils/field-capability.ts` 中同一套 helper 决定。工具栏选择器与列头使用相同 helper，始终一致。
 
-- `isFilterableField` —— 仅排除 `dynamic=true`。所有 `FieldType`（含 `File`、`MultiFile`、`OneToMany`、`ManyToMany`、`JSON`、`Filters`、`Orders`、`DTO`）保留筛选能力，因为 `filter-operators.ts` 为其定义操作符（至少 `IS SET` / `IS NOT SET`）。
-- `isSortableField` —— 排除 `dynamic=true`**以及**八种不可排序 `FieldType`：`File`、`MultiFile`、`OneToMany`、`ManyToMany`、`JSON`、`Filters`、`Orders`、`DTO`。
+- `isFilterableField` —— 排除 `dynamic=true`，级联字段除外（`cascadedField = "deptId.companyId"`）：条件直接写级联字段名时，后端 `WhereBuilder` 把它改写成路径并连表。其余 `FieldType`（含 `File`、`MultiFile`、`JSON`、`Filters`、`Orders`、`DTO`）保留筛选能力，因为 `filter-operators.ts` 为其定义操作符（至少 `IS SET` / `IS NOT SET`）。
+- `isFilterablePathLeaf` —— 经关联走到的字段（`employeeId.departmentId` 的 `departmentId`）必须是存储字段：后端连到关联记录、比较这个字段的列，只在条件直接写级联字段名时才改写成路径，路径末端的级联字段跑不了。一对多/多对多也是 dynamic，同样排除。所有能展开关联的条件选择器（列表的 Filter 对话框、角色数据范围、`Filters` 构建器）都用它判断路径末端。
+- `isSortableField` —— 排除 `dynamic=true`（级联字段也排除）**以及**八种不可排序 `FieldType`：`File`、`MultiFile`、`OneToMany`、`ManyToMany`、`JSON`、`Filters`、`Orders`、`DTO`。
 - `isGroupableField` —— 与 `isSortableField` 相同规则。
 
-`dynamic=true` 字段不会出现在 filter / sort / groupby 选择器，列头也不渲染筛选或排序图标。
+不能筛选的 `dynamic` 字段不会出现在 filter 选择器，`dynamic` 字段都不出现在 sort / groupby 选择器；列头按同样的规则渲染筛选或排序图标。
+
+工具栏的 Filter 对话框还能展开列表模型的多对一、一对一关联，下一层的字段以点路径列出（`hooks/useRelationFilterFields.ts` 的 `useListFilterFields`）：请假单可以按员工的部门筛选（`employeeId.departmentId`），员工可以按档案的状态筛选（`employeeProfileId.status`）。关联在点开、开始搜索或已有规则用到它时才读取元数据。经关联走到的字段要能结束路径（`isFilterablePathLeaf`）、能作为列显示（`isColumnCandidateField`），并且是调用者能看到的字段——后端对调用者看不到的字段，条件一行都不匹配；一对一子表还去掉它指回列表模型的引用和审计字段，与 Columns 对话框一致。规则存为点路径，后端连表；经关联的条件受调用者在关联模型上的行范围和敏感字段授权约束，筛选不会回答调用者读不到的行或字段的问题。活动筛选摘要同样按标签显示这类规则，只读取规则用到的关联。由数据源（`queryFields`）应答的列表不展开关联。卡片视图的工具栏提供同样的字段和关联。
+
+`FilterDialog` 自己编辑草稿（`utils/filter-tree.ts` 的 `updateFilterNode` / `removeFilterNode`，删到最后一条规则时留一条空规则，不会把筛选删空），调用方只提供怎样新建规则和分组。标题下面说明筛选的作用，有关联分组时还说明关联可以展开；能选的字段与列表不同的调用方传 `description`：薪资组的适用范围（只能用薪资分组依据的字段）、流程规则（经关联最多读两层、在流程启动时读值；数据变化触发器只读变化记录自身的字段）。
 
 ## 统一活动工具栏状态
 
-工具栏活动状态区可显示并清除：
+工具栏下方这一行显示用户如何收窄、排序或分组了列表，每项都能撤销：
 
 - 树筛选标签
 - 列筛选标签
@@ -322,13 +358,19 @@ type UserAccountRow = ModelTableRowWith<{
 - 排序摘要
 - 分组摘要
 
-`Clear all` 一并清除所有活动工具栏状态。
+它只放与列表本身视图不同的东西，所以页面刚打开时的列表没有这一行：
+
+- 页面自己的排序（`orders` / `initialParams.orders`）不生成标签 —— 列头箭头已经显示了它。别的排序会生成，它的 × 恢复页面的排序；页面有排序、但用户去掉了排序的列表显示 `Sort: None`。
+- 页面的基础条件（`filters` / `initialParams.filters` / tab 的筛选）也不生成标签：Filter 对话框在规则上方以 "Always applied" 完整、换行地写出它 —— 用户想知道某人为何在或不在列表里时会去看的地方。
+- [固定筛选](#固定筛选)不生成标签：药丸自己显示着值。
+
+`Clear all` 一并清除所有活动工具栏状态，并把排序恢复为页面默认而不是清空 —— 否则刻意排序的列表会变成任意顺序，并且该 tab 会一直记住这个状态。它也把每个固定筛选恢复为默认值。
 
 ## 视图状态持久化
 
 表格会记住**查询状态**，进入记录详情再点 Back —— 或刷新同一 tab —— 会回到原位置，而非重置为默认视图。
 
-持久化查询状态：分页（页码 + 页大小）、排序、group-by、工具栏筛选树、列头筛选、搜索词，以及侧栏（`SideTree` / `SideList` / `SideCard`）选择。状态存于 `sessionStorage`，按 `view kind + modelName + route + 活动 MultiView tab` 作用域，通过共享模块 `src/components/views/shared/view-state/`。
+持久化查询状态：分页（页码 + 页大小）、排序、group-by、工具栏筛选树、列头筛选、搜索词、侧栏（`SideTree` / `SideList` / `SideCard`）选择，以及[固定筛选](#固定筛选)中选过的值。状态存于 `sessionStorage`，按 `view kind + modelName + route + 活动 MultiView tab` 作用域，通过共享模块 `src/components/views/shared/view-state/`。
 
 行为：
 
@@ -347,6 +389,76 @@ type UserAccountRow = ModelTableRowWith<{
 - **Stale-while-revalidate 无处不在**：全局查询默认 `staleTime: 0`（`src/providers/query-provider.tsx`），每次挂载 instant 渲染缓存数据 —— 无 skeleton 闪烁 —— 同时后台 refetch 替换为新鲜数据。覆盖表格主查询、侧栏、sidecar 与详情 `getById`；是无法枚举的 invalidation 的安全网。真正静态数据的 hook（元数据、选项集、区号、默认值）自行 pin 更长 `staleTime`。
 - **写入时前缀 invalidation**：每条 mutation 路径（表单保存、default / dialog / custom 动作、批量操作、删除）调用 `invalidateModelQueries`，使键以模型名开头的*所有*缓存查询失效 —— 表格页、侧栏、board 计数、sidecar join 与记录缓存同样适用。仍在挂载的视图在写入发生时由此刷新。
 
+窗口重新获得焦点时不重新读取（全局 `refetchOnWindowFocus: false`）：在另一个标签页做的写入，要到下次挂载或失效时才显示。行会在另一个标签页里被处理的列表，通过数据源要求在获得焦点时重新读取（见 [数据源](#数据源)）。
+
+## 数据源
+
+`dataSource` 让表格从页面自己的端点读取行，而不是 `/{model}/searchPage` —— 用于通用模型 API 无法提供给其读者的列表，例如审批中心的任务箱，由服务端限定为调用方本人：
+
+```tsx
+const source = useApprovalTasksSource("Pending", ["nodeLabel", "submittedTime", "startTime"]);
+const hrefOf = useApprovalRequestHref(); // 每行的链接：其申请页，或在单独标签页打开的算薪批次
+
+<ModelTable<FlowApprovalTaskView>
+  modelName="FlowApprovalTask"
+  dataSource={source}
+  rowHref={hrefOf}
+  renderRowActions={(task) => <TaskActions task={task} />}
+>
+  <Field fieldName="nodeLabel" label="Task" />
+  <Field fieldName="initiatorId" label="Submitter" renderCell={(row) => actorLabel(row.initiator)} />
+  <Field fieldName="startTime" label="Received" />
+</ModelTable>
+```
+
+它是 `{ key, fetch, queryFields?, refetchOnWindowFocus? }`（`ModelTableDataSource`，基于 `src/hooks/useSearchPageQuery.ts` 的 `PageDataSource`）。`fetch({ filters, orders, pageNumber, pageSize })` 返回一页 `Page`。`key` 是数据源各页的缓存键，查询参数追加在其后：以模型名开头，模型写入时运行的失效（`invalidateModelQueries`、审批动作的 `["FlowApprovalTask"]`）就会像刷新 searchPage 列表一样刷新它。键不同即是另一个列表，从第一页开始。`refetchOnWindowFocus: true` 让窗口每次重新获得焦点时重新读取各页，覆盖应用默认的不读取（见 [数据新鲜度](#数据新鲜度)）：用于行会在读者离开期间、在另一个标签页里变化的列表 —— 我的待办和我的申请，其中薪资批次审批在单独的标签页打开并在那里处理。
+
+其余一切仍来自模型元数据，与 searchPage 列表相同：列、列标签与字段类型、基于模型 `searchName` 的搜索框（`["searchName", "CONTAINS", term]`）、列头筛选、排序、分页、Columns 对话框、记住的查询状态与列排布。它们像对 searchPage 一样合并为 `filters` / `orders` —— 包括 `filters` prop 与 workspace 筛选 —— 只有这些与页码到达数据源：字段列表、子查询、分组与聚合属于 searchPage，从不发送。没有 `orders` prop 时，用户选择排序之前不发送排序，数据源自己的默认顺序生效；一旦发送排序就会替换它。
+
+筛选与排序只针对模型的存储字段：`dynamic` 字段（包括级联字段）两者都不提供，指向其他记录的路径和一对一关联也不提供（否则 Filter 对话框会展开其子字段）。`queryFields` 进一步收窄为数据源支持的字段 —— 列头只在这些字段上筛选和排序，Filter 与 Sort 对话框也只列出这些 —— 页面借此把原始 id（单元格显示名称的 `initiatorId` 列）或读者读不到其选择器的关联排除在筛选之外。在模型命名字段（其 `searchName`、主键）上的筛选值改为手输而非选择，因为选择器通过模型的通用 `searchName` 列出行（`filters/FilterValueInput.tsx` 的 `FilterOwnModelRowsContext`）。
+
+凡依赖模型通用端点的功能一律关闭，不论页面或调用方的授权如何：Create、Import、Export、Bulk edit、批量 Delete、行内编辑、Group 控件、pivot 列、侧栏（`SideTree` / `SideCard` / `SideList`）、sidecar，以及逐行访问检查（`getRecordAccess`）。页面自己的动作 —— `<Action>`、`renderRowActions`、`renderBulkActions` —— 照常运行，调用它们各自的端点。
+
+页面在工具栏里显示的收窄条件（例如在那里选的申请类型）是一个[固定筛选](#固定筛选)：它的条件和其余查询一起放在 `filters` 里到达 `fetch`，它变化时列表回到第一页，tab 也会记住它。数据源本身在 `fetch` 和 `key` 里都不涉及这类选择。
+
+## 行链接
+
+打开某个页面的行就是指向它的链接：默认指向记录的详情页（`${pathname}/${id}?mode=read`，或 `linkTo` 下的页面），或指向 `rowHref(row)` 返回的地址。浏览器把它当作真正的链接：普通点击在当前标签页打开，Cmd/Ctrl 点击与鼠标中键在新标签页打开，Shift 点击在新窗口打开，右键菜单提供"在新标签页中打开"与"复制链接地址"，悬停时状态栏显示地址。Tab 每行停一次，Enter 打开。
+
+```tsx
+// Flow Designs：流程在设计器中打开，仅限能打开设计器的人；其他人点行不打开任何页面。
+<ModelTable
+  modelName="FlowDesign"
+  enableClick={false}
+  rowHref={mayOpenDesigner ? (row) => flowDesignEditRoute(row.id) : undefined}
+>
+  {/* … */}
+</ModelTable>
+
+// My Tasks：每个申请在当前标签页打开其申请页，算薪批次的审批在单独标签页打开批次页 ——
+// (task) => "/home/approvals/record/LeaveRequest/9" | { href: "/payroll/tenant-run/pay-run/5", target: "_blank" }
+const hrefOf = useApprovalRequestHref();
+<ModelTable<FlowApprovalTaskView> modelName="FlowApprovalTask" dataSource={source} rowHref={hrefOf}>
+  {/* … */}
+</ModelTable>
+```
+
+`rowHref(row)` 返回字符串表示在当前标签页打开的地址；返回 `{ href, target: "_blank" }` 表示在单独标签页里处理的页面（链接带 `rel="noopener noreferrer"`）；返回 null 表示该行不是链接、点击无反应（例如调用方无权打开的行）。它优先于 `onRowClick`、`linkTo` 与 `enableClick`。开启行内编辑时点击仍用于编辑，行不是链接；`enableClick={false}` 且没有 `rowHref` 时行不响应点击。
+
+实现方式（`components/row-link.tsx`，`PaginatedDataGrid` 与审批中心的 `TaskTable` 共用）：行中除其自身控件 —— 选择框、行动作列与行内编辑列、展开按钮 —— 之外的每个单元格都放一个覆盖整格的行链接。之所以逐格放置，是因为冻结列的单元格是 `position: sticky`，从别的单元格拉伸过来的链接会被它截在格内。第一个这样的单元格，其内容包在可被读屏读出、可聚焦的那个链接里，链接名称就是该格文字；其余单元格各在内容下方放一个链接，不进入 Tab 顺序，对辅助技术隐藏（`aria-hidden`、`tabindex="-1"`）。单元格内容让指针穿透到下方的链接（`src/styles/globals.css` 中的 `[data-row-link-cell]`），单元格自己的控件除外 —— 自己的链接、预览文件或显示掩码值的按钮、输入控件、悬停出提示的触发器（`[data-slot$="-trigger"]`、`aria-haspopup`）—— 它们保留自己的点击，不会打开该行。单元格文字的悬停提示（显示被截断值全文的 `title`）在指针进入时由链接接管。表格自己只处理普通点击：用 router 跳转，跳转到记录页时还记下列表的 id 供详情页的上一条 / 下一条使用；其余一律交给浏览器。
+
+行链接的代价：链接行里的文字无法拖选（在链接上拖动会拖走链接），单元格内容中非控件元素的悬停效果不会触发。需要自己处理点击的 `renderCell` 用 `<button>` 或链接，不要用可点击的 `<span>`。
+
+## 行点击、行动作与可选行
+
+`onRowClick(row)` 以点击所在的行调用，取代打开记录页 —— 用于点击后做别的事、而不是去某个页面的列表。打开页面的行应当是链接（`rowHref`，见 [行链接](#行链接)）：只可点击的行无法在新标签页打开，也无法用键盘操作。给出它时行总是可点击，不论 `enableClick`；`rowHref` 优先于它；开启行内编辑时点击仍用于编辑。
+
+`renderRowActions(row)` 在操作列、声明的 `<Action>` 之前绘制该行自己的动作：用于本身就是带对话框的组件、`<Action>` 无法表达的动作（审批人的 Approve / Reject 及其菜单、带间隔的 Urge）。该列宽度取其内容（列上的 `meta.fitContent`，由 `PaginatedDataGrid` 处理），声明的行内 `<Action>` 也一样：固定宽度装不下长标签，会压到前一列上。其中的点击 —— 包括它打开的对话框内的点击 —— 不会到达行。
+
+`renderBulkActions(rows)` 是它在选中行上的对应物：页面自己对选中行的动作，在有行被选中时绘制在工具栏、声明的工具栏 `<BulkAction>` 之前 —— 用于本身就是带对话框的组件、`<BulkAction>`（模型的一个 operation）无法表达的动作：我的待办里批量 Approve / Return / Reject。给出它就让行可选。
+
+`rowSelectionBlockedReason(row)` 在行可选择时回答这一行为何不能选：其复选框禁用，悬停显示原因，页内全选也会跳过它（TanStack 的逐行 `enableRowSelection`）。可选择的行返回 null。已勾选的行在列表重新读取后变成不可选 —— 某个操作改变了它的状态，例如 Flow Instances 的 Terminate 会取消终止的流程 —— 会随即移出选择：否则它的复选框是禁用的、无法取消勾选，批量操作也会再作用到它一次。仍可选的行保持勾选。
+
 ## 核心 Props
 
 | Prop               | Type                       | Required | Default | Notes                                                                                                                                      |
@@ -358,16 +470,22 @@ type UserAccountRow = ModelTableRowWith<{
 | `orders`           | `OrderCondition`           | No       | -       | 推荐默认排序。支持单个元组（`["createdTime", "DESC"]`）或多个元组。优先于 `initialParams.orders` 与 `MultiView.Tab.orders`（context）。 |
 | `filters`          | `FilterCondition`          | No       | -       | 推荐基础筛选。优先于 `initialParams.filters` 与 `MultiView.Tab.filters`（context）。运行时与 workspace、搜索、列、侧栏与工具栏筛选 AND 合并。见 [优先级规则](./multi-view#filter--order-precedence)。 |
 | `initialParams`    | `QueryParamsWithoutFields` | No       | -       | 高级初始查询设置（`pageSize`、`groupBy`、`effectiveDate`、`subQueries`、`splitBy`、`aggFunctions`、`summary`）。`filters` / `orders` 优先用顶层 props。 |
-| `children`         | `ReactNode`                | No       | -       | 有序 `<Field />` 声明，以及可选 `<Action />`、`<BulkAction />` 与一个侧栏（`<SideTree>`、`<SideCard>` 或 `<SideList>`）。运行时至少需要一条可见 `<Field />`。 |
+| `children`         | `ReactNode`                | No       | -       | 有序 `<Field />` 声明，以及可选 `<Action />`、`<BulkAction />`、`<PinnedFilter />`（见 [固定筛选](#固定筛选)）与一个侧栏（`<SideTree>`、`<SideCard>` 或 `<SideList>`）。运行时至少需要一条可见 `<Field />`。 |
 | `enableBulkDelete` | `boolean`                  | No       | `true`  | 启用内置批量删除入口。                                                                                                         |
 | `enableCreate`     | `boolean`                  | No       | `true`  | 启用内置创建按钮。                                                                                                             |
 | `enableImport`     | `boolean`                  | No       | `true`  | 在 More 菜单启用内置导入对话框入口。                                                                                          |
 | `enableExport`     | `boolean`                  | No       | `true`  | 在 More 菜单启用内置导出对话框入口。                                                                                          |
 | `bulkEditFields`   | `string[]`                 | No       | -       | 可选批量编辑白名单。省略时，内置 Bulk Edit 使用全部元数据字段。                                                     |
 | `excludeFields`    | `string[]`                 | No       | -       | 可选批量编辑黑名单。始终从内置 Bulk Edit 排除（除保留字段外）。                                     |
-| `linkTo`           | `string`                   | No       | -       | 行点击导航的子目录名（单段）。前往 `${pathname}/${linkTo}/${id}?mode=read`。省略则默认 `${pathname}/${id}?mode=read`。 |
-| `enableClick`      | `boolean`                  | No       | `true`  | 点击行是否导航到详情页。无详情路由的只读 / 报表表设为 `false`，行不可点击（无 `cursor-pointer`、无导航）。`inlineEdit` 启用时忽略。 |
+| `linkTo`           | `string`                   | No       | -       | 行链接指向的记录页子目录名（单段）：`${pathname}/${linkTo}/${id}?mode=read`。省略则默认 `${pathname}/${id}?mode=read`。 |
+| `enableClick`      | `boolean`                  | No       | `true`  | 每行是否链接到详情页。无详情路由的只读 / 报表表设为 `false`，行不是链接（无 `cursor-pointer`、无导航）。`inlineEdit` 启用时、或给出 `rowHref` / `onRowClick` 时忽略。 |
 | `freezeColumnIndex`| `number`                   | No       | `1`     | 左侧冻结的数据列初始数量。启用时选择列仍钉在冻结范围之前。             |
+| `dataSource`       | `ModelTableDataSource<TData>` | No    | -       | `{ key, fetch, queryFields?, refetchOnWindowFocus? }`：通过 `fetch({ filters, orders, pageNumber, pageSize })` 读取行，取代 `/{model}/searchPage`，缓存在 `key` 下；`refetchOnWindowFocus` 为 true 时在窗口获得焦点时重新读取。列、搜索、列筛选、排序、分页与记住的状态仍由元数据驱动；筛选与排序只针对存储字段（`queryFields` 进一步收窄）；创建、导入、导出、批量编辑 / 删除、行内编辑、分组、pivot、侧栏与 sidecar 关闭。见 [数据源](#数据源)。 |
+| `rowHref`          | `(row: TData) => string \| { href: string; target?: "_blank" } \| null` | No | - | 每行的地址，取代记录页：该行是指向它的链接（Cmd/Ctrl/中键点击、右键菜单、Tab + Enter）；`target: "_blank"` 在单独标签页打开；null 表示该行不响应点击。优先于 `onRowClick`、`linkTo` 与 `enableClick`；行内编辑仍接管点击。见 [行链接](#行链接)。 |
+| `onRowClick`       | `(row: TData) => void`     | No       | -       | 以被点击的行调用，取代打开记录页，用于不打开页面的点击（打开页面的行用 `rowHref` 做成链接）；行总是可点击，不论 `enableClick`，但不是链接。开启行内编辑时点击仍用于编辑。 |
+| `renderRowActions` | `(row: TData) => ReactNode` | No      | -       | 该行自己的动作，绘制在操作列、声明的 `<Action>` 之前，列宽取其内容；其中的点击不会到达行。用于带自身对话框的组件式动作。 |
+| `renderBulkActions` | `(rows: TData[]) => ReactNode` | No   | -       | 页面自己对选中行的动作，有行被选中时绘制在工具栏、声明的工具栏 `<BulkAction>` 之前；给出它就让行可选。用于带自身对话框的组件式批量动作。 |
+| `rowSelectionBlockedReason` | `(row: TData) => string \| null` | No | - | 行可选择时：这一行为何不能选（复选框禁用、悬停显示原因、全选跳过），可选则返回 null。 |
 
 ## 内置导入 / 导出
 
@@ -486,6 +604,7 @@ top-level filters  >  initialParams.filters  >  MultiView.Tab.filters (context)
 
 - 上述选中的 base 筛选
 - workspace 筛选（`useWorkspaceFilter()` —— 安全 / 作用域）
+- 固定筛选（`<PinnedFilter>` 的值，见 [固定筛选](#固定筛选)）
 - 侧栏筛选（`SideTree` / `SideCard` / `SideList` 选择）
 - 搜索筛选（`["searchName", "CONTAINS", keyword]`）
 - 列筛选标签
@@ -564,7 +683,7 @@ header 搜索框由模型元数据驱动（`resolveTableSearchConfig`）：place
 - 活动行内编辑行从当前草稿行值解析动作 context
 - 活动行 dirty 时点击行动作会询问是否丢弃草稿
 - `BulkAction` 与选择作用域绑定，仅选中行时显示
-- `BulkAction placement="toolbar"` 出现在 `Columns` 与 `More` 之间
+- `BulkAction placement="toolbar"` 出现在 `Columns` 与 `More` 之间，在页面自己的 `renderBulkActions` 之后（见 [行点击、行动作与可选行](#行点击行动作与可选行)）
 - `BulkAction placement="more"` 出现在工具栏 More 下拉 bulk 区
 - 内置 `Delete selected` 共享该 bulk 区
 

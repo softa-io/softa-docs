@@ -4,4 +4,5 @@ export default {
   automation: "自动化",
   integration: "业务接入",
   api: "接口与数据",
+  design: "设计要点",
 }

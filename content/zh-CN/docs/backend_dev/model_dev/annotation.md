@@ -70,7 +70,7 @@ public enum CustomerTier {
 | `description` | String | `""` | `description` | **≤512 字符**，解析期强制校验（目录列宽）；写面向使用者的简明摘要——设计备注放 Javadoc |
 | `displayName` | String[] | `{}` | `displayName` | 列表显示默认值 |
 | `searchName` | String[] | `{}` | `searchName` | 搜索字段默认值 |
-| `defaultOrder` | String[] | `{}` | `defaultOrder` | 如 `"createdTime:desc"` |
+| `defaultOrder` | String[] | `{}` | `defaultOrder` | 每个元素一条排序，`"field"` 或 `"field:dir"`，如主数据 `{"name"}`、`{"fullName", "code"}`；不写时分页读取最新的在前（`id DESC`），一对多子表和多对多标签按录入顺序，流水和普通明细行不用声明；约定见 [模型元数据](../../features/metadata/model) |
 | `softDelete` | boolean | `false` | `softDelete` | 要求类上有 `deleted` 字段；每次读取追加 `deleted = false`（可用 `FilterControl.bypassSoftDelete()` 绕过），起始值 `false` 由元数据层物化进 `sys_field.default_value`，因此列 DDL 带 `DEFAULT FALSE` |
 | `activeControl` | boolean | `false` | `activeControl` | 要求类上有 `active` 字段；每次读取追加 `active = true`——除非调用方自己的 filters 点名了 `active`（或设置了 `FilterControl.bypassActiveControl()`），因此禁用会让行从读取中退场但不删除；起始值 `true` 由元数据层物化进 `sys_field.default_value`，因此列 DDL 带 `DEFAULT TRUE`。与 `timeline` 互斥（启动时拒绝） |
 | `timeline` | boolean | `false` | `timeline` | 生效日期行（见 Timeline Model）；与 `activeControl` 互斥——期间状态建为版本化业务字段，终结走 `setEndDate` |
@@ -124,7 +124,23 @@ private Long companyId;
 
 元数据 API（`/metadata/getMetaModel`）以模型的 `enableAuditLog` 返回该开关，值为 `false` 时前端 Form 视图不渲染审计日志面板——见 [Form](../../frontend_dev/views/form#内置行为)。
 
-**存量数据库升级**：该开关存放在 `sys_model.enable_audit_log`（Studio 在 `design_model.enable_audit_log` 中镜像）。全新数据库无需任何操作；`scanner-scope` 非空时，启动会自动补上该列（见[目录表自举](#目录表自举sys_-表自身的结构)）。只有 `scanner-scope` 为空的环境（生产环境即是如此）需要手动执行迁移 V41：`deploy/migrations/mysql/V41__add_enable_audit_log_to_sys_model.sql`，PostgreSQL 版本写在其头部注释中；未部署 `studio-starter` 的环境跳过其中的 `design_model` 部分。该迁移在发版前后执行都安全，但应在新版本启动前执行：缺少该列时运行时照常启动、所有模型保留审计日志，但无法关闭该开关，且 `MetadataAnnotationChecker` 会把缺失的列报告为漂移。
+**存量数据库升级**：该开关存放在 `sys_model.enable_audit_log`（Studio 在 `design_model.enable_audit_log` 中镜像）。全新数据库无需任何操作；`scanner-scope` 非空时，启动会自动补上该列（见[目录表自举](#目录表自举sys_-表自身的结构)）。只有 `scanner-scope` 为空的环境（生产环境即是如此）需要手动补列。Softa 不提供迁移文件，由部署方应用把下面的语句放进自己的发版脚本；未部署 `studio-starter` 的环境跳过两条 `design_model` 语句。该脚本在发版前后执行都安全，但应在新版本启动前执行：缺少该列时运行时照常启动、所有模型保留审计日志，但无法关闭该开关，且 `MetadataAnnotationChecker` 会把缺失的列报告为漂移。
+
+```sql
+-- PostgreSQL
+ALTER TABLE sys_model ADD COLUMN IF NOT EXISTS enable_audit_log BOOLEAN DEFAULT TRUE;
+UPDATE sys_model SET enable_audit_log = TRUE WHERE enable_audit_log IS NULL;
+ALTER TABLE design_model ADD COLUMN IF NOT EXISTS enable_audit_log BOOLEAN DEFAULT TRUE;
+UPDATE design_model SET enable_audit_log = TRUE WHERE enable_audit_log IS NULL;
+
+-- MySQL (no IF NOT EXISTS for columns: where the column already exists, run only its UPDATE)
+ALTER TABLE sys_model ADD COLUMN enable_audit_log TINYINT(1) DEFAULT 1 COMMENT 'Enable Audit Log' AFTER copyable;
+UPDATE sys_model SET enable_audit_log = 1 WHERE enable_audit_log IS NULL;
+ALTER TABLE design_model ADD COLUMN enable_audit_log TINYINT(1) DEFAULT 1 COMMENT 'Enable Audit Log' AFTER copyable;
+UPDATE design_model SET enable_audit_log = 1 WHERE enable_audit_log IS NULL;
+```
+
+其中的 `UPDATE` 只对早先无默认值补过该列的环境有意义：`NULL` 本就按开启处理，它们只是让行数据如实写明。
 
 ### `@Field` ↔ `SysField`
 
@@ -139,7 +155,7 @@ private Long companyId;
 | `columnName` | String | `""` | `columnName` | 空 → `snake_case(fieldName)` |
 | `length` | int | `0` | `length` | `0` → 类型默认：STRING/OPTION 64，MULTI_STRING/ORDERS 256，DOUBLE 24（测量），BIG_DECIMAL 32（金额）；其他需显式声明。`TEXT` 字段的 length 可选——纯应用层守卫（列本身无界）。遗留路由：MySQL 将 STRING `length > 16383` 渲染为 TEXT（64KB 字节；新代码用 `fieldType = TEXT`） |
 | `scale` | int | `0` | `scale` | `0` → 类型默认：DOUBLE 2，BIG_DECIMAL 8（DECIMAL 小数位） |
-| `required` | boolean | `false` | `required` | NOT NULL 约束 |
+| `required` | boolean | `false` | `required` | NOT NULL 约束。用在 `ONE_TO_MANY` / `MANY_TO_MANY` 上（没有列）时表示至少一行（一条关联）：新建必须带上至少一行；更新时提交了这个字段，写完后必须至少剩一行（按写入后的结果数，所以删光所有行的补丁会被拒）；更新没提交这个字段则不检查 |
 | `readonly` | boolean | `false` | `readonly` | UI 提示 |
 | `translatable` | boolean | `false` | `translatable` | i18n 感知列 |
 | `copyable` | boolean | `true` | `copyable` | `false` ⇒ `copyById` 不携带该值（业务键、凭证、运行时状态） |

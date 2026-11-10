@@ -1,0 +1,277 @@
+# 业务接入
+
+<Lead>
+
+本页写给接入 Flow 的研发：让业务模型走审批（审批业务记录）、发布默认流程、在宿主应用里启用 `flow-starter` 前要确认的事项，以及配置项与扩展点。
+
+</Lead>
+
+自动化流程的触发与消息配置见[自动化](./automation#触发与消息集成)。
+
+## 审批业务记录
+
+<Lead>
+
+业务记录由它所属单据的 Approval 流程审批：模型、控制器、处理器各接一处；框架维护审批状态，处理器负责只有业务才知道的部分。
+
+</Lead>
+
+业务记录——请假申请、报销单——由它所属单据的一个 Approval 流程审批：流程的触发器是写明记录模型（`modelName`）的 `SubmitTrigger`，可以再用条件写明它审批哪些记录。业务这一侧接三处：
+
+| 接入点 | 写法 | 替代 |
+|---|---|---|
+| 模型 | 继承 `ApprovalModel`（`entity` 包） | `AuditableModel` |
+| 控制器 | 继承 `ApprovalModelController` | `EntityController` |
+| 处理器 | 宿主为每个模型实现一个 `ModelApprovalHandler<T>`（`runtime/spi`，一个 Spring bean） | — |
+
+`ApprovalModelController` 为每个这样的模型提供同样的三个端点，与其他端点一样按模型授权：`POST /{Model}/submit?id=`、`POST /{Model}/withdraw?id=`（请求体 `{comment}`，可选）和 `POST /{Model}/cancel?id=`，均经由 `FlowClient`。提交会产生什么，对所有模型都由 `GET /flow/instances/preview` 回答。
+
+每条记录都有一个**当事员工**：记录所涉及的员工，基于组织关系的审批人源从他开始解析（见[审批人解析](./approval#审批人解析)）。它是模型的 `employeeId`，除非处理器的 `subject()` 指定了另一个字段（`Transfer::getTransfereeId`）；无论哪种，都必须是指向员工模型（`softa.flow.org.employee-model`）的多对一字段，启动时会检查。当事员工为空的记录不能提交。提交会把它作为启动变量 `_subjectId` 带给流程。
+
+### 框架与处理器的分工
+
+框架维护审批状态，对每个模型都一样：
+
+- 审批字段——`approvalStatus`（`ApprovalStatus`）、`submitterId`、`submittedTime`——以及对它们的每一次写入
+- 唯一的状态机（见[单据的审批状态](./approval#单据的审批状态)）：只有草稿可以提交或作废；一条记录同一时间只有一个审批
+- 冻结所有非草稿记录（`ApprovalLockValidator`）
+- 每个结果只回写一次
+- 写入审批人的修改——只写该步骤允许修改的字段
+- 提交时记在实例上的内容：当事员工、部门、生效日期、编号
+
+处理器负责只有业务才知道的部分：
+
+| 时机 | 方法 | 做什么 |
+|---|---|---|
+| 提交 | `validate(record)` | 提交必须通过的检查——谁可以提交该记录、记录必须包含什么 |
+| 提交 | `submission(record)` | 一个 `ApprovalSubmission(title, variables, effectiveDate, code, summary)`——仅根据记录算出的实例标题和在记录自身字段之外补充的路由变量，以及模型有这些信息时，记录的生效日期、记录自身的编号和一行摘要（最长 256 字），供审批列表显示与筛选 |
+| 提交 | `afterSubmitted(record)` | 提交所引发的动作，例如预占假期余额 |
+| 审批人修改字段时 | `afterApproverEdit(record, editedFields)` | 模型自己对审批人修改的规则，和单据自己的页面保存时一样——服务端要算出的值、明细之间要保持一致的约束；抛出异常就拒绝这次批准，修改一并回滚 |
+| 出结果 | `afterOutcome(record, outcome)` | 结果的后续动作，例如扣减余额——或在拒绝、作废后释放余额 |
+| 作废草稿 | `validateCancel(record)` | 除能看到草稿外，还有谁可以作废它，例如只有报销人本人 |
+| 审批之后 | `effectStatuses(rowIds)` | 对审批后延期生效的模型，每条已批准记录的变更进行到哪一步（`RecordEffectStatus`：`Scheduled`、`Applied`、`Failed`），从记录本身读取，从不根据日期推测。默认为空，适用于审批后立即生效的模型 |
+
+<FlowFigure name="sequence">
+
+处理器在主链路上的位置：③ `validate`、④ `submission`、⑦ `afterSubmitted` 在提交里——⑦ 在单据改为审批中之后、审批实例启动之前；⑩ 审批人改了字段时调用 `afterApproverEdit`；⑬ `afterOutcome` 在结果写回之后。①–⑧ 全部在调用方事务中完成。
+
+</FlowFigure>
+
+### 路由变量
+
+审批启动时带上记录上所有可供路由比较的字段，变量名即字段名。设计器提供的就是这些字段，因此连线上的规则条件可以读取其中任何一个。
+
+- **带上**：记录自身的普通类型列——文本、数字、布尔、日期和时间（转为 ISO 文本）、选项和多选（item code）、多值文本、多对一/一对一关联（id）。
+- **不带**：标识、簿记和审批状态字段（`id`、`tenantId`、`version`、`deleted`、审计字段、`approvalStatus`、`submitterId`、`submittedTime`）；声明为敏感的字段（加密或读取时脱敏），因为实例变量不经过记录的字段权限；没有值的字段。
+- **经关联读的字段**：流程的规则写了路径（`employeeId.departmentId`，最多两层，如 `employeeId.departmentId.costCentreId`）时，启动时从关联记录读出这些字段，以路径为变量名一起带上；只读规则用到的路径，规则与读取时机见[路由：连线条件](./index#条件的两种写法)。
+- **处理器补充**：处理器的 `submission` 在此之上补充它根据记录算出的值——例如通过其他模型读到的公司币种——同名变量会覆盖字段值。需要按关联记录的字段分支时，直接在规则里写路径即可，不必再由处理器补变量。
+
+### 从业务代码调用
+
+业务代码经由 `FlowClient` 提交、撤回、作废记录，读取审批历史和预览：
+
+| `FlowClient` | 会发生什么 |
+|---|---|
+| `submitRecord(modelName, rowId)` | 提交记录并启动它的审批，依次做的事见表下 |
+| `withdrawRecord(modelName, rowId, comment)` | 撤回正在等待的审批（引擎检查 actor 是提交人，且流程的 `withdrawPolicy` 允许）；记录重新成为草稿。若记录的审批**失败**，其提交人也以同样方式取回记录——处理器得知它被撤回；失败的实例保留供流程监控。记录没有进行中的审批时拒绝 |
+| `cancelRecord(modelName, rowId)` | 永久作废草稿：和 `submitRecord` 一样，提交人必须在自己能修改这条记录的范围内够到它，记录必须是草稿，且 `handler.validateCancel` 必须通过。记录变为 `Cancelled`，`handler.afterOutcome` 收到一个没有实例的 `Cancelled` 结果。在调用方事务中完成 |
+| `recordApprovals(modelName, rowId)` | 审批历史，同 `GET /flow/instances/by-record` |
+| `previewRecord(modelName, rowId)` | 提交将启动的审批，同 `GET /flow/instances/preview`——见[预览记录的审批](./approval#预览记录的审批)。应在事务之外调用 |
+| `previewValues(modelName, values)` | 尚未保存的记录的同一预览：以字段值（按存储形态：id、code，含当事员工字段）代替记录行——视作草稿，只按这些值算当事员工和处理器的 `validate` / `submission`。用于应用在提交时才建的记录（如薪酬批次的审批申请单由批次自己的提交建出），让审批路线在记录存在之前就能显示。没有对应的 HTTP 接口：由调用方自己的接口决定谁能查。与 `previewRecord` 一样在事务外调用 |
+
+`submitRecord` 依次：
+
+1. **提交人够得到这条记录**：提交人必须在自己能修改这条记录的范围内够到它：提交会写这条记录，所以算的是提交人持有该模型修改动作的那些角色的范围，而不是所有能查看它的角色合起来的更大范围——只能查看某个部门申请的角色，提交不了其中任何一张。提交人的角色都不持有修改动作时，仍按他能读取的范围判断。
+2. **只提交草稿**：只有没有进行中审批的草稿才会被提交。
+3. **业务检查**：`handler.validate` 以提交人身份检查整条记录，`handler.submission` 返回实例标题和它在记录字段之外补充的路由变量。
+4. **选流程**：流程从这张单据启用中的 Approval 流程里选：提交条件成立的必须恰好一个；一个都不成立时，交给没有条件的那个流程（单据的默认审批流）；也没有默认审批流，或有多个成立时，提交被拒绝并说明原因。
+5. **启动审批**：记录变为 `Pending`，记下提交人与时间，运行 `handler.afterSubmitted`，然后启动记录的审批。
+
+全部在调用方事务中完成。每次提交都从头启动一个新的审批——退回之后也是如此，运行当时生效的修订版——同时把该记录之前的审批标记为 `superseded`。
+
+### 记录的审批
+
+- **只有提交所启动的实例才是记录的审批**：同一记录上的自动化运行不是，也从不回写（以 API 启动 Approval 流程会被拒绝——其触发器是 `Submit`）。
+- **一条记录最多只有一个进行中的审批**：即使两个提交同时到达，第二个也会被拒绝。
+- **提交时在实例上记下**审批列表显示与筛选所用的内容，以提交时为准（见[实例搜索](./api#实例搜索)）：`subjectId`——记录所涉及的员工——以及 `departmentId`，即该员工的部门（越过提交人的权限读取），部门数据范围据此收窄（见[监控](./api#监控)）；`effectiveDate`、`recordCode` 和 `summary` 来自处理器的 `ApprovalSubmission`。
+- **`summary`** 是一行说明单据要什么的文字（假期的天数和日期、报销的金额），由处理器用 `ApprovalSummaries` 的工具拼出（日期写作 `12 Nov 2026`、区间 `12 Nov 2026 – 14 Nov 2026`、数量 `1.5 days`、金额 `SGD 1,234.50`），存在实例上（`FlowInstance.summary`，最长 256 字符，超出截断），审批人修改单据后重新计算。它和标题一样会给审批所及的所有人看，不受步骤隐藏字段的限制，所以只能用所有人都能看的字段，不能写薪酬这类敏感字段。
+- **每次提交都会把该记录之前的审批标记为 `superseded`**，因此一个 `Returned` 且未被取代的审批，就是其记录仍在等待修改并重新提交的审批（`awaitingRevision`）。
+
+<Dev title="实现：怎样认出记录的审批、挡住第二次提交">
+
+- 记录的审批由 `FlowExecutionState.recordApproval` 标出。
+- 审批未结束期间，`FlowInstance.openRecordId` 保存记录的 id，并与模型组成唯一索引，因此即使两个提交同时到达，第二个也会被拒绝。
+- 当事员工的部门由 `OrganizationService.getDeptIdOfEmployee` 读取。
+
+</Dev>
+
+## 接入步骤
+
+<Lead>
+
+以「请假单」为例，接入一张单据要五步：模型、控制器、处理器、默认流程和授权。
+
+</Lead>
+
+1. **模型继承 `ApprovalModel`**（代替 `AuditableModel`），获得 `approvalStatus`、`submitterId`、`submittedTime`；单据要有指向员工模型的当事员工字段（默认 `employeeId`）。需要单据编号时加一个自动编号字段：退回后重新提交编号不变，并会记在审批实例上供列表显示与筛选。
+2. **控制器继承 `ApprovalModelController`**（代替 `EntityController`），获得 `submit`、`withdraw`、`cancel` 三个端点，按模型授权。
+3. **实现 `ModelApprovalHandler<T>`**，注册为 Spring bean：
+
+```java
+@Component
+public class LeaveRequestApprovalHandler implements ModelApprovalHandler<LeaveRequest> {
+    public Class<LeaveRequest> modelClass() { return LeaveRequest.class; }
+
+    public void validate(LeaveRequest r) { /* 余额是否足够、日期是否冲突… */ }
+
+    public ApprovalSubmission submission(LeaveRequest r) {
+        return new ApprovalSubmission(
+            "Leave · " + r.getEmployeeName(),                           // 实例标题，列表与通知里显示
+            Map.of(),                                                    // 记录自身字段之外的路由变量——这里没有
+            r.getStartDate(),                                            // 生效日期
+            r.getCode());                                                // 单据编号
+    }
+
+    public void afterOutcome(LeaveRequest r, ApprovalOutcome outcome) {
+        // Approved → 扣减余额；Rejected / Cancelled → 释放预占
+    }
+}
+```
+
+4. **发布默认流程**：每个默认流程作为租户种子文件中的一行 `FlowDesign`（场景 `Approval`，`"enabled": true`，触发器 `{"type": "Submit", "modelName": "LeaveRequest"}` 写明单据；同一单据有多个时，各自用提交条件写明审批哪些记录，比如请假与销假按 `leaveRequestType` 区分），见下文[默认流程种子](#默认流程种子)。内置角色用角色编码指定；不要把没有持有人的角色设为默认审批人，否则该步骤会在所有租户解析不到人。
+5. **授权**：为 `submit`、`withdraw` 端点授权（作废草稿随 `submit`）；把监控台端点与 `FlowInstance` 上的数据范围授予管理员角色。
+
+前端的提交、撤回按钮、审批路径预览与审批记录面板见[表单视图](../../frontend_dev/views/form)。
+
+> [!WARNING]
+>
+> `afterOutcome` 只做属于这个结果、写在本库里的事。付款、调用外部系统等离开本库的动作放到事务提交之后，否则审批回滚时外部动作收不回来。
+
+## 默认流程种子
+
+<Lead>
+
+默认流程以租户种子文件的形式到达各租户，加载时自动发布；之后各租户编辑自己的副本，只有平台管理员重放文件时才会有意覆盖。
+
+</Lead>
+
+- **每个文件一行 `FlowDesign`**：提交触发器写明它审批的单据（`{"type": "Submit", "modelName": ...}`），行上写明 `"enabled": true`（这一列必填，种子行按原样写入）；发布时单据写进 `FlowDesign.modelName` 这一查询列。
+- **加载时发布**：seed-starter 公布某个文件写入的行时，每个新的设计都会被发布；无法编译的设计会使该文件在该租户中失败。
+- **之后归租户**：各租户在设计器中编辑自己的副本，常规运行不会再用模板覆盖它。
+- **重放会覆盖**：平台管理员重放（reapply）该文件时会有意覆盖，被改写的设计会重新发布，此后新发起的实例按设计现在的内容运行。
+
+<Dev title="由谁发布（SeedFlowPublisher）">
+
+seed-starter 以 `SeedFileLoadedEvent` 公布某个文件写入的行，`SeedFlowPublisher` 据此发布每个新的设计。
+
+</Dev>
+
+## 宿主应用集成清单
+
+<Lead>
+
+在真实应用中启用 `flow-starter` 之前，按依赖、业务记录、组织与通讯录、权限、通知、消息队列与任务节点几类逐项确认。
+
+</Lead>
+
+**依赖**
+
+- 将 `flow-starter` 加入应用 classpath
+- 通过通用模型 API 创建并暴露 `FlowDesign` 草稿
+
+**业务记录**
+
+- 对业务记录：继承 `ApprovalModel`（带 `employeeId`，或由 `subject()` 指定员工字段）和 `ApprovalModelController`，为每个模型实现一个 `ModelApprovalHandler<T>`——审批后延期生效的模型还需实现 `effectStatuses`——并把每个默认流程作为租户种子文件发布
+
+**组织与通讯录**
+
+- 确认组织遵循默认的 HR 约定，或覆盖 `softa.flow.org.*`，或提供自己的 `OrganizationService`——同时实现 `getUnusableAccounts`，否则每个账号都视为能使用；以及 `getRoleNames`，否则转给角色（`AssignToRole`）的步骤只能按 id 和编码称呼这些角色
+- 把 `softa.flow.org.directory-model` 指向一个只放通讯录字段的员工投影模型，并给每个角色配上它的范围——没有范围的角色在选择框里找不到任何人；使用自己的 `OrganizationService` 的应用要实现五个通讯录方法，否则选择框找不到任何人
+
+**权限**
+
+- 把 `GET /flow/delegations/flows` 列入可以查看委托规则的权限（限定到单个流程或步骤的规则用它选流程和步骤，列表也用它显示规则限定的步骤）
+- 把通讯录的读取——人员用 `GET /flow/directory/people` 和 `/people/by-ids`，部门用 `/departments` 和 `/departments/by-ids`——列进用到选择框的页面的权限里（审批、管理自己的委托、设计器、监控台），`/people/all` 和 `/people/all/by-ids` 只列进设计器和监控台的权限，不要列入 `permission.authenticated-bypass-patterns`：列在那里会跳过端点闸门（见[通讯录](./api#通讯录)）
+- 把监控台的端点以及 `FlowInstance` 上的数据范围授予管理员的角色（部门数据范围按当事员工的部门收窄）
+- 把审批页的按实例读取——`GET /flow/instances/{instanceId}` 及其 `/summary`、`/design`、`/record`、`/overlay`、`/trace`、`/urge`、`/withdraw`——以及以单据为键的页面要用的 `GET /flow/instances/by-record/record`，列进能打开审批的权限里：没有任何权限列出的端点会被端点闸门拒绝，其余由访问守卫判断
+- 把 `POST /flow/approvalTasks/search` 列进读取用户自己待办的权限——它取代了 `GET /flow/approvalTasks/pending`、`/completed` 和 `/cc`——并随发版附带补齐已有任务行列表字段的 SQL（见[审批任务](./api#审批任务)）
+
+**通知**
+
+- 审批邮件：配置 `system.site-url`（每封邮件中的链接），并为每个租户提供 `flow.*` 邮件模板——或在流程上关闭 `emailNotification`；如需短信或 IM，提供自己的 `ApprovalNotificationService`
+- 若失败的审批应通知 `TENANT_ADMIN` 以外的角色，配置 `flow.notification.failure-role-codes`
+
+**消息队列与任务节点**
+
+- 若使用触发或异步任务，启用 Pulsar topics
+- 若使用 `Timer` 节点，配置 `mq.topics.flow-timer.topic`（定时节点自己安排唤醒），并开启维护任务 `flow_timer_sweep` 兜底丢失的唤醒（见[自动化](./automation#触发与消息集成)）
+- 若流程需要调用 Spring bean，显式启用 `CALL_SERVICE`（及其 bean 名允许列表）；其余任务节点类型均附带可用执行器，并按其能力 bean 条件注册
+
+## 配置项
+
+<Lead>
+
+flow-starter 读取的配置项如下；默认组织服务读取的模型和字段都在 `softa.flow.org.*` 下，可以逐项覆盖。
+
+</Lead>
+
+| 配置项 | 默认值 | 作用 |
+|---|---|---|
+| `flow.notification.failure-role-codes` | `TENANT_ADMIN` | 记录的审批失败时，除提交人外还通知哪些角色的持有人 |
+| `flow.trigger-cache-ttl-seconds` | `60` | 触发匹配缓存的存活秒数（见[持久化模型](./api#持久化模型)） |
+| `flow.automation.retention-days` | `30` | 已结束的自动化运行保留天数，之后由维护任务 `flow_automation_purge` 清理 |
+| `flow.task.builtin.call-service.enabled` | `false` | 启用 `CallService` 任务节点 |
+| `flow.task.call-service.allow-list` | 空 | 启用 `CallService` 时必填：允许调用的 bean 名前缀，逗号分隔 |
+| `flow.task.builtin.query-records.enabled` | `true` | 设为 `false` 以注册自己的 `QueryRecords` 执行器 |
+| `softa.flow.org.*` | 见下 | 默认组织服务 `FlowOrgService` 读取的模型和字段（`OrganizationServiceProperties`） |
+| `system.site-url` | 无 | 审批邮件里的链接（`/home/approvals/{instanceId}`）的前缀；不配置时链接为空 |
+| `mq.topics.*` | 无 | 对应的生产者、消费者只在配置了主题时注册，见[触发与消息集成](./automation#触发与消息集成) |
+
+<Dev title="softa.flow.org.* 的各项及默认值">
+
+| 配置项 | 默认值 |
+|---|---|
+| `employee-model` | `Employee` |
+| `directory-model` | 不设即员工模型，见[通讯录](./api#通讯录) |
+| `account-id-field` | `userId` |
+| `name-field` | `fullName` |
+| `code-field` | `code` |
+| `dept-id-field` | `departmentId` |
+| `position-id-field` | `jobPositionId` |
+| `supervisor-id-field` | `piEmployeeId` |
+| `department-model` | `Department` |
+| `dept-name-field` | `name` |
+| `dept-code-field` | `code` |
+| `dept-leader-id-field` | `picEmpId` |
+| `dept-hrbp-id-field` | `hrbpEmpId` |
+| `parent-dept-id-field` | `parentId` |
+| `role-model` | `UserRoleRel` |
+| `role-id-field` | `roleId` |
+| `role-user-id-field` | `userId` |
+| `role-definition-model` | `Role` |
+| `role-code-field` | `code` |
+| `role-name-field` | `name` |
+| `account-model` | `UserAccount` |
+| `account-status-field` | `status` |
+| `approver-account-statuses` | `Active` |
+| `max-dept-depth` | `10`，向上或向下遍历部门的最大层数，防止环 |
+
+</Dev>
+
+## 扩展点
+
+<Lead>
+
+应用声明同类型的 bean 即可替换或补充默认实现。
+
+</Lead>
+
+| Bean | 默认 | 用途 |
+|---|---|---|
+| `ModelApprovalHandler<T>` | 无，每个审批模型一个 | 单据的业务部分：校验、标题与路由变量、结果的后续动作（见[审批业务记录](#审批业务记录)） |
+| `OrganizationService` | `FlowOrgService` | 从组织里找审批人、判断账号能否办理、通讯录（见[审批人解析](./approval#审批人解析)） |
+| `ApprovalNotificationService` | `CompositeApprovalNotificationService`（站内信 + 邮件） | 替换整个通知；要加通道时声明自己的 `CompositeApprovalNotificationService`（见[通知](./approval#通知)） |
+| `FlowClient` | `InProcessFlowClient` | 业务模块调用审批的进程内端口（见[接口与数据](./api#api-概览)） |
+| `TaskExecutor` | 内置执行器 | 每种任务节点一个执行器，同一种注册两个会启动失败；要换掉内置的 `QueryRecords`，先关掉它（见[配置项](#配置项)） |
+| `FlowValidator` | 内置校验器 | 追加的发布校验，诊断与内置的一起报告，`Error` 阻止发布 |
+| `flowDeadLetterPolicy` | 最多重投 3 次 | flow-starter 的 Pulsar 消费者共用的死信策略，超过次数的消息进入 broker 默认的 DLQ 主题（`<topic>-<subscription>-DLQ`） |

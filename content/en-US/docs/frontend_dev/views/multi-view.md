@@ -296,7 +296,7 @@ Switching tabs unmounts the previous view and mounts the new one. Toolbar filter
 | ----- | ------- | ---- |
 | **A. Developer-declared** | `ModelTable.filters` / `ModelTable.initialParams.filters` / `MultiView.Tab.filters` (context) | Page-level base condition |
 | **B. System scope** | `workspaceFilter` from `useWorkspaceFilter()` | Forced data isolation (security boundary) |
-| **C. User runtime** | Search input, column filters, toolbar filters, side panel selection | Live narrowing on the page |
+| **C. User runtime** | Pinned filters, search input, column filters, toolbar filters, side panel selection | Live narrowing on the page |
 
 ### Filters: within Layer A → override; across layers → AND
 
@@ -313,7 +313,7 @@ If `<ModelTable filters={X}>` is rendered inside `<MultiView.Tab filters={Y}>`, 
 ```
 finalFilter = (Layer A: chosen base)
         AND  (Layer B: workspaceFilter)
-        AND  (Layer C: tree filter, search, column filters, toolbar filters)
+        AND  (Layer C: pinned filters, tree filter, search, column filters, toolbar filters)
 ```
 
 Each layer adds its own constraint; the final query satisfies them all. This is implemented in `buildModelTableFilterCondition`.

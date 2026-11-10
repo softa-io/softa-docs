@@ -14,7 +14,7 @@
   - 对于 OneToMany / ManyToMany，如果既没有出现在 `fields` 中，也没有在 `subQueries` 中配置，则不会出现在响应中。
   - 对时间轴模型，即使 `fields` 做了窄选择，`sliceId` 也总会随行返回（类似乐观锁下的 `version`），返回的版本行可直接用于 `update` / `deleteBySliceId`。
 - `filters`：筛选条件列表。每个条件使用数组形式表示 `[field, operator, value]`，例如：`["status", "=", "ACTIVE"]`。
-- `orders`：排序规则列表。每条规则为 `[field, direction]` 形式，例如：`["createdTime", "DESC"]`。也可以使用字符串形式，如 `"createdTime DESC, name ASC"`。
+- `orders`：排序规则列表。每条规则为 `[field, direction]` 形式，例如：`["createdTime", "DESC"]`。也可以使用字符串形式，如 `"createdTime DESC, name ASC"`。分页查询会在最后自动补上主键（方向跟第一个排序字段一致），排序字段有重复值时翻页也不重不漏。
 - `aggFunctions`：需要执行的聚合函数列表，例如：`["SUM(amount)", "COUNT(id)"]`。
 - `pageNumber`：分页页码，从 1 开始。
 - `pageSize`：每页返回的记录数。
@@ -49,10 +49,35 @@ SubQuery 属性：
 
 1. `fields`：要返回的关联模型字段列表。对于 ManyToOne / OneToOne，除了这些字段外，显示名称字段也会被自动包含。
 2. `filters`：应用在关联模型上的筛选条件。
-3. `orders`：关联模型的排序规则。
+3. `orders`：关联模型的排序规则。不传时用关联模型的 `defaultOrder`，模型也没有时按录入顺序（`id` 升序）。
 4. `count`：当为 `true` 时，对于 OneToMany / ManyToMany，不再返回明细行，而是返回关联行数量。
 5. `topN`：仅适用于 OneToMany，且需要配置 `orders`；表示对每个主记录只返回前 N 条关联记录。
 6. `subQueries`：对关联模型再做嵌套展开。
+
+### 1.3 SearchNameParams
+
+`SearchNameParams` 是 `/searchName` 的请求体：按名称搜索候选项（下拉、选择器用），一次返回一页，每行带 `displayName`。
+
+- `value`：要匹配的文本，默认在模型的 `searchName` 字段上做 `CONTAINS` 匹配。
+- `matchField` / `operator`：改用别的字段或运算符匹配，如 `"code"` 加 `"START WITH"`。
+- `filters`：附加的筛选条件，如关联字段自带的过滤、表单上下文带来的条件。
+- `orders`：排序规则，不传时用模型的 `defaultOrder`，模型也没有时最新的在前（`id DESC`）。无论哪种，最后都会补上模型的物理主键（时间轴模型是 `sliceId`），所以翻页不会重复或漏掉候选项。
+- `additionalFields`：除显示名称外要额外返回的字段。
+- `pageNumber`：页码，从 1 开始，默认 1。
+- `pageSize`：每页条数，默认 10，取值 1 到 10000，超出范围直接报错。
+- `effectiveDate`：时间轴模型的生效日，默认今天。
+- `sourceRecord`：调用方所在记录的快照，供后端按业务规则收窄候选项。
+
+返回这一页的行（列表），不返回总数，也不做 count 查询。返回的行数少于 `pageSize` 说明已到最后一页；等于 `pageSize` 时可以接着请求下一页（最后一页正好满时，下一页返回空）。
+
+```json
+{
+  "value": "李",
+  "filters": ["active", "=", true],
+  "pageNumber": 2,
+  "pageSize": 20
+}
+```
 
 ## 2. Filters 中缀表达式
 

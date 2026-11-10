@@ -84,7 +84,7 @@ public enum CustomerTier {
 | `description` | String | `""` | `description` | **≤512 chars**, parse-time enforced (catalog column width); concise user-facing summary — design notes go in Javadoc |
 | `displayName` | String[] | `{}` | `displayName` | list-display defaults |
 | `searchName` | String[] | `{}` | `searchName` | search-field defaults |
-| `defaultOrder` | String[] | `{}` | `defaultOrder` | e.g. `"createdTime:desc"` |
+| `defaultOrder` | String[] | `{}` | `defaultOrder` | one sort per entry, `"field"` or `"field:dir"`, e.g. `{"name"}` or `{"fullName", "code"}` for master data; unset, a paged read lists the newest first (`id DESC`) and ONE_TO_MANY lines and MANY_TO_MANY tags come in entry order, so records and plain lines need none; conventions in [Model metadata](../../features/metadata/model) |
 | `softDelete` | boolean | `false` | `softDelete` | requires a `deleted` field; every read appends `deleted = false` (bypass via `FilterControl.bypassSoftDelete()`), and the starting value `false` is materialized into `sys_field.default_value` so the column DDL carries `DEFAULT FALSE` |
 | `activeControl` | boolean | `false` | `activeControl` | requires an `active` field; every read appends `active = true` unless the caller's own filters name `active` (or `FilterControl.bypassActiveControl()` is set), so disabling retires a row from reads without deleting it; the starting value `true` is materialized into `sys_field.default_value` so the column DDL carries `DEFAULT TRUE`. Mutually exclusive with `timeline` (boot-rejected) |
 | `timeline` | boolean | `false` | `timeline` | effective-dated rows (see Timeline Model); mutually exclusive with `activeControl` — express period state as a versioned business field and terminate via `setEndDate` |
@@ -141,7 +141,23 @@ With the switch off, the model has no Audit Log history, its rows no longer appe
 
 The metadata API (`/metadata/getMetaModel`) serves the flag as the model's `enableAuditLog`, and the frontend Form view renders no Audit Log panel when it is `false` — see [Form](../../frontend_dev/views/form#built-in-behavior).
 
-**Upgrading an existing database**: the flag is stored in `sys_model.enable_audit_log` (Studio mirrors it in `design_model.enable_audit_log`). A fresh database needs nothing, and with a non-empty `scanner-scope` the boot adds the column on its own (see [Catalog self-bootstrap](#catalog-self-bootstrap-the-sys_-tables-own-schema)). Only an environment that runs with an empty `scanner-scope`, as production does, applies migration V41 by hand: `deploy/migrations/mysql/V41__add_enable_audit_log_to_sys_model.sql`, with the PostgreSQL variant in its header comment; a deployment without `studio-starter` skips its `design_model` part. The migration is safe on either side of the deploy, but run it before the new version boots: without the column the runtime still starts and every model keeps its audit log, yet the flag cannot be switched off, and `MetadataAnnotationChecker` reports the missing column as drift.
+**Upgrading an existing database**: the flag is stored in `sys_model.enable_audit_log` (Studio mirrors it in `design_model.enable_audit_log`). A fresh database needs nothing, and with a non-empty `scanner-scope` the boot adds the column on its own (see [Catalog self-bootstrap](#catalog-self-bootstrap-the-sys_-tables-own-schema)). Only an environment that runs with an empty `scanner-scope`, as production does, adds it by hand. Softa ships no migration files, so the deploying app puts the statements below into its release script; a deployment without `studio-starter` skips the two `design_model` statements. The script is safe on either side of the deploy, but run it before the new version boots: without the column the runtime still starts and every model keeps its audit log, yet the flag cannot be switched off, and `MetadataAnnotationChecker` reports the missing column as drift.
+
+```sql
+-- PostgreSQL
+ALTER TABLE sys_model ADD COLUMN IF NOT EXISTS enable_audit_log BOOLEAN DEFAULT TRUE;
+UPDATE sys_model SET enable_audit_log = TRUE WHERE enable_audit_log IS NULL;
+ALTER TABLE design_model ADD COLUMN IF NOT EXISTS enable_audit_log BOOLEAN DEFAULT TRUE;
+UPDATE design_model SET enable_audit_log = TRUE WHERE enable_audit_log IS NULL;
+
+-- MySQL (no IF NOT EXISTS for columns: where the column already exists, run only its UPDATE)
+ALTER TABLE sys_model ADD COLUMN enable_audit_log TINYINT(1) DEFAULT 1 COMMENT 'Enable Audit Log' AFTER copyable;
+UPDATE sys_model SET enable_audit_log = 1 WHERE enable_audit_log IS NULL;
+ALTER TABLE design_model ADD COLUMN enable_audit_log TINYINT(1) DEFAULT 1 COMMENT 'Enable Audit Log' AFTER copyable;
+UPDATE design_model SET enable_audit_log = 1 WHERE enable_audit_log IS NULL;
+```
+
+The `UPDATE`s only matter where the column was added earlier without a default: a `NULL` already reads as enabled, so they just make the rows say so.
 
 ### `@Field` ↔ `SysField`
 
@@ -156,7 +172,7 @@ The metadata API (`/metadata/getMetaModel`) serves the flag as the model's `enab
 | `columnName` | String | `""` | `columnName` | empty → `snake_case(fieldName)` |
 | `length` | int | `0` | `length` | `0` → type default: STRING/OPTION 64, MULTI_STRING/ORDERS 256, DOUBLE 24 (measurements), BIG_DECIMAL 32 (money); declare explicitly for anything else. On `TEXT` fields length is optional — purely an app-level guard (the column is unbounded). Legacy: MySQL renders STRING `length > 16383` as TEXT (64KB bytes; prefer `fieldType = TEXT`) |
 | `scale` | int | `0` | `scale` | `0` → type default: DOUBLE 2, BIG_DECIMAL 8 (DECIMAL scale) |
-| `required` | boolean | `false` | `required` | NOT NULL constraint |
+| `required` | boolean | `false` | `required` | NOT NULL constraint. On a `ONE_TO_MANY` / `MANY_TO_MANY` (no column): at least one row / link — a create must name one, an update that sends the field must leave one (counted after the write, so a patch deleting every row is refused); an update that leaves the field out is not judged |
 | `readonly` | boolean | `false` | `readonly` | UI hint |
 | `translatable` | boolean | `false` | `translatable` | i18n-aware column |
 | `copyable` | boolean | `true` | `copyable` | `false` ⇒ value not carried over by `copyById` (business keys, credentials, runtime state) |

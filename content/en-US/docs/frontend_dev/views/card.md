@@ -327,6 +327,10 @@ The card toolbar is a simplified subset of `ModelTable`'s toolbar:
 
 Active filter/sort states are shown as clearable badges below the toolbar.
 
+The Filter and Sort dialogs offer the fields `ModelTable`'s do: the model's filterable fields (a cascaded field included), without the sensitive fields the caller never sees unless a rule already uses one; the Filter dialog also opens the model's many-to-one and one-to-one relations, listing the fields one level on under their dotted path (`useListFilterFields`; see [Table](./table#field-capability-rules)). The active filter badge shows such a rule by its labels.
+
+The row is laid out by the shared [ListToolbar](../components/list-toolbar), as `ModelTable`'s is: Filter / Sort / Refresh and Create go to a line of their own, right-aligned, when they do not fit beside the search box, rather than squeeze it.
+
 ## Core Props
 
 | Prop          | Type                                                          | Required | Default | Notes                                                                                                        |

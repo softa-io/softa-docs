@@ -229,6 +229,10 @@ modelService.updateOne(modelName, { id, [groupBy.field]: column.id })
 
 移动成功后看板使 `[modelName, ...]` 下查询失效，主列表、分组计数与各列展开均重新拉取。
 
+## 工具栏
+
+搜索框，旁边是看板的卡片计数（"42 total"），右侧是 Refresh（有 sidecar 时）和 Create —— 由共用的 [ListToolbar](../components/list-toolbar) 排布，与 `ModelTable` 的相同：按钮放不进搜索框旁边时换到单独一行并靠右，而不是挤压搜索框。
+
 ## 限制（v1）
 
 - 工具栏无过滤 / 排序对话框（与配对的 `ModelTable` 视图配合使用）。

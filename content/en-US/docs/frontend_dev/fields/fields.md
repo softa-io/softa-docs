@@ -293,6 +293,7 @@ Behavior notes:
 - `widgetProps` is not propagated into `ModelTable` / `RelationTable` read-mode cell renderers.
 - `defaultValue` is intended for static field-level create defaults. Use dialog/page `defaultValues` only for runtime/contextual prefills such as route params, parent row values, or non-rendered fields.
 - `required={false}` can relax metadata `required`; `readonly={false}` can override metadata readonly.
+- on a `OneToMany` / `ManyToMany`, `required` means at least one row (item), judged on the rows the form holds — deleting the last one shows `<Label> is required` under the table. A paged relation table (`isPaged`) holds one page at most, so it leaves the rule to the server.
 
 Examples:
 

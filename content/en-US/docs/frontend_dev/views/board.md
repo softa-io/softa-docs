@@ -229,6 +229,10 @@ For business actions that need server-side validation (e.g. env mutex transition
 
 After a successful move the board invalidates queries under `[modelName, ...]` so the main list, grouped count and any per-column expansions all re-fetch.
 
+## Toolbar
+
+The search box with the board's card count beside it ("42 total"), and Refresh (with sidecars) and Create on the right — laid out by the shared [ListToolbar](../components/list-toolbar), as `ModelTable`'s is: the buttons go to a line of their own, right-aligned, when they do not fit beside the search box, rather than squeeze it.
+
 ## Limitations (v1)
 
 - No filter / sort dialogs in the toolbar (use the paired `ModelTable` view for those).

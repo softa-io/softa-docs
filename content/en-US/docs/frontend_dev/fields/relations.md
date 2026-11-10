@@ -49,7 +49,7 @@ function OptionItemsTableView() {
 | Prop       | Type             | Required | Notes                                                                                                     |
 | ---------- | ---------------- | -------- | --------------------------------------------------------------------------------------------------------- |
 | `children` | `ReactNode`      | Yes      | Ordered `<Field />` column declarations, plus optional `<Action />` row actions (see [Row Actions](#row-actions)). |
-| `orders`   | `OrderCondition` | No       | Default relation-table sorting. Supports a single tuple or multiple tuples.                               |
+| `orders`   | `OrderCondition` | No       | Default relation-table sorting. Supports a single tuple or multiple tuples. Without it the table keeps the order the server sends — the related model's `defaultOrder`, else entry order — and sorts on the page only once the reader clicks a column header.                               |
 | `pageSize` | `number`         | No       | Relation-table page size. Only affects paged relation tables (`isPaged={true}`).                          |
 
 Sorting examples:
@@ -147,6 +147,7 @@ Notes:
 
 - `filters` is applied to the default searchable reference query
 - when a dependent `{{ fieldName }}` has no current value, the selector stays query-disabled instead of loading all options
+- the dropdown loads its options a page at a time: 20 when it opens, the next page each time the list is scrolled to its end, up to 200, after which a line asks the reader to type to narrow down. They come in the related model's `defaultOrder` (newest first when it has none), then its primary key, so pages neither repeat nor skip a record. `TagList` and the relation pickers in table filters work the same way
 
 #### `filterBySource` — backend-driven contextual filtering
 
@@ -217,6 +218,7 @@ Behavior:
 - it is still declared through `Field`, not by rendering `SelectTreePanel` directly
 - it uses the same `Field.filters` rules as searchable reference fields
 - when a dependent `{{ fieldName }}` value is missing, the tree selector stays query-disabled instead of loading an unfiltered tree
+- the whole tree is read at once (up to 5000 nodes) and searched among the nodes read; it is not read a page at a time, since every node needs its parent to be drawn
 - low-level `Tree` / `SelectTreePanel` are internal infrastructure
 
 #### Recursive parent picker: `preventCycle`

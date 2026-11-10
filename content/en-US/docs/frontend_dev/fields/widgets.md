@@ -15,7 +15,7 @@ Related docs:
 
 | FieldType     | Default behavior               | Supported WidgetType                                                              |
 | ------------- | ------------------------------ | --------------------------------------------------------------------------------- |
-| `String`      | single-line input              | `URL`, `Email`, `Phone`, `PlainText`, `RichText`, `TemplateEditor`, `Markdown`, `Code`, `Color`, `yyyy-MM`, `MM-dd`, `CronEditor` |
+| `String`      | single-line input              | `URL`, `Email`, `Phone`, `PlainText`, `RichText`, `TemplateEditor`, `Markdown`, `Code`, `Color`, `yyyy-MM`, `MM-dd`, `CronEditor`, `ModelName`, `ModelField` |
 | `Text`        | multiline textarea             | `RichText`, `Markdown`, `Code`, `TemplateEditor`                                  |
 | `MultiString` | tag-style comma/enter input    | -                                                                                 |
 | `Integer`     | numeric input                  | `Monetary`, `Percentage`, `Slider`                                                |
@@ -236,29 +236,50 @@ Value contract: `string` in `"MM-dd"` format, or `undefined` when cleared.
 
 ### `CronEditor`
 
-Visual cron expression editor. Stores a standard cron string (5-part or 6-part). Opens a popover panel with tabbed editors for each cron position (Seconds, Minutes, Hours, Day, Month, Week). Each tab supports four modes: Every (wildcard), Specific values (multi-select grid), Range (from–to), and Interval (every N starting at X). The panel shows a live expression preview and the next scheduled run times.
+A Quartz cron expression — the dialect the backend scheduler runs (cron-starter's `SysCron`, flow-starter's Cron triggers and Timer nodes): `second minute hour day-of-month month day-of-week [year]`, day of week 1–7 = SUN–SAT, one of the two day fields `?`. The field is a button that says what the schedule means, in the server's words, with the expression beneath it; it opens a panel whose **Repeat** select picks how to edit it:
+
+- a common schedule — Every few minutes (1, 2, 3, 4, 5, 6, 10, 12, 15, 20 or 30: the steps that divide an hour), Every hour (at minute mm), Every day, Every weekday (Mon–Fri), Every week (on chosen days) and Every month (on day d), the last four at a time hh:mm;
+- Custom — the fields one by one in tabs (Minute, Hour, Day, Month), each Every / Specific / Range / Interval. The Day tab picks the day **by day of month or by day of week**: Quartz takes one, and the other is written `?`;
+- Expression — the expression as typed, for what the panel cannot show (`L`, `W`, `#`, a year, a second that is not one value).
+
+The second is never edited: it stays one value (0 unless the expression already had another), so a schedule written from the panel fires at most once a minute. An existing value opens on the kind it is (`0 */15 * * * ?` on Every few minutes, `0 0 9 ? * MON-FRI` on Every weekday, `0 30 2 1 1 ?` on Custom, `0 0 9 L * ?` on Expression); switching kinds carries the time, the days and the fields over. Days of the week are written by name (`MON,WED`), and read as names or as Quartz numbers.
+
+Nothing is computed in the browser: whether an expression is accepted, what it means and when it runs next come from the server's preview, asked 400 ms after the draft stops changing — `GET /toolkit/previewCron` (the scheduler's rules) unless the caller brings its own. The panel lists the next runs in the server's zone, shows why an expression is refused, and keeps **Apply** off while the server refuses it; **Clear** empties the field. Under the closed field the refusal stays visible. A page using the widget needs the preview endpoint in its permissions (a custom permission bundled into `view`, as System › Scheduled Jobs does).
 
 ```tsx
 <Field fieldName="cronExpression" widgetType="CronEditor" />
 ```
 
-```tsx
-<Field
-  fieldName="schedule"
-  widgetType="CronEditor"
-  widgetProps={{ format: "5-part" }}
-/>
-```
-
 `CronEditor` widget props:
 
-| Prop           | Type                   | Default  | Notes                                                  |
-| -------------- | ---------------------- | -------- | ------------------------------------------------------ |
-| `format`       | `"6-part" \| "5-part"` | `"6-part"` | 6-part includes seconds tab; 5-part hides it.        |
-| `showPreview`  | `boolean`              | `true`   | Show next run times preview in the panel.              |
-| `previewCount` | `number`               | `5`      | Number of next run times to display.                   |
+| Prop           | Type     | Default | Notes                                              |
+| -------------- | -------- | ------- | -------------------------------------------------- |
+| `previewCount` | `number` | `5`     | How many next runs the panel lists (the server allows 1–10). |
 
-Value contract: `string` in standard cron format (e.g. `"0 30 9 * * *"` for 6-part, `"30 9 * * *"` for 5-part), or empty string when cleared.
+Value contract: a Quartz `string` (e.g. `"0 30 9 * * ?"`), or an empty string when cleared.
+
+Outside a form, the same editor is `CronEditor` (`widgets/string/cron/CronEditor.tsx`): `value` / `onChange` / `onBlur`, and `preview`, a `CronPreviewSource` (`{ key, load(expression, count) }`) naming who judges the expression. The flow designer's schedule (`components/flow/panel/cron-input.tsx`) passes `GET /flow/cron/preview`, which also refuses a schedule firing more than once a minute.
+
+### `ModelName` / `ModelField` — a model, and a field of it
+
+Two widgets for a configuration record that names a model and fields of it — an import or an export template. Both store plain names. Neither is in the backend `WidgetType` enum, so a page states them on its `<Field>`.
+
+```tsx
+<Field fieldName="modelName" widgetType="ModelName" />
+
+{/* The export template page: its filters, orders and columns are about the model picked above. */}
+<ModelFieldSourceProvider modelName={modelName} cascade>
+  <Field fieldName="filters" />
+  <Field fieldName="orders" />
+  {/* each row: <Field fieldName="fieldName" widgetType="ModelField" /> */}
+  <Field fieldName="exportFields" tableView={ExportTemplateFieldsTableView} />
+</ModelFieldSourceProvider>
+```
+
+- `ModelName` picks a model from the model catalog (`SysModel`, read a page at a time as the list is scrolled) and stores its `modelName`. Only a catalogued model can be picked: a mistyped name saves without complaint and fails later, on whoever uses the record. The flow designer's model pickers are the same control (`ModelCombobox`), which there also accepts a typed name for a model the catalog does not list yet.
+- `ModelField` picks a field of the model a surrounding `ModelFieldSourceProvider` names and stores its name — or, under a relation, its dotted path. Without a provider it stays a plain text box: a page that has not said which model it edits has not opted in, and guessing would offer another model's fields as though they were valid.
+- `ModelFieldSourceProvider` (`components/fields/core/model-field-source.tsx`) states once which model the pickers inside work against, so a row edited in a dialog of its own still knows it (context crosses the dialog's portal). `modelName` is that model — none yet, and the pickers offer nothing until one is chosen. `country` narrows `ModelField` to the fields that country uses. `cascade` also offers the fields of the model's to-one relations, one level down (`deptId.code`), each relation read when it is opened or once a search is typed. The `Filters` and `Orders` builders read the same provider (below).
+- Turn `cascade` on only where the server resolves such a path wherever the pickers write one. An export does — a join for a filter or an order, a read of the related record for a column. An import template leaves it off: its column names a relation by the key the row is looked up by, a narrower choice the import dialog makes.
 
 ### `Markdown`
 
@@ -817,11 +838,14 @@ JSON editor widget props:
 <Field fieldName="filters" />
 ```
 
+The rules are over the fields of the field's own model — or, inside a `ModelFieldSourceProvider`, over those of the model it names, and none until it names one: an export template's `filters` are about the model it exports, not about `ExportTemplate`. With the provider's `cascade`, a rule may also name a field of a to-one relation, one level down, stored as its dotted path; a stored rule's relation is read with the field, so it shows by its labels, and the builder stays closed until it is. A flow's data nodes (Get data, Query records, Update data, Delete data) cascade their `filters` this way, since they run as a query of the node's model. Paths among `allowedFields` (`employeeId.departmentId`) open just their relations, to just the fields named, provider or not: a flow rule is offered the paths the backend lists for it. Only a field a condition can read is listed: a `dynamic` field that is not cascaded has no column, so neither a query nor an in-memory rule can test it; and a field reached through a relation must be stored — the backend rewrites a cascaded field to its path only when a condition names it directly (`isFilterablePathLeaf`).
+
 `Filters` widget props:
 
 | Prop            | Type       | Default | Notes                         |
 | --------------- | ---------- | ------- | ----------------------------- |
-| `allowedFields` | `string[]` | -       | Whitelist searchable fields.  |
+| `allowedFields` | `string[]` | -       | Whitelist searchable fields; a dotted path (`employeeId.departmentId`) also opens that relation to the fields named, and a two-level one (`employeeId.departmentId.costCentreId`) opens the second relation inside the first. |
+| `dialogDescription` | `string` | -   | What the conditions can read, under the Advanced Filter dialog's title, where it differs from a list's (a flow rule says what it reads and when). |
 | `excludeFields` | `string[]` | -       | Hide fields from the builder. |
 
 ### `Orders`
@@ -829,6 +853,8 @@ JSON editor widget props:
 ```tsx
 <Field fieldName="orders" />
 ```
+
+The fields come from the same place as the `Filters` builder's — the field's own model, or the model a `ModelFieldSourceProvider` names — and with `cascade` an order may sort by a to-one relation's field (`deptId.code`), which the query joins on.
 
 `Orders` widget props:
 

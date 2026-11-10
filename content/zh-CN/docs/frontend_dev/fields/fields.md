@@ -291,6 +291,7 @@ interface FieldConditionContext {
 - `widgetProps` 不会透传给 `ModelTable` / `RelationTable` 的只读单元格渲染器
 - `defaultValue` 适用于静态的字段级创建默认值。对于路由参数、父行值或未渲染字段等运行时 / 上下文预填，请使用对话框 / 页面级 `defaultValues`
 - `required={false}` 可以放宽元数据里的 `required`；`readonly={false}` 可以覆盖元数据里的只读设置
+- 用在 `OneToMany` / `ManyToMany` 上时，`required` 指至少一行（一项），按表单里持有的行判断——删掉最后一行，表格下方显示 `<Label> is required`。分页的关联表格（`isPaged`）最多只持有一页，交给服务端判断
 
 示例：
 

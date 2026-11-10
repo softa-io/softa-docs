@@ -1,0 +1,666 @@
+# 审批流
+
+<Lead>
+
+审批流（场景 `APPROVAL`）审批一张业务单据：提交人提交，框架按提交条件选出这张单据的审批流，审批人一步步处理，结果写回单据，再由业务模块做后续动作。
+
+</Lead>
+
+<RoleCards>
+<RoleCard title="管理员" href="#配置审批流">给单据建审批流：每一步由谁审批、几票通过，撤回、催办、抄送等设置</RoleCard>
+<RoleCard title="审批人和提交人" href="#处理审批">批准、驳回、退回、转交、抄送；撤回、催办、取回失败的审批</RoleCard>
+<RoleCard title="开发者" href="/zh-CN/docs/features/flow/integration/">让业务模型接入审批；结果写回和预览接口在本页后半</RoleCard>
+<RoleCard title="运维" href="#约束与异常">出错时怎样处理，重跑审批之后的步骤；维护任务见「超时提醒」</RoleCard>
+</RoleCards>
+
+## 全景
+
+<Lead>
+
+一张单据在审批中有两个状态：单据自己的审批状态，和这次审批的实例状态。先看谁参与、一次提交怎样走完。
+
+</Lead>
+
+### 参与者
+
+| 角色 | 是谁 | 能做什么 |
+|---|---|---|
+| 提交人 | 点「提交」的用户，即实例的 `initiator` | 提交、按撤回策略撤回、催办、评论、作废草稿；被退回后修改并重新提交 |
+| 当事员工 | 单据所涉及的员工（请假的人、被调薪的人），默认是单据的 `employeeId` | 不一定是提交人：代提交时，是提交人替他提交。按组织找审批人时以他为起点 |
+| 审批人 | 当前步骤解析出的登录账号 | 批准、拒绝、退回、转交、抄送、评论；批量批准 / 退回 / 拒绝 |
+| 抄送人 | 审批人手动抄送的人，或流程设置里的抄送规则抄送到的人 | 查看、标记已读、评论 |
+| 受托人 | 委托规则指定的代理人 | 委托生效期间，新到达委托人名下的任务改派给他（已在等待的不动）；他的账号不能使用时委托不生效，任务留给委托人 |
+| 管理员 | 持有监控台权限的用户，按 `FlowInstance` 数据范围 | 监控实例；终止、重跑审批之后的步骤、转派、代人委托、管理员催办 |
+
+提交人和实例给过任务的人——审批人（不论是否处理过）、抄送人、转交 / 委托的对象，以及步骤没等到他处理就关闭了的审批人——是实例的**参与者**：不需要任何权限配置就能查看实例，实例运行中可以评论。管理员的催办、终止、转派都不让他成为参与者。见[谁能查看](#谁能查看)。
+
+### 主链路
+
+<FlowFigure name="sequence">
+
+左侧两条竖条是事务边界。①–⑧ 在一次提交里完成：任何一步出错，整次提交撤销，单据仍是草稿。⑨–⑪ 每个审批步骤重复一次。审批人的一次处理（⑩–⑬）也在一个事务里：⑩ 审批人改了字段时，先写回可编辑字段，交业务模块检查，不通过整次处理被拒；⑫ ⑬ 出错，这次处理就不算数。
+
+例外是 ⑪：后续步骤出错只回滚到通过那一刻，审批保留，实例转为失败，见[审批之后的步骤出错](#审批之后的步骤出错)。虚线箭头是通知。
+
+</FlowFigure>
+
+<Dev title="每一步由谁实现、落在哪个事务">
+
+③ ④ ⑦ ⑬ 由各业务模块的审批处理器实现：③ `validate`，④ `submission`（标题与路由变量），⑦ `afterSubmitted`，⑬ `afterOutcome`；⑩ 审批人改了字段时调用 `afterApproverEdit`。见[业务接入](./integration#审批业务记录)。每一步落在哪个事务里，见[设计要点](./design#事务边界)。
+
+</Dev>
+
+### 单据的审批状态
+
+所有审批模型共用同一个状态机，`approvalStatus` 只由框架写。
+
+<FlowFigure name="recordStates">
+
+只有草稿能提交、能作废。退回、撤回、审批出错后取回，都让单据回到草稿；改完再提交，会开始一个新的审批。
+
+</FlowFigure>
+
+| 状态 | 可以发生什么 | 去向 |
+|---|---|---|
+| <Status>Draft</Status> | 编辑；提交；由提交人作废 | 提交 → <Status>Pending</Status>；作废 → <Status>Cancelled</Status> |
+| <Status>Pending</Status> | 冻结。审批人批准、拒绝或退回；提交人在流程的 `withdrawPolicy` 范围内撤回；管理员终止 | 批准 → 下一步骤或 <Status>Approved</Status>；拒绝 → <Status>Rejected</Status>；退回或撤回 → 重新成为 <Status>Draft</Status>；终止 → <Status>Cancelled</Status> |
+| <Status>Approved</Status> <Status>Rejected</Status> <Status>Cancelled</Status> | 最终且冻结：不再编辑、提交或作废 | — |
+
+- **退回、撤回不是会停留的状态**：记录重新成为草稿，修改后作为新的审批提交，审批历史保留发生过的一切。
+- **重新提交或作废草稿**，会把这张单据之前的审批标为 `superseded`：被退回的那次不再算等待修改（实例搜索的 `awaitingRevision`），作废的单据在实例搜索的行上标为 `recordCancelled`。
+- **管理员终止**审批（`POST /flow/monitor/instances/terminate`），记录变为 <Status>Cancelled</Status>。
+- **审批之后的情况**——已付款、已生效、已作废——不是审批状态，放在模型自己的状态字段里；对延期生效的变更，处理器的 `effectStatuses` 告诉监控台其进展。
+
+<Dev title="审批字段与审批锁（ApprovalLockValidator）">
+
+处理器的模型在元数据中缺少审批字段 `approvalStatus`、`submitterId`、`submittedTime` 时，启动会失败。
+
+`ApprovalLockValidator`（一个 `ModelWriteValidator`，order 10）作用于写入根，所有写入通道都在此汇合——记录的表单、通用端点、导入、流程的写入节点：
+
+- 非草稿记录——`Pending`、`Approved`、`Rejected`、`Cancelled`——既不能修改也不能删除，它所拥有的东西也不能：即那些通过直接指向它、且级联删除（`onDelete = CASCADE`）的多对一字段归属于它的模型记录，例如报销单的明细行——也不能在它下面新增此类记录；
+- 审批字段属于框架：新记录是没有提交人的 `Draft`，任何写入都不能改变它们。回传已存储的值不算修改。
+
+关闭权限检查的写入不受限制：写入器自己的写入、审批步骤允许其审批人编辑的字段（见[审批人的写入](#审批人的写入)）、处理器的后续动作。审批锁只规定何时任何人都不能修改记录；在其他状态下谁可以修改它——其所有者、在哪些状态下——仍由模型自己的校验器决定。审批字段在元数据中不是 `readonly`，否则框架自己的写入也会被丢弃；表单把它们显示为只读。
+
+</Dev>
+
+### 审批实例的状态
+
+<FlowFigure name="instanceStates">
+
+运行中、等待中时，单据保持「审批中」；实例一结束，右侧就是单据随之变成的状态。失败的实例不写回，单据保持「审批中」，出路见[审批之后的步骤出错](#审批之后的步骤出错)。
+
+</FlowFigure>
+
+> [!NOTE]
+>
+> 提交时流程出错**不会**留下失败实例：整次提交被拒绝并回滚，单据仍是草稿，也不发任何通知。审批人自己能改正的问题——这一步已被别人处理、必填项没填、修改不合规——也只拒绝这次操作，审批人看到原因。失败的实例只来自启动之后：审批人通过之后流程走不下去（下一步解析不到审批人、没有可走的路线、分支汇合不对，以及审批流只放人和路由之前发布的修订版上自动步骤出错；审批保留），或者同样的旧修订版上定时、异步任务恢复时出错。
+
+<Dev title="FlowExecutionStatus 全部取值与状态转换">
+
+- `Pending`
+- `Running`
+- `Waiting` — 停在一个或多个等待上（待审批和/或定时器 / 异步回调）。具体原因位于实例的待审批列表和等待令牌列表中，因此单一状态可同时覆盖因不同原因挂起的并行分支。
+- `Rejected`
+- `Returned` — 退回给提交人；像拒绝一样结束实例，但其记录重新成为草稿。提交人修改后再次提交，从头启动一个新实例
+- `Withdrawn` — 由提交人撤回；结束实例，其记录重新成为草稿
+- `Cancelled` — 由管理员结束（*终止*，见[监控](./api#监控)）；记录的审批会连同其记录一起作废
+- `Completed`
+- `Failed` — 某个步骤无法运行。除非管理员将其终止（→ `Cancelled`），或者——审批之后流程走不下去、审批已保留时——重跑审批之后的步骤（→ `Running`），否则保持失败；记录审批的提交人也可以改为把记录取回（见[审批业务记录](./integration#审批业务记录)）
+
+没有要等的步骤时，实例从 `Running` 直接进入 `Completed`（End 节点可省）；恢复执行时出错同样进入 `Failed`。`Running`、`Waiting` 期间单据保持 `Pending`。实例一结束，结果写回单据：`Completed` → `Approved`，`Rejected` → `Rejected`，`Returned` / `Withdrawn` → `Draft`，`Cancelled` → `Cancelled`；`Failed` 不写回，单据保持 `Pending`。
+
+状态转换由 `FlowStatusTransitions` 统一校验：任何状态都可以进入 `Failed`，同一状态自转合法（并行分支再停一处仍是 `Waiting`）；其余只允许图中列出的转换，否则抛出 `Illegal flow status transition`。拒绝、退回、撤回、终止会关闭所有并行分支上仍在等待的步骤。
+
+</Dev>
+
+## 配置审批流
+
+<Lead>
+
+管理员在流程设计器里给单据建审批流：每一步由谁审批、几票通过，再定整个流程的撤回、退回、催办、提醒和抄送。发布前用 [Test run](#测试草稿) 看一张申请会怎样走。
+
+</Lead>
+
+### 一张单据的审批流
+
+审批流在新建时选定单据（列出应用能审批的所有单据），之后不能改。一张单据可以有多个审批流——比如请假与销假，或以后每个国家、公司一套——靠提交触发器的条件区分（按字段配规则，或写表达式）。没有条件的审批流是这张单据的**默认审批流**，审批其他流程的条件都不成立的记录。
+
+提交时，框架在这张单据**生效中**（已发布且已启用）的审批流里找条件对这条记录成立的那一个：
+
+| 条件成立的审批流 | 结果 |
+|---|---|
+| 恰好一个 | 用它启动审批 |
+| 多于一个（条件互相重叠） | 拒绝提交，并列出这些流程，请管理员收窄条件，让恰好一个成立 |
+| 一个都没有 | 交给默认审批流；也没有默认审批流（没建、已停用）时，拒绝提交，提示没有适用的审批流 |
+
+- **给某个国家单独一套流程**：复制默认审批流、给副本加上这个国家的条件——这个国家的记录走副本，其他人仍走默认审批流。副本是未发布的草稿，单据和条件都和原流程一样；同一单据另有启用中的审批流条件完全相同时——两个都没有条件（两个默认审批流）也算——发布或启用会被拒绝，所以要先改条件。
+- **同一个审批流里需要不同路线**（例如请假超过 3 天要多一级审批）：用带条件的连线分开。
+- **每次提交都从头启动**：退回后再提交时重新按条件选流程，运行的是当时生效的修订版。
+
+### 审批人解析
+
+一步的审批人是一组或几组来源找到的人合成的名单。按组织找人时默认从**当事员工**出发——记录所涉及的员工（见[业务接入](./integration#审批业务记录)）——所以代他人提交的申请交给当事员工的审批人，而不是提交人的；来源也可以改为从提交人算起，见[按当事员工找](#按当事员工找)。
+
+<FlowFigure name="stepStart">
+
+从左往右是一个审批步骤开始时系统做的事，都在推进到这一步的那次请求里完成。一个人都没找到时看「找不到审批人时」：报错让这次提交被拒，审批之后遇到则实例失败；自动通过和「自动通过的票已经够了」一样，这一步不生成待办，直接进入下一步；转给角色换成角色里的人，接着算票，只要一票。只配了指定人员的步骤一律按报错处理。委托只换人，不改票数。
+
+</FlowFigure>
+
+#### 审批人来源
+
+步骤的 `config.approverSources` 是一组或几组来源，每组按 `type` 区分（`ApproverSourceType`），参数和 `type` 放在同一个对象里：
+
+| 来源 | 找谁 | 参数 |
+|---|---|---|
+| 指定人员 `Users` | 写明的用户。设计器下拉的第一项，新建步骤默认就是一组指定人员 | `userIds` |
+| 上级 `Supervisor` | 第 N 级上级，默认从当事员工算起 | `level`；`relativeTo`，见[按当事员工找](#按当事员工找) |
+| 部门负责人 `DeptLeader` | 某个部门的负责人 | `deptScope`，默认当事员工的部门 |
+| 部门 HRBP `DeptHrbp` | 某个部门的 HR 业务伙伴 | `deptScope`，默认当事员工的部门 |
+| 角色 `RoleQuery` | `roleIds`、`roleCodes` 或两者共同指定的角色的持有人，可选地收窄到某个部门 | `roleIds` / `roleCodes`；`deptScope`，默认不限部门 |
+| 岗位 `Position` | 岗位上的人 | `positionIds` |
+| 部门成员 `Department` | 部门的成员 | `deptIds` |
+
+**一个步骤的几组审批人合成一个名单。** 这一步的审批人是各组找到的所有人，同一个人只算一次，按组的顺序排列；审批模式按这个名单计数：「经理或 HR 谁批都行」是一个步骤、两组、`AnyOne`，「经理和 HR 都要批」是同样两组、`Unanimous`——不用画并行分支。某一组没找到人，其他组的人照样能批；所有组都没找到人，才按[找不到审批人时](#找不到审批人时)的设置处理，拒绝提交时的原因按组逐一说明（「Ann Lee has no manager who can approve; nobody who can approve holds its roles」）。各方必须分别通过的——有先后、能改的字段不同（字段权限是步骤的）、某一方缺人就要停下——仍然分成几个步骤，串联或放在并行分支上。
+
+**步骤必须写明由谁审批**：至少一组，每组是带类型的来源，选指定人员时至少一人；没写的步骤校验和发布都会拒绝。
+
+**没有从流程变量里取人的来源。** 审批流的变量是单据字段、当事员工的 id 和触发信息，从来没有用户 id；要按条件换人，用条件分支加指定人员。「部门取自变量」（`deptScope: VARIABLE_DEPT`）保留：它读单据上的部门字段。
+
+#### 找不到审批人时
+
+`config.emptyApproverStrategy`，**只在有一组按规则找人时生效**：
+
+| 策略 | 效果 |
+|---|---|
+| `Error`（默认） | 停止：提交时拒绝提交并说明原因；审批之后遇到，实例失败 |
+| `AutoApprove` | 算这一步通过，记一条没有操作人的自动通过（"Auto-approved (no approver)"），进入下一步 |
+| `AssignToRole` | 转给所选角色里能处理事项的成员——去掉提交人和当事员工，否则单子会转回他们自己、按本人自动通过——由其中任一人同意或拒绝，不看节点上配的审批方式。去掉后没人，和 `Error` 一样拒绝，提示里写明是哪些角色 |
+| `Skip` | 设计器不再提供；已存了它的步骤照常运行，和 `AutoApprove` 一样算通过，但审批历史里不留痕迹 |
+
+只配了指定人员的步骤，找不到人只可能是这些人都不能办理了——流程该改了——一律停止并说明原因，不管存的是什么；设计器不显示这一项。需要在人员变动时有兜底的步骤，按岗位或角色配，不要写死具体的人。
+
+`AssignToRole` 的角色可以选租户自建的（`config.emptyApproverRoleIds`），也可以选内置的（`config.emptyApproverRoleCodes`，各租户的 code 相同，种子流程按 code 写）。成员的找法与 `RoleQuery` 相同，会找到所有法人的成员；要按法人分开的，就按法人建角色。
+
+#### 按当事员工找
+
+组织关系默认从当事员工读取：代提交的单据和他本人提交的走同一条路线。`Supervisor` 接受 `relativeTo`：`SUBJECT`（当事员工，默认）或 `INITIATOR`（提交人）。基于部门的来源接受一个 `deptScope`：
+
+| `deptScope` | 部门 | 默认用于 |
+|---|---|---|
+| `SUBJECT_DEPT` | 当事员工的部门 | `DeptLeader`、`DeptHrbp` |
+| `INITIATOR_DEPT` | 提交人的部门 | |
+| `SPECIFIC_DEPT` | `deptId` 指定的部门（`Department` 用 `deptIds`） | `Department` |
+| `VARIABLE_DEPT` | `deptVariable` 所指变量中的部门 id——例如调动的调入部门 | |
+| `ALL` | 不限部门：所有持有人（仅 `RoleQuery`） | `RoleQuery` |
+
+无法确定的部门——没有当事员工的部门、变量为空——解析为无人，而不会变成所有持有人；该步骤随后按找不到审批人的设置处理。没有当事员工的实例从其提交人开始解析。
+
+按提交人算（`INITIATOR`、`INITIATOR_DEPT`）只在确实要提交人那边确认时用：例如 HR 专员代录调薪、调岗，先由录入人的上级确认录入，再走员工的上级。员工自己提交时两者找到的人一样；代提交时，按提交人算的这一步会送到提交人的上级或部门，而不是员工的。
+
+#### 账号不能使用的人
+
+审批人要有能登录的账号。没有账号的员工视为无人，账号不能登录的也一样——还没邀请（`Pending`）、邀请了还没接受（`Invited`）、被冻结（`Frozen`）、离职后结束（`Deactivated`）：
+
+- **找人时悄悄跳过**，和离职的上级一样：步骤的指定人员、其他所有来源解析出的审批人，以及抄送规则的接收人。跳过后没人的步骤，按找不到审批人的设置处理——上级离职后，下属的新申请不会再卡在他名下。
+- **不能审批的上级把这一步交给更上一级**：往上找到第一个能审批的人，级数按链上每个人算（第 2 级仍是上级的上级）；汇报关系绕回已经走过的人时就停。只有往上一直找不到能审批的人，这一步才为空。没有能审批的负责人（或 HRBP）的部门，沿用其上级部门的。
+- **把步骤交给账号不能使用的人的动作一律拒绝**（`400`），并写明是谁、为什么——`Ann Lee's account is frozen`：转交、抄送（只要选中的人里有一个不能使用就整次拒绝）、管理员转派、建委托规则（本人建或代人建）、批量转派及其预览。
+- **设计器给出警告**（`Warning`，不是 `Error`）：步骤或抄送规则的指定人员里当前不能使用的人；账号在发布之后还会变化，所以到达步骤时引擎会再检查一次。
+
+角色持有人本身就是账号，即使没有员工档案也能审批，前提是能登录。已经派给后来离职的人的待办仍归他，要由管理员改派。
+
+#### 审批人去重
+
+`approverDedup` 默认为 **`Global`**：已在先前节点审批过的用户在后续节点自动通过（记为 `AUTO_APPROVE`）。残余风险：流程中途的表单编辑仍会被该先前审批自动背书；在需要重新审阅的流程上，将策略设为 `Contiguous` 或 `None`。
+
+#### 自动通过
+
+提交人默认代为通过（「提交人是审批人时」）：某个步骤的审批人中包含提交单据的用户时，他被视为已批准——提交就等于同意——在审批历史中记为 `AUTO_APPROVE`（"Auto-approved (submitter)"），其余由该步骤的审批模式决定：任一人通过的步骤直接通过，需全员通过的步骤仍等待其他人。由流程设置 `selfApproval` 决定：`AutoApprove`（默认）或 `RequireApproval`，后者像对待其他审批人一样询问提交人。例如总经理自己提交、这一步只配了总经理，默认直接通过；上级替下属提交调薪、第一步正好是他自己，同样算已同意。
+
+当事员工在别人替他提交时不享受这一点——比如 HR 替某位部门负责人提交调薪，「部门负责人」这一步解析出来就是他本人：以他的名义通过等于替他决定自己的事，所以他和其他审批人一样要自己审批。员工自己提交的单据，他就是提交人，适用上面的设置。不想让本人经手的单据（HR 发起的调薪、降职等），审批人用「上级」来源、按当事员工算（默认）：它从当事员工往上找，碰不到他本人。
+
+<Dev title="组织数据从哪里读（OrganizationService）">
+
+审批人是**登录账号 id**。组织通过 `OrganizationService` SPI 读取，其默认实现 `FlowOrgService` 遵循 permission-starter 已在使用的 HR 约定，因此基于这些模型的应用无需任何配置：
+
+| 用途 | Model.field |
+|---|---|
+| 账号 → 员工（提交人的） | `Employee.userId` |
+| 姓名、部门、岗位 | `Employee.fullName`、`departmentId`、`jobPositionId` |
+| 上级（员工 id） | `Employee.piEmployeeId` |
+| 部门负责人、HRBP（员工 id）、上级部门、名称 | `Department.picEmpId`、`hrbpEmpId`、`parentId`、`name` |
+| 角色持有人、角色编码 | `UserRoleRel.userId` / `roleId`、`Role.code` |
+| [通讯录](./api#通讯录)里显示在名字旁的编码，模型有这个字段时才读 | `Employee.code`、`Department.code` |
+| [通讯录](./api#通讯录)搜索的人员，按调用方的行范围读取（`directory-model`，默认就是员工模型；字段名相同） | `Employee` |
+
+- 能登录的账号：`UserAccount.status` 在 `softa.flow.org.approver-account-statuses` 之中（默认 `Active`）。应用没有 `UserAccount` 模型时不检查状态。按 id 查用户（用于显示姓名）仍能查到所有账号。
+- 账号能否使用的规则适用于流程和动作写明的每一个人，而不只是组织查询（`ActorAccounts`，询问 `OrganizationService.getUnusableAccounts`——应用的实现不覆盖它时视为人人可用；`FlowOrgService` 按账号状态回答，租户里没有的账号也算不能使用）。
+- 设计器的警告：`UNUSABLE_APPROVER`（报在所在那一组的 `config.approverSources.<序号>.userIds` 上）、`UNUSABLE_CC_RECIPIENT`，校验和发布时都会报告（`ApproverAccountValidator`，一个 `FlowValidator` bean）；不是账号 id 的值不检查。
+- 查询跳过行范围——由谁审批不能取决于提交人能看到什么。
+- 所有模型名和字段名都可以在 `softa.flow.org.*`（`OrganizationServiceProperties`，包括 `account-model`、`account-status-field`、`approver-account-statuses`）下覆盖；使用其他组织体系的应用提供自己的 `OrganizationService` bean。
+- 转给角色时，`PendingApproval.assignedRoles` 记下角色名，角色名由 `OrganizationService.getRoleNames` 提供。
+- 与角色 id 不同，角色编码在每个租户中都相同，因此下发到多个租户的流程用编码（`roleCodes`）指定内置角色；设计器同时提供两种列表，因为管理员自建的角色没有编码，需要按 id 选择。
+
+</Dev>
+
+<Dev title="校验与诊断码">
+
+- 没写审批人的步骤每次运行都找不到人——默认策略下每次提交都被拒——校验和发布都会拒绝（`MISSING_APPROVERS`：一组都没有时报在 `config.approverSources` 上，某组没选来源时报在 `config.approverSources.<序号>` 上，选了指定人员却没选人时报在 `config.approverSources.<序号>.userIds` 上；序号从 0 起；不论计票方式）。关于某一组的诊断都这样标在那一组上，步骤有几组时提示里写「group 2」这样的第几组。
+- 只有指定人员能在到达步骤前数清人数，所以每组都是指定人员时，「至少 N 人同意」超过各组合起来的人数（同一个人只算一次）才报错。
+- 转给角色却一个角色都没选，报 `MISSING_EMPTY_APPROVER_ROLES`。「找不到审批人时」只在有一组按规则找人时生效，所以只配了指定人员的步骤，校验也不检查它的角色。
+- 编译器会拒绝某个来源不接受的部门范围，以及缺少必需信息的范围（`INVALID_DEPT_SCOPE`、`MISSING_DEPT_IDS`、`MISSING_DEPT_VARIABLE`、`INVALID_RELATIVE_TO`）。
+- 配置里读不了的值——例如早先设计器给出的常量名 `ERROR`——在其字段上报告（`UNREADABLE_CONFIG`），而不是让整次校验失败；重新选一次即可。
+- `Skip` 在描述符里列在 `deprecatedOptions`。
+
+</Dev>
+
+<Dev title="已去掉的审批人来源与迁移">
+
+以前步骤只有一个来源（`config.approverSource`），指定审批人还单独存在 `config.approvers` 里；部署方的发版脚本会把步骤原来用的那一组改写进 `approverSources`，引擎不再读这两个键。
+
+`VariableList`（变量里存用户 id）、`Expression`（AviatorScript 算出用户 id）、`InitiatorManager`（`initiatorManagerId`）和 `Role`（`roleApprovers`）已经去掉：除非应用自己往变量里放用户 id，它们都找不到人；表达式只能把用户 id 写死在里面，这件事用条件分支加指定人员说得更清楚。审批步骤的一组或抄送规则写着引擎不认识的来源时，发布被拒（`UNKNOWN_APPROVER_SOURCE_TYPE` / `INVALID_CC_RULE`），运行时找不到人。
+
+部署方的发版脚本会在新 jar 启动之前改写库里还在用它们的流程——流程设计和每个已发布版本（设计 JSON 和编译后的 JSON）：这样的组直接去掉（变量里没有用户 id，它本来就找不到人），去掉后一组都不剩的步骤换成一组当事员工的直属上级，这样的抄送规则删掉。
+
+</Dev>
+
+### 通过门槛
+
+审批模式（`config.approvalMode`）决定几票同意算通过，按这一步各组审批人合起来的名单计数（同一个人只算一次）：
+
+| 审批模式 | 几票同意算通过 |
+|---|---|
+| `AnyOne`（默认） | 任一人 |
+| `Unanimous` | 全部 |
+| `MinCount` | 配置的人数（`minCount`） |
+| `Percentage` | 审批人数 × 百分比 ÷ 100，向上取整 |
+
+- **只在这一步可能有多个审批人时生效**：有几组，或者唯一的一组是几个指定的人、角色、岗位、部门成员。唯一的一组只有一个指定的人，或者是上级、部门负责人、部门 HRBP（每次只找到一个人；部门负责人、HRBP 只有「变量里的部门」给了多个部门时才会多人）时，一人同意即通过，不管存的是什么——哪种模式结果都一样——设计器不显示这一项，校验也不检查它。
+- **驳回没有门槛：一个审批人驳回，这次审批就被驳回**，不管这一步要几票通过——会签（全部通过）和或签（任一人通过）都一样，主流审批产品也是这样。已经同意过这一步的审批人不能再驳回。
+- 同一个人在每一轮只能投一次有效票。
+- **票数在步骤开始时算好**，并按这一步实际的审批人封顶：所需批准票数不超过审批人数。转交时票数不变；管理员转派把两人合并为一个位置时，按同一规则封顶——合并后这一步已经够票的，当场通过（三人全部通过的步骤，另两人已同意，第三人的位置并入其中一人）。
+- **找到的人少于门槛时**（例如要求至少 3 人只解析到 2 人，或解析到的人里有离职、冻结的被去掉了），这一步按实际的人数要求：2 人里要 2 人同意。
+
+<Dev title="存储与校验">
+
+- 配置里按上面的 JSON 值保存；枚举常量名（`ANY_ONE`）读不了。
+- 编译时校验器会拒绝不可能的通过门槛（`INVALID_MIN_COUNT`、`INVALID_PERCENTAGE`）。
+- 步骤上没有驳回方式；以前存在步骤上的 `rejectMode`、`rejectMinCount`、`rejectPercentage` 读取时被忽略。
+
+</Dev>
+
+### 流程设置
+
+流程级设置在设计器的「流程设置」面板里（画布上不选中任何节点时显示），它们只属于审批流，放到其他场景会编译失败。
+
+| 审批设置 | 取值 | 默认值 |
+|---|---|---|
+| `withdrawPolicy` | 提交人可以撤回到何时：`Never`、`BeforeFirstAction`（直到审批人第一次批准、拒绝、退回或转交——自动通过不算）、`UntilCompleted` | `Never` |
+| `returnEnabled` | 审批人能否把审批退回给提交人修改——每一步都一样：退回总是退给提交人、结束这次审批，提交人改完重新提交 | 关闭 |
+| `urgeEnabled` | 提交人能否催办；管理员不受这个开关限制 | 开启 |
+| `urgeIntervalHours` | 每个等待中的步骤多久能催一次（小时，与 `remindAfterHours` 一致），提交人和管理员共用；至少为 1 | `4` |
+| `remindAfterHours` | 步骤开始后满多少小时提醒尚未处理的审批人，之后每隔同样的小时数再提醒，最多 3 次；至少为 1。只发提醒——见[超时提醒](#超时提醒) | 不设：不提醒 |
+| `approverDedup` | `Global`、`Contiguous`、`None`——见[审批人去重](#审批人去重) | `Global` |
+| `selfApproval` | `AutoApprove`、`RequireApproval`——见[自动通过](#自动通过) | `AutoApprove` |
+| `emailNotification` | 是否同时以邮件发送通知——见[通知](#通知) | 开启 |
+| `cc` | 抄送规则：提交时、通过后、驳回后抄送给谁——见[抄送](#抄送) | 不抄送 |
+
+**撤回**：无论哪种策略，只有提交人可以撤回，且只能在审批等待审批人期间撤回。失败的单据审批是例外：已经没有人能处理它，所以提交人不受撤回策略限制，可以在单据仍在等这次审批时把单据取回——回到草稿，按届时的流程重新提交；失败的实例保留供排查。「撤回」按钮——无论在单据页、审批页还是「我的申请」——恰好在撤回会被接受时出现。
+
+<Dev title="撤回规则与旧设置">
+
+- `WithdrawPolicyGuard` 是唯一的规则（取回失败的审批：`WithdrawPolicyGuard.takesBack`）：撤回动作据此执行，预览、`GET /flow/instances/{instanceId}/withdraw` 和实例搜索的 `withdrawable` 据此报告。
+- `returnEnabled` 在步骤上没有自己的开关，以前存在步骤上的读取时被忽略。
+- `urgeIntervalHours` 取代了原来的 `urgeIntervalMinutes`：仍存着旧键的流程设计和版本在迁移前读作未设置，由部署方的发版脚本换算，在新 jar 启动之前执行。
+
+</Dev>
+
+### 抄送
+
+抄送是整个审批的设置，只在流程设置里配置，审批步骤本身没有抄送配置。规则（`cc`，一组 `FlowCcRule`）随流程版本发布，实例按它运行的版本执行。每条规则写明：
+
+- **何时**：提交时（`OnSubmit`）；通过后（`OnApproved`，整个审批以批准结束时）；驳回后（`OnRejected`，整个审批以拒绝结束时——即第一个人驳回时）。
+- **抄送谁**：`recipientSource`，一组人，与审批步骤 `approverSources` 里的每一组同形——指定人员，或按规则查找：当事员工的上级、部门负责人、角色、岗位、部门成员……。按[审批人解析](#审批人解析)的方式查找，不受提交人数据权限的限制；账号不能使用的人不抄送。同一时机要抄送几组人，就加几条规则。
+
+接收人在「抄送我」里有一条待阅、收到站内通知，并成为参与者：可以查看、评论。同一节点同一轮已经抄送过的人——不论是规则还是手动——不会重复抄送。审批人也可以在审批时手动抄送，一次选一人或多人——见[审批动作](#审批动作)。
+
+<Dev title="规则何时执行、怎样记录">
+
+- 通过后的规则不论是哪一次运行让审批结束都会执行——审批人批准、重跑、管理员转派（审批流只放人和路由之前发布的修订版上，还有定时器或异步任务恢复实例）：它在实例完成的地方执行，和「已批准」通知一起，而不是由每个可能走到那里的动作各自执行。
+- 指定人员写作 `{"type": "Users", "userIds": [...]}`。
+- 规则抄送与手动抄送记录方式相同：每个接收人一条 `CC` 记录，没有操作人（不是某个人发的），落在开始节点（提交时的，在开始节点往下走过任何步骤之前记下；路上没有经过任何审批步骤时，通过后的也在这里）或结束审批的那一步上——通过后的落在最后完成的那个审批步骤上——位于该节点的当前轮次。
+
+</Dev>
+
+### 审批人的写入
+
+审批步骤可以让审批人在批准时修改单据上的字段。节点的字段权限（`formPermissions`）是审批人所编辑字段的唯一授权：
+
+- 只有标为 `EDITABLE` 或 `REQUIRED` 的字段会被写回；批准请求 `formData` 中的其他键——`HIDDEN` 或 `READONLY` 字段，或节点未列出的字段——都会被丢弃，没有 `formPermissions` 的节点什么也不写。
+- `REQUIRED` 字段在编辑落地后必须有值——要么是提交的值，要么是记录已存的值——因此当记录缺少该值时，什么都不提交的批准仍会被拒绝。空白字符串、空集合都算没有值：整表提交或已存的明细表一行都没有、多选一项都没选。
+- 明细表的修改以补丁提交（新增、修改、删除了哪些行），补丁本身看不出还剩几行，步骤不去数：明细表必须至少留一行的，在模型上声明（`@Field(required = true)`），由 ORM 在每次写入时检查，审批人的修改也不例外。
+- 写入后立刻把编辑后的记录和写入的字段交给处理器的 `afterApproverEdit`，按模型自己的规则检查审批人的修改（和单据自己的页面保存时一样：服务端要算出的值、明细之间的一致性）；它抛出异常就拒绝这次批准、修改一并回滚——不合规的修改当场被拒，而不是等到审批结果生效时才失败。
+- 写入之后，根据编辑后的记录重新读取路由变量——先是记录自身的字段和流程规则经关联读的字段（改了关联就读新的关联记录），再叠加处理器的 `submission`——并替换流程启动时的变量：后续路由能看到审批人所做的修改，包括被清空的字段。
+
+> [!WARNING]
+>
+> 审批人的写入搁置**所有**权限检查，包括敏感字段的写入检查：即使审批人的角色没有覆盖某个字段的敏感字段集，只要节点表单把它设为可编辑，审批人仍能写入它。不要在审批表单上把敏感字段（薪资、银行信息、证件号码……）设为可编辑，除非这一步可能解析到的每位审批人都应当能编辑它；应设为只读，或不放在表单上。
+
+<Dev title="为什么搁置权限">
+
+一旦 actor 被确认为该节点的审批人，审批的表单编辑以及它所恢复执行的每个节点都会搁置该 actor 自己的行范围来运行。审批本身就是授权：审批人很少对其所审批的记录持有更新权限，而在按动作授予行范围的情况下（permission-starter），这会连审批本身都被拒绝。在引擎之外执行审批的宿主端点也同样处理，并先做一次入口检查，确认审批人能看到该申请（`@RequirePermission`）。因此，记录的写入规则（`ModelWriteValidator`）会把这些写入视为系统写入：在记录处于审批中时冻结记录的审批锁（`ApprovalLockValidator`）仍会放行节点标为可编辑的字段。
+
+</Dev>
+
+### 超时提醒
+
+审批流的 `remindAfterHours`（流程设置，和催办间隔放在一起）让每个步骤在开始后满这么多小时到期（`dueTime`，写在待办上：「我的待办」显示到期时间，过期的标为 Overdue）。步骤一到期就提醒尚未处理的审批人，之后每隔 `remindAfterHours` 小时再提醒，最多 3 次。不设这一项，步骤就不会到期，也不提醒。提醒是一条「审批已超时」的站内信，不发邮件。提醒靠一个定时维护任务发出，这个任务默认关闭，开启之前不会有任何提醒（见下）。
+
+**只发提醒，系统不替任何人做决定**：不自动通过、不自动驳回、不自动转交。HR 和财务类审批里，没人回复不等于同意；自动驳回又让提交人替审批人的拖延买单。没人处理的步骤就一直等着，出路都是人来走：审批人转交（离开前设好的委托只改派之后到达的任务）、提交人催办、管理员转派。步骤没有自己的超时设置——以前存在步骤上的 `timeout`（时限、策略、提醒、升级对象）读取时被忽略，不起任何作用。
+
+<Dev title="调度与维护任务（cron）">
+
+- 最多 3 次是 `ApprovalTimeoutScheduler.MAX_REMINDERS`，不可配置。`ApprovalTimeoutScheduler` 针对已持久化的待审批发提醒，提醒间隔取实例所运行修订版的设置；按修订版里已经没有的设置到期的步骤只提醒一次。
+- 它由 cron 行 `flow_approval_timeout_handle` 驱动，按租户执行（`PerTenant`）：每个租户在自己的上下文里跑一遍，提醒和它更新的实例都属于这个租户；定时节点补扫 `flow_timer_sweep` 也一样。（跨租户执行时没有租户号，插入的行会不带租户。）
+- starter 的维护 cron（审批提醒 `flow_approval_timeout_handle`，每 10 分钟；定时器扫描 `flow_timer_sweep`，每 5 分钟；自动化运行清理 `flow_automation_purge`，每天 02:30，跨租户执行一次）以关闭状态随 `data-system/SysCron.FlowMaintenance.json` 发布。应用需要在其 `seed-manifest.yml` 的 `platform` 下列出该文件，否则这些行根本不存在；然后开启所需的那些。
+- 旧版本为已删除的 cron（`flow_delegation_expiry`、`flow_instance_stuck_scan`）写入的行不再执行任何操作（消息被忽略），删掉即可。
+- 再次加载这个文件会把其中的 `active: false` 写回每一行，加载后要把用到的任务重新打开。
+
+</Dev>
+
+## 处理审批
+
+<Lead>
+
+审批人、提交人、管理员各自能做什么。所有动作的操作人都取当前登录用户；身份一律从登录上下文解析，客户端传来的会被忽略。
+
+</Lead>
+
+### 审批动作
+
+审批人的动作要求实例在等待审批、操作人是当前步骤的审批人。意见最多 256 个字符。拒绝信息写明涉及的人和步骤名称（步骤没有名称时用节点 id），例如 `Cat Ng is already an approver of step 'Manager approval'.`；把步骤交给账号不能使用的人一律拒绝，例如 `Ann Lee's account is frozen.`（见[账号不能使用的人](#账号不能使用的人)）。
+
+| 动作 | 额外条件 / 必填 | 效果 | 通知 |
+|---|---|---|---|
+| 批准 | 意见可选；可带字段（只写回可编辑 / 必填字段） | 先写回字段并重新计算路由变量；计票模式下记一票，到门槛或「任一人」即进入下一步。同一人重复批准原样返回 | 下一步的审批人收到待办；结束时通知提交人 |
+| 拒绝 | 意见必填 | 一人拒绝即可（见[通过门槛](#通过门槛)）：实例 <Status>Rejected</Status>，所有分支结束，单据 <Status>Rejected</Status> | 提交人 |
+| 退回 | 流程开启 `returnEnabled`；意见必填 | 实例 <Status>Returned</Status>，单据回到草稿。总是退回给提交人，不能退到中间步骤 | 提交人 |
+| 转交 | 本人还没投票；对象不能是本人，也不能已在该步骤；对象的账号要能使用 | 对象接替他的位置，所需票数不变。这是审批人把任务交给别人的唯一方式：原来的「委托」动作做的是同一件事，已经去掉，之前记下的 `DELEGATE` 照常显示 | 新审批人 |
+| 抄送 | 本人还没投票；一次选一人或多人。已经能从这一步看到审批的人——该步骤的审批人（包括本人）、本轮已在这一步被抄送过的人——自动跳过，一个都不剩时拒绝；选中的人里只要有账号不能使用的，整次抄送拒绝，并列出是谁 | 对象成为参与者，可查看、评论 | 抄送人（仅站内信） |
+| 评论 | 参与者即可；实例未结束 | 只写一条记录，不改变状态 | 无 |
+
+### 提交人的动作
+
+| 动作 | 条件 | 结果 |
+|---|---|---|
+| 撤回 | 只有提交人；实例在等待审批；`withdrawPolicy` 允许 | 实例 <Status>Withdrawn</Status>，单据回到草稿，未处理的任务关闭；**不发任何通知** |
+| 取回失败的审批 | 只有提交人；实例 <Status>Failed</Status>，单据仍在等这次审批；不受撤回策略限制；单据页、审批页、「我的申请」都能操作 | 单据回到草稿；失败的实例保留供排查 |
+| 催办 | 只有提交人；实例在等待审批；流程的 `urgeEnabled` 没有关闭 | 提醒当前步骤尚未处理的审批人。每个步骤在流程的 `urgeIntervalHours`（默认 4 小时）内只催一次，与管理员共用这个间隔 |
+| 评论 | 参与者；实例未结束 | 写入审批记录 |
+| 修改后重新提交 | 退回或撤回后单据是草稿 | 新的实例，从第一步开始，重新选流程 |
+
+### 管理员的动作
+
+在[监控台](./api#监控)操作，按调用方在 `FlowInstance` 上的权限：
+
+| 动作 | 条件 | 结果 |
+|---|---|---|
+| 终止 | 实例运行中、等待中或失败；理由必填；一次最多 100 个 | 关闭待审批，实例 <Status>Cancelled</Status>，单据作废；记一条 `TERMINATE`；通知提交人。被关掉待办的审批人凭那条任务仍能打开审批 |
+| 转派 | 原审批人、新审批人（不能相同）和理由；新审批人的账号要能使用（预览也同样拒绝）；可先预览受影响的任务数 | 把原审批人当前的待审批任务移交给新审批人，记为原审批人的 `TRANSFER`（管理员为 `operatorId`）；新审批人已在同一步时合并为一个位置，合并后这一步已经够票的当场通过、审批接着往下走；尚未到达的步骤不受影响 |
+| 重跑审批之后的步骤 | 实例因审批之后出错而失败，单据仍在等它；和终止用同一个权限 | 见[审批之后的步骤出错](#审批之后的步骤出错) |
+| 代人委托 | 单独的权限，不受数据范围限制；校验与本人建委托相同 | 替某位审批人建委托规则，他在自己的委托里能看到、能取消 |
+| 管理员催办 | 能读取该实例；不受流程的 `urgeEnabled` 限制 | 同提交人催办，共用间隔；监控台列表的每一行说明管理员现在能否催办 |
+
+这些动作都不让管理员成为实例的参与者：他查看实例、读取单据都按自己的权限，也不能评论。
+
+### 批量操作
+
+`POST /flow/instances/batch/{approve,return,reject}`（`BatchApprovalExecutor`）以同一条意见对调用方最多 100 个待办任务执行同一种审批人动作——退回或拒绝时意见必填。
+
+- 每个任务都是一次独立的引擎调用，各在自己的事务中：一个被拒绝的任务不影响其他任务，且每条引擎规则都与单个操作时一样生效。
+- 批量操作不填写任何内容，因此在调用引擎之前会跳过所在步骤有 `REQUIRED` 字段的任务（要填的字段需要打开单据填写，与设置任务 `batchable` 标志的规则相同）；退回时还会跳过所在流程没有开启 `returnEnabled` 的任务（即任务的 `returnAllowed`）。
+- 结果（`FlowBatchActionResult`）给出成功 / 跳过 / 失败计数，以及按请求顺序排列的每个任务的结果与原因。
+
+### 谁能查看
+
+- **默认可见**：实例的参与者——提交人，以及实例给过任务的人（审批人，无论是否已处理；抄送人；转交、委托的对象；步骤没等到他处理就关闭了的审批人，比如终止时被清掉的待审批人、别人一票就通过的步骤里没投票的审批人）。参与者在实例运行中可以评论；审批被终止后，审批人仍能从待办邮件的链接打开它。
+- **管理员的动作不让人成为参与者**：催办、终止、转派（记为原审批人的 `TRANSFER`，管理员为 `operatorId`）都不给管理员任务，他和其他人一样按下一条查看。
+- **其他人**按标准的角色与数据范围：能以自己的权限读取这条 `FlowInstance`，或（记录的审批）能读取这张单据本身。
+- **审批页上的单据**：提交人和任务持有人越过自己的行权限读取，自己在任何行上都看不到的敏感字段不显示。在此之上：正轮到他审批的人按自己那一步的字段权限看——列为 `Readonly` / `Editable` / `Required` 的显示（敏感字段也显示），标为 `Hidden` 的不显示；提交人看到的是不受步骤影响的默认结果；抄送人、之前步骤的审批人看到默认结果，再去掉流程里任一审批步骤标为 `Hidden` 的字段。其他能读取这张单据的人按自己的权限读取；其余的人拒绝。
+- 能不能操作由动作处理器按身份判断，与数据权限无关。
+
+<Dev title="怎样判断参与者、经由实例读取单据">
+
+- 实例的状态和审批历史能说出大部分参与者（`FlowParticipants`）；其余的人只有任务记得——任务关闭后仍保留——所以状态和历史都没提到调用方时，访问守卫再查实例的 `FlowApprovalTask`：抄送任务也算，不论任务状态，不论问几个实例都只查一次（`FlowInstanceAccessGuard.isParticipant`）。
+- 审批页经由实例读取单据（`GET /flow/instances/{instanceId}/record`）。一对多的明细行同样去掉自己看不到的敏感字段，除非步骤把这个一对多列为可见，这时明细完整返回。被步骤授予、但调用方元数据里没有的字段，随单据一起返回其定义（`fields`）。细节见[审批的单据](./api#审批的单据)。
+- 以单据为键的页面按单据读取它（`GET /flow/instances/by-record/record`），不论当前是哪一次审批：调用方参与过的最新一次审批（被终止的那次里被清掉的审批人凭任务算参与过）像经由那个实例一样借出单据——当前等待的审批人按自己的步骤读取，只参与过之前某次提交的人看到那次审批的默认结果；其他能读取这张单据的人按自己的权限读取，从未提交过的单据也这样读取；其余的人拒绝。单据的审批历史（`GET /flow/instances/by-record`）放行的人与此相同。
+- 审批页的实例摘要（`.../summary`）和流程图（`.../design`）也经由实例读取：能查看实例的人都能读取，不需要 `FlowInstance` / `FlowBundle` 的权限。
+- 接口层面的细节见[实例 API](./api#实例-api)与[监控](./api#监控)。
+
+</Dev>
+
+### 通知
+
+每条通知走两个通道，一个通道失败既不会让另一个沉默，也不会影响动作本身：
+
+- **站内信**总是发送，指向流程实例。要审批的任务、要阅读的抄送也发站内信，尽管它们列在「我的待办」里、顶栏显示其数量：站内信告诉对方有一件到了。
+- **邮件**在流程设置 `emailNotification` 没关闭时发送，发往每个接收人的账号邮箱（没有邮箱的接收人跳过），措辞来自租户中该通知代码对应的邮件模板（见[邮件](../message/email)）。flow-starter 不附带任何邮件模板：没有该代码模板的租户收不到邮件，失败会记入日志。
+
+| 事件 | 通知对象 | 站内信 | 邮件模板 |
+|---|---|---|---|
+| 步骤中尚未处理的审批人被指派；任务被转交或转派给某人 | 尚未处理的审批人；新的任务持有人 | 发——「Pending approval」（同时在「我的待办」里） | `flow.task-assigned` |
+| 抄送 | 其接收人 | 发——「For your information」，附抄送留言（同时在「我的待办」里） | —（不发邮件） |
+| 催办 | 被催办的审批人 | 发 | `flow.urged` |
+| 步骤到期（流程的 `remindAfterHours`），之后每隔同样的小时数，最多 3 次 | 其尚未处理的审批人 | 发 | —（不发邮件） |
+| 已批准；被拒绝或退回（附意见） | 提交人 | 发 | `flow.approved`、`flow.rejected`、`flow.returned` |
+| 被管理员终止，或某个步骤被管理员转派（附理由） | 提交人 | 发 | `flow.terminated`、`flow.reassigned` |
+| 记录的审批失败（附错误） | 提交人，以及 `flow.notification.failure-role-codes`（默认 `TENANT_ADMIN`）中角色的持有人 | 发 | `flow.failed` |
+
+- 消息在动作提交之后、在其自己的事务中写入：回滚的动作不发送任何东西，无法写入的消息会记入日志而不使动作失败。失败会立即通知，因为失败那次尝试自身的事务会回滚。
+- 只有审批流会通知其完成：自动化运行不是写入触发它的用户要求得知的事，而失败的自动化运行由运维人员关注。
+- 审批人对审批采取行动——批准、拒绝、退回、转交或阅读抄送——或打开审批的页面，他关于这个实例的未读站内信就标为已读，铃铛只统计仍是新消息的事项；「我的待办」仍是工作清单。
+
+<Dev title="通道实现、模板变量与已读标记">
+
+- 默认的 `ApprovalNotificationService` 是 `CompositeApprovalNotificationService`，分别通知两个通道：站内信 `InboxApprovalNotificationService`、邮件 `MailApprovalNotificationService`。由一个映射（`ApprovalNotices`）决定在两个通道上通知谁、通知什么。
+- 站内信经由 message-starter 发送 Workflow 类型的站内消息（`sourceModel` = `FlowInstance`，`sourceId` = 其实例 id；客户端打开实例并从那里继续）。超过收件箱 200 字符上限的标题会被截断；文本翻译为租户的默认语言。
+- 邮件经由 message-starter 发往 `UserAccount.email`。模板变量为 `subject`（实例标题，否则为流程名）、`content`（意见或理由，如有）、`flowName`、`recordCode` 和 `link`——审批页面，即 `system.site-url` + `/home/approvals/{instanceId}`，未配置站点 URL 时为空。
+- `InboxReadMarker`：审批人采取行动后，其关于该实例的未读站内消息（待审批或抄送本身、催办、超时提醒）在动作提交后标为已读；催办、评论或发出抄送不算采取行动。
+- 打开审批也算看过：不论从哪里进来（「我的待办」、铃铛、邮件或链接），前端在审批的页面打开时调用 `POST /InboxNotification/myMarkAsReadBySource`（`sourceModel=FlowInstance`、`sourceId` 为实例 id），把用户关于该实例的未读站内消息标为已读，并对发给他的每份未读抄送记一次阅读（`/flow/instances/cc/read`）。审批的页面指审批中心的单据页、实例页，以及在业务页上审批的单据的业务页（如薪资批次页）。在业务页上，实例取自用户自己在这张单据上的任务：轮到他审批的任务，或未读的抄送。待审批的任务不因打开而改变，仍等他处理。
+- 应用提供的 `ApprovalNotificationService` bean 会替换默认实现，连同两个通道一起；若要增加通道——短信、IM——请声明自己的 `CompositeApprovalNotificationService`，把站内信和邮件通道与你的通道一并列入。
+
+</Dev>
+
+## 结果写回
+
+<Lead>
+
+审批一结束，框架把结果写回单据，再调用处理器的 `afterOutcome`；它和让审批结束的那次操作在同一个事务里、跳过权限检查执行，抛出异常会否决这次操作。
+
+</Lead>
+
+- 记录的审批完成、被拒绝、退回、撤回或作废（由管理员终止）时，`approvalStatus` 设为结果——退回或撤回后为 `Draft`。`afterOutcome(record, outcome)` 收到类型、做出决定的用户及其意见（自动通过时没有；终止时为管理员及其理由）。
+- 结果只会落到仍为 `Pending` 的记录上：已结束的实例再次保存（因评论或抄送已读）不会改变任何东西，`afterOutcome` 对每个结果只运行一次。
+- 在 `afterOutcome` 里只做属于该结果、写入本数据库的操作；任何离开本数据库的事——付款、外部系统——放到提交之后。
+- 失败的实例不写入任何东西，记录保持 `Pending`，出路有三种：提交人通过撤回取回记录（重新成为草稿）；管理员终止该审批（记录变为 `Cancelled`）；审批之后出错时，管理员重跑审批之后的步骤（见[审批之后的步骤出错](#审批之后的步骤出错)）。
+- 记录在实例启动之前就变为 `Pending`，因为没有审批步骤的流程会在启动时就完成。
+
+**启动失败就是提交失败，而且整体失败**：记录的审批在提交里启动，异常交给调用方，什么都不留下——没有失败实例——不通知任何人，单据随事务回滚，仍是草稿。
+
+- 找不到审批人的设置为 `Error`（默认）的步骤解析不到人时，提交被拒（`400`），信息里写明原因：`No approver was found for step '{label}': {原因}. Ask your HR administrator to set one up, then try again.`——说不出原因时句子停在步骤名。
+- 记录的审批预览会在任何人提交之前指出哪一步找不到审批人：预览的 `failure` 带同一条信息；提交会碰上这一步时（它之前没有要等人的步骤），表单的 Submit 直接显示这条原因，不再提交。
+- 审批人批准后才进入这样的步骤，审批保留，实例带着这条信息失败（见[审批之后的步骤出错](#审批之后的步骤出错)）：审批人没法给步骤配审批人。因此记录的审批只会在启动之后、审批之后流程走不下去时失败（旧修订版上还有定时、异步任务恢复时出错）。
+
+<Dev title="实现：结果监听器与找不到审批人的原因">
+
+- 结果经由监听器 `ApprovalOutcomeListener` 和写入器 `ApprovalStatusWriter` 到达记录。
+- 解析不到审批人时抛出 `FlowNoApproverException`（一种 `FlowActionValidationException`，`400`）。原因按审批人来源给出（`ApproverResolutionService.whyNobody`），例如「Alice Tan has no manager who can approve」「… 2 levels up …」「the request names no employee」「the submitter has no employee profile」「Finance and the departments above it have no leader who can approve」「nobody who can approve holds its roles」「none of its approvers can approve」。
+
+</Dev>
+
+### 预览记录的审批
+
+`GET /flow/instances/preview?modelName=&rowId=`（`FlowClient.previewRecord`）回答现在提交该记录会发生什么，而不真正提交——供记录页面在任何人按下「提交」之前展示审批路径。它执行提交本身的检查与流程选择：记录的审批状态及其审批、以请求者自己的权限执行 `handler.validate` 和 `handler.submission`、提交触发器。`afterSubmitted` 从不被调用。结果在 `status` 里报告，而不是抛出；提交会被拒绝时，`message` 是提交时的那条消息：
+
+| `status` | 含义 |
+|---|---|
+| <Status>Ready</Status> | 恰有一个流程适用，`steps` 是推演出的审批路径 |
+| <Status>InProgress</Status> | 审批正在进行：当前等待的步骤及其现状（`current`，附带仍被询问的审批人），然后是之后的步骤 |
+| <Status>Refused</Status> | 提交会被拒绝 |
+| <Status>NoFlow</Status> | 单据没有启用中的审批流 |
+| <Status>SeveralFlows</Status> | 有多个流程适用，列在 `candidates` 中 |
+
+推演时假定每个审批步骤都被批准，`steps` 按审批到达的顺序列出审批步骤，每个步骤带有一个 `outcome`：
+
+| Outcome | 该步骤 |
+|---|---|
+| <Status>Waiting</Status> | 等待 `approvers`，其中需要 `requiredApprovals` 人批准；步骤找不到人、转给了角色（`AssignToRole`）时，`assignedRoles` 写明是哪些角色 |
+| <Status>AutoApproved</Status> | 自动通过：`autoApprovals` 把提交人（`Submitter`）——依流程的 `selfApproval`——或在先前步骤批准过的人——依流程的审批人去重（`EarlierApproval`）——视为已批准 |
+| <Status>NoApproverApproved</Status> <Status>NoApproverSkipped</Status> | 解析为无人；其找不到审批人的设置将其记为通过或跳过 |
+| <Status>NoApproverFails</Status> | 在 `Error` 下解析为无人——或在 `AssignToRole` 下，角色里也没人：提交会在这里被拒绝，拒绝信息见 `failure` |
+| <Status>Undetermined</Status> | 由谁审批，或是否自动通过，取决于只有审批运行时才知道的数据 |
+
+`withdrawable` 说明请求者现在能否撤回该记录：其提交人，在审批等待审批人且流程的 `withdrawPolicy` 允许时（`WithdrawPolicyGuard`），或在其审批失败之后——因此「撤回」按钮不需要自己的规则。
+
+**不做任何猜测**。审批流只放人和路由，所以路由读到的变量都来自这次提交——除了从一开始就未知的实例 id，以及这条规则之前发布的修订版上某个节点可能写入的东西（推演把这种节点当作会写入所有变量）。条件读取了未知变量的路由列在 `undecided` 中，且不被沿用；在这种节点之后到达、审批人按规则查找的步骤为 `Undetermined`；开启审批人去重时，其审批人可能批准过、也可能没批准过先前步骤（多个可能通过它的人之一）的步骤同样如此。引擎会因之失败的错误——路由不匹配任何边、条件无法求值——会以 `failure` 结束推演。
+
+**不写入任何东西**：没有实例、任务、账本行或通知，也不计入任何委托的使用。能以自己的权限读取该记录的人才可以预览（`FlowInstanceAccessGuard.requireRecordReader`），且从不豁免行范围；参与过该记录先前的审批是不够的。用户的显示方式与审批历史相同。
+
+<Dev title="推演怎样复用引擎、事务注意事项">
+
+- 对进行中的审批，推演基于实例自身的变量和审批、在实例的副本上进行——从不触碰实例本身。
+- `ApprovalPathPreviewer` 按引擎的运行方式从开始节点推演：路由由 `FlowGatewayRouter` 基于提交将带入的变量决定，审批人由 `PendingApprovalFactory`（含自动委托）决定，自动通过由 `ApproverDedupService` 决定，所用状态从不保存。
+- 预览不在自己的事务中运行，`FlowClient.previewRecord` 应在事务之外调用：通过事务方法抛出的拒绝会把它所加入的事务标记为只能回滚。
+
+</Dev>
+
+### 测试草稿
+
+设计器里审批流的 Test run，就是在流程**已保存的草稿**上做同样的预览：`POST /flow/designs/{id}/preview`，请求体 `{submitterId, values}`（`FlowLaunchService.previewDraft`），回答「这个用户提交一张填着这些字段值的申请，在草稿下会怎样」。申请是当场填的，从不保存；不传 `submitterId` 时就是当前用户。草稿只编译、不注册（编译不过返回诊断，`400`）；不是审批流的流程会被拒绝。
+
+- 申请没写员工时，就是提交人自己的员工。
+- 单据处理器算出 `submission`（标题、路由变量），但**不跑 `validate`**：测试的是流程，不是这张申请现在能不能提交——薪资批次没算完，照样能看到谁审批。
+- 按上文预览记录的方式推演草稿（`ApprovalPathPreviewer`）。
+
+返回的 `FlowDesignPreview` 包括：`submitConditionMet`（草稿的提交条件是否选中这张申请；不选中时，真提交根本不会进这个流程）、`submitter`（提交人，带姓名）、`route`（路线，其 `nodeIds` 按到达顺序列出经过的每个节点，供画布标注）。申请没有员工、或单据没有审批处理器，报告为 `Refused`。不启动、不写入、不发送任何东西，也不计入委托的使用。自动化流程没有测试运行：运行一次就会真的执行节点的动作。
+
+## 约束与异常
+
+<Lead>
+
+出了问题先查「出错时怎样处理」。配置错误能在发布时拦下的，设计器会逐条定位到节点；运行时规则被违反时，操作被拒并说明原因。
+
+</Lead>
+
+### 出错时怎样处理
+
+| 情况 | 框架怎样处理 | 怎样恢复 |
+|---|---|---|
+| 提交被拒：启用中的审批流里没有一个的提交条件成立且没有默认审批流、有多个成立、当事员工为空、业务校验失败、已在审批中、已是终态 | 拒绝提交并返回原因，不建实例 | 按提示修正配置或单据 |
+| 提交时流程出错（如某步解析不到审批人且设置为 `Error`） | 提交整体回滚，单据仍是草稿；不留下失败实例，也不发任何通知；解析不到审批人时返回 `400` 和统一的提示 | 修正流程或组织数据后重新提交 |
+| 审批人通过后，流程走不下去（下一步找不到审批人、没有可走的路线、分支汇合不对；审批流只放人和路由之前发布的修订版上，还有自动步骤出错） | 审批保留，实例 <Status>Failed</Status>，单据保持 <Status>Pending</Status>；通知提交人和失败通知角色 | 提交人取回（回到草稿，改后重新提交），管理员排除原因后重跑，或终止（作废） |
+| 同样的旧修订版上，定时、异步任务恢复时出错 | 实例 <Status>Failed</Status>，单据保持 <Status>Pending</Status>；通知提交人和失败通知角色 | 提交人取回（回到草稿），或管理员终止（作废） |
+| 处理器 `afterSubmitted` / `afterOutcome` 抛出异常 | 否决这次动作：提交、批准、拒绝、退回、撤回、终止、作废都可能被否决，全部回滚，操作人看到原因 | 处理业务问题后重试 |
+| 两人同时操作同一实例 | 乐观锁：后保存的一方失败，提示数据已被修改 | 刷新后重试 |
+| 同一人重复批准 / 拒绝 | 原样返回当前状态，不报错、不重复记录 | — |
+| 同一单据并发提交 | 唯一索引挡住第二次 | — |
+| 动态审批人少于计票门槛 | 按实际人数封顶，不会一直等待（见[通过门槛](#通过门槛)） | — |
+| 通知发送失败 | 只记日志，不影响动作；动作回滚时根本不发 | 查日志 |
+
+<Dev title="常见报错原文">
+
+| 场景 | 消息 |
+|---|---|
+| 重复提交 | `This record is already in approval.` |
+| 没有 / 有多个适用的审批流 | `No approval flow applies to this {0} record. Ask your administrator to set one up, to enable it, or to widen its submit condition.` / `Several approval flows apply to this {0} record ({1}). Ask your administrator to narrow their submit conditions so that exactly one applies.` |
+| 当事员工为空 | `This record names no employee in {0}, so its approvers cannot be found.` |
+| 终态单据再提交 | `This record is approved and cannot be submitted again.`（拒绝、作废的单据会加上 `Raise a new one.`） |
+| 修改 / 删除审批中的单据 | `This record is in approval and cannot be changed. Withdraw it first to edit it.` / `A record in approval cannot be deleted. Withdraw it first.` |
+| 作废审批中的单据 | `This record is in approval. Withdraw it first, then cancel the draft.` |
+| 拒绝 / 退回没写意见 | `A comment is required to reject approval node: {node}`（退回同理） |
+| 流程不允许退回 | `Flow '{flow}' does not allow returning an approval to its initiator` |
+| 撤回被拒 | `Flow instance does not allow initiator withdrawal: {id}` / `An approver has already acted on this approval, so it can no longer be withdrawn: {id}` |
+| 解析不到审批人 | `No approver was found for step '{label}': {原因}. Ask your HR administrator to set one up, then try again.`（说不出原因时没有 `: {原因}` 这一段） |
+| 转给角色后也没人 | `No approver was found for step '{label}', and nobody in {roles} can take it but the submitter or the employee the record is about. Ask your HR administrator to set one up, then try again.` |
+| 对象账号不能使用 | `Ann Lee's account is frozen.`（未激活、未接受邀请、锁定、离职、没有账号各有说法；多人时以 `; ` 连接） |
+| 对象已在该步骤 | `Cat Ng is already an approver of step 'Manager approval'.` |
+| 意见过长 | `The comment can be at most 256 characters` |
+| 委托规则不成立 | `Both the approver and the delegate are required` / `The delegate must be someone else` / `The delegation must end after it starts` |
+| 并发冲突 | `Data version does not match, may have been modified, please refresh and try again!` |
+
+接口一律返回 HTTP 200，错误码在响应体里：参数或规则不满足为 `BAD_REQUEST`，无权限为 `PERMISSION_DENIED`，运行时错误为 `ERROR`（只记日志，响应里不带原因）。见[接口与数据](./api#api-概览)。
+
+</Dev>
+
+### 审批之后的步骤出错
+
+审批通过后，引擎在审批人这次请求里接着执行后面的步骤。之后流程走不下去，都**不会**连带撤销这次审批。审批流只放人和路由，所以能让它停下的只有人或路由：下一步解析不到审批人，没有可走的路线（#2382），分支汇合不对——在这条规则之前发布的修订版上，还有自动步骤出错。审批人已经做完自己的事，这些都不是他能改正的。出现其中任何一种时：
+
+- 后续步骤的写入回滚，审批本身保留；它们为提交准备的东西一并丢弃——提交后才发的消息等回调会被移除；它们新增的变更日志也会删掉，由这些日志触发的流程不会启动。
+- 实例回到审批刚完成的样子，在出错的步骤上标为 <Status>Failed</Status>，提交人和失败通知角色（默认租户管理员）的持有人收到通知（"Approval failed: …"，带错误信息）。
+- 审批人这次请求照常成功：审批保留，返回的是失败的实例，而不是错误。单据保持 <Status>Pending</Status>。
+
+审批人自己能改正的问题，在这之前就拒绝，审批随之回滚：这一步已被别人处理、必填项没填、修改不合规（`afterApproverEdit`）。单据处理器否决结果（`afterOutcome`）也一样，它在保存实例时运行。
+
+之后有三条出路：
+
+1. **提交人取回单据**——回到草稿，按届时的流程重新提交。流程本身有缺口时只能这样，因为进行中的实例一直按它启动时的版本运行。
+2. **管理员排除原因后重跑**：实例从出错前的那个审批步骤之后回到 <Status>Running</Status>，审批历史记一条该管理员的 `RETRY`，后续步骤照审批之后的方式执行，不受操作人自己的权限限制。再次出错时，实例再次失败，同样的人再收到通知；走通之后审批继续——走完则完成，并照常发送 `OnApproved` 抄送。
+3. **管理员终止**，单据作废。
+
+只有审批之后出错的实例可以重跑；其他原因失败的——自动化运行、定时器或回调——只能终止。单据的审批只有单据仍在等它时才能重跑：提交人已经取回（单据回到草稿），或者单据已经重新提交，都会被拒绝。审批之后的步骤不发送、不调用任何东西，所以重跑不会重复任何事；审批流只放人和路由之前发布的修订版例外，见[已知限制](./design#已知限制)。
+
+<Dev title="保存点、UndoableSteps 与重跑接口">
+
+- 审批通过后接着执行后续步骤的是 `FlowExecutionOrchestrator.runAfterApproval`。后续步骤执行前，引擎先把实例按审批刚完成的样子复制一份，并在事务里设一个保存点；出错时写入回滚到保存点。
+- 为提交准备的东西由 `UndoableSteps` 丢弃：提交后回调被移除时以「已回滚」通知它们。
+- 出错时记一条 `ERROR` 日志，带堆栈；实例记下 `FAILED`、`failedNodeId`、`errorMessage`（审批步骤自己的路线走不通时就是审批步骤），以及从哪个审批步骤之后重跑（`retryAfterNodeId`）。只有带 `retryAfterNodeId` 的实例可以重跑。
+- 重跑：`POST /flow/monitor/instances/retry`，和终止用同一个权限（`RetryActionHandler`）。
+
+</Dev>
+
+### 运行时规则
+
+| 规则 | 违反时 |
+|---|---|
+| 只有草稿能提交、能作废；一张单据同时只有一个进行中的审批 | 拒绝提交 / 作废 |
+| 非草稿单据冻结，它级联拥有的明细同样冻结，也不能在其下新建 | 写入被审批锁拒绝 |
+| 审批字段只由框架写；新单据一定是没有提交人的草稿 | 拒绝写入（回传原值不算修改） |
+| 提交时，这张单据启用中的审批流里提交条件成立的不能多于一个；一个都不成立时由默认审批流（没有条件的那个）审批，没有默认审批流就不能提交；当事员工不能为空 | 拒绝提交并说明原因 |
+| 只有当前步骤的审批人才能操作；同一人同一轮只算一票 | 拒绝操作 |
+| 拒绝、退回、终止、转派必须写意见或理由；意见、理由最多 256 个字符 | 拒绝操作 |
+| 退回只在流程开启 `returnEnabled` 时可用，一律退回给提交人 | 拒绝操作；批量退回跳过该任务 |
+| 撤回只限提交人，且在 `withdrawPolicy` 允许的时间内 | 拒绝操作 |
+| 催办每个步骤有间隔 | 拒绝催办，返回下次可催时间 |
+| 评论只限参与者，实例结束后不能评论 | 拒绝操作 |
+| 终止只对运行中、等待中、失败的实例；终止、转派只在调用方数据范围内 | 逐个返回失败原因 |
+| 批量：有必填字段的步骤不可批量；一次最多 100 个 | 跳过该任务 |
+| 审批人写回只写可编辑 / 必填字段；必填字段写回后必须有值（明细表至少一行，多选至少一项） | 其他字段丢弃；必填为空拒绝批准 |
+| 委托规则要有审批人和受托人，两人不同，受托人的账号要能使用；起止都填时结束晚于开始；范围为单个流程 / 节点时，流程和节点要在 `GET /flow/delegations/flows` 列出的范围内 | 拒绝创建（本人建、管理员代建相同） |
+| 转交、抄送、转派的对象账号要能使用 | 拒绝操作，写明是谁、为什么；抄送整次拒绝 |
+
+### 发布时拦下的配置
+
+设计器在打开流程时、每次编辑后和发布时都会编译一遍，错误逐条定位到节点，有错误就不能发布：
+
+- **结构**：缺流程名或场景；画布为空；开始节点不是恰好一个；节点或连线的 id 缺失、重复，或连线指向不存在的节点；图中有环；有从开始节点走不到的节点；节点没有名称（名称就是审批中心里显示的步骤名）。
+- **场景与触发器**：节点不能用在该场景（审批流只能放开始、结束、审批和网关这些人和路由的节点）；缺触发器或触发器不属于该场景；记录触发器的流程没写模型，或不基于记录的触发器却写了模型；审批流的单据应用无法审批；cron 表达式为空、无法解析、不会再触发或一分钟触发不止一次；触发条件同时写了规则和表达式，或规则、表达式写错；非审批流设置了审批设置（含抄送、超时提醒）；催办间隔或提醒小时数小于 1；抄送规则没写时机、没写抄送谁，或同时写了指定的人和查找规则；`sync` 放错场景、sync 流程含会等待的节点、开了 `rollbackOnFail` 却没开 `sync`；带 `Subflow` 触发器的流程含定时、异步任务这类会等待的节点（它在调用方里一次跑完）。
+- **审批节点**：审批人源类型未知；上级层级小于 1 或 `relativeTo` 非法；部门范围不适用于该源，或缺少它需要的部门、变量、角色、岗位；指定人员里有空值或重复；没选审批人来源，或选了指定人员却没选人（不论计票方式）；「找不到审批人时」选了转给角色却没选角色；`minCount` 不在 1 到人数之间；百分比不在 1–100；字段权限里列了字段却没选权限（以前会当作没配、照样发布；设计器新加的一行默认 Readonly）。
+- **路由**：连线表达式语法错误；一条连线同时有规则和表达式；流程不基于记录启动却使用规则；规则读取记录没有的字段、审批不路由的字段或一对多/多对多字段，对选项或关联比较大小，或使用 `PARENT OF` / `CHILD OF`；网关出边或汇聚入边少于两条；默认边多于一条（包容网关也一样）；按条件在多条出边里选一条的节点没有默认边；默认边排在条件边前面；可能同时走的分支（并行拆分的各条边、包容网关的条件边）不经汇聚就汇到同一个节点；包容网关的分支要汇合却没配成一对（每条分支含默认边各用一条边进同一个汇聚）；汇聚有多条出边；并行分支用多条边进同一个汇聚，或可能走到别的汇聚、结束而绕过它。
+- **任务与定时节点**：缺配置、配置格式错误、缺必填输入；调用服务的参数类型个数与参数个数不符；任何节点设置里的 `{{ }}` 写错或没闭合；定时节点没写或写了多种等待方式、时长小于 1 秒、cron 或截止时间表达式写错、cron 不会再触发或一分钟触发不止一次。
+
+以下只给**警告**，不影响发布：步骤或抄送规则的指定人员里当前账号不能使用的人（见[账号不能使用的人](#账号不能使用的人)）；审批流里一个审批步骤都没有（`NO_APPROVAL_STEP`，标在开始节点上——提交即通过，允许但少有人想要）。触发器的诊断标在开始节点上（`nodeId` 为唯一的开始节点，`field` 为 `trigger`；图里没有唯一的开始节点时标在流程级），设计器在那里编辑触发器。
+
+编译时**不检查**、运行时才暴露的：子流程节点选的目标是否存在、触发方式对不对、是否间接调回自己（设计器只列能调用的流程，其余由运行时报错兜底）；脚本、返回值、表达式源的语法；字段权限里的字段名是否存在。
+
+<Dev title="编译错误码">
+
+- 结构：`MISSING_DEFINITION` `MISSING_FLOW_NAME` `MISSING_SCENARIO` `EMPTY_GRAPH` `NO_START_NODE` `MULTIPLE_START_NODES` `MISSING_NODE_ID` `MISSING_NODE_TYPE` `DUPLICATE_NODE_ID` `MISSING_EDGE_ID` `MISSING_EDGE_ENDPOINT` `DUPLICATE_EDGE_ID` `UNKNOWN_EDGE_SOURCE` `UNKNOWN_EDGE_TARGET` `GRAPH_CYCLE` `UNREACHABLE_NODE` `MISSING_NODE_LABEL`
+- 场景与触发器：`INVALID_SCENARIO_NODE` `MISSING_TRIGGER` `TRIGGER_NOT_ALLOWED` `MISSING_MODEL` `MODEL_NOT_APPROVABLE` `CONFLICTING_TRIGGER_CONDITIONS` `INVALID_TRIGGER_CONDITION` `CRON_MISSING_EXPRESSION` `CRON_INVALID_EXPRESSION` `APPROVAL_SETTING_OUTSIDE_APPROVAL` `INVALID_URGE_INTERVAL` `INVALID_REMIND_AFTER_HOURS` `INVALID_CC_RULE` `SYNC_OUTSIDE_AUTOMATION` `SYNC_FLOW_WAITS` `SUBFLOW_WAITS` `ROLLBACK_WITHOUT_SYNC`
+- 审批节点：`UNKNOWN_APPROVER_SOURCE_TYPE` `INVALID_SUPERVISOR_LEVEL` `INVALID_RELATIVE_TO` `INVALID_DEPT_SCOPE` `MISSING_DEPT_IDS` `MISSING_DEPT_VARIABLE` `MISSING_ROLE_IDS` `MISSING_POSITION_IDS` `BLANK_APPROVER` `DUPLICATE_APPROVER` `MISSING_APPROVERS` `INVALID_MIN_COUNT` `INVALID_PERCENTAGE` `MISSING_FIELD_PERMISSION` `UNREADABLE_CONFIG` `MISSING_EMPTY_APPROVER_ROLES`
+- 路由：`INVALID_CONDITION_EXPR` `CONFLICTING_EDGE_CONDITIONS` `RULE_WITHOUT_RECORD` `INVALID_RULE_CONDITION` `UNKNOWN_ROUTING_EDGE` `INSUFFICIENT_GATEWAY_EDGES` `MULTIPLE_DEFAULT_EDGES` `INCLUSIVE_JOIN_UNPAIRED` `DEFAULT_EDGE_NOT_LAST` `NO_DEFAULT_EDGE` `CONCURRENT_BRANCHES_MEET` `JOIN_MULTIPLE_OUTGOING` `BRANCH_ENTERS_JOIN_TWICE` `BRANCH_SKIPS_JOIN`
+- 警告（不阻止发布）：`UNUSABLE_APPROVER` `UNUSABLE_CC_RECIPIENT` `NO_APPROVAL_STEP`
+- 任务与定时节点：`MISSING_TASK_CONFIG` `INVALID_TASK_CONFIG` `MISSING_REQUIRED_INPUT` `ARG_TYPES_ARITY` `UNKNOWN_MODEL` `INVALID_FIELD_PATH` `INVALID_TEMPLATE_PLACEHOLDER` `INVALID_TIMER_CONFIG` `INVALID_TIMER_CRON` `INVALID_TIMER_DEADLINE`
+
+</Dev>

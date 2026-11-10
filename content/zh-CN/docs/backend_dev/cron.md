@@ -241,6 +241,12 @@ VALUES
 - `POST /SysCron/executeNow?id=123`
 - `POST /SysCron/executeMultipleNow?ids=1&ids=2`
 
+### 3. 预览表达式
+
+`GET /toolkit/previewCron?expression=&count=`（softa-web 的 toolkit，由 softa-orm 的 `CronSchedule` 实现）回答调度器是否接受一个表达式——能解析、日和周两个字段有一个是 `?`、之后还会触发——它的文字含义（`CronUtils.cronSemantic`），以及在服务器时区（调度器运行的时区）里接下来的几次运行（`count`，1–10，默认 5）。编辑 `SysCron.cronExpression` 的页面在字段旁显示它；调度器运行不了的表达式本来也保存不了，因为保存时要由它计算 `cronSemantic`。过去的运行没有记录：`lastExecTime`、`nextExecTime` 和 `SysCronLog` 都没有写入，所以页面用这种方式按表达式算出下次运行。flow-starter 的 `GET /flow/cron/preview` 给出同样的回答，另加一条自己的规则：流程每分钟最多运行一次。
+
+带有 `SysCron` 行的种子文件每次重新加载（发版改了它之后）都会写回它写到的字段，所以页面上改过的 `active` 或 `cronExpression` 会回到文件里的值。
+
 ## Quartz Cron 表达式
 
 格式：
@@ -250,7 +256,7 @@ VALUES
 - - - - - -  -
 | | | | | |  |
 | | | | | |  +- 年（可选）
-| | | | | +---- 星期（范围：1-7 或 SUN-SAT，1 表示周一）
+| | | | | +---- 星期（范围：1-7 或 SUN-SAT，1 表示周日）
 | | | | +------ 月（范围：1-12 或 JAN-DEC）
 | | | +-------- 日（范围：1-31）
 | | +---------- 时（范围：0-23）

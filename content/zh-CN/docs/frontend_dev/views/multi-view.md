@@ -296,7 +296,7 @@ export function EnvDashboard() {
 | ----- | ------- | ---- |
 | **A. 开发者声明** | `ModelTable.filters` / `ModelTable.initialParams.filters` / `MultiView.Tab.filters`（context） | 页面级基础条件 |
 | **B. 系统范围** | `useWorkspaceFilter()` 的 `workspaceFilter` | 强制数据隔离（安全边界） |
-| **C. 用户运行时** | 搜索输入、列过滤、工具栏过滤、侧栏选择 | 页面上实时收窄 |
+| **C. 用户运行时** | 固定筛选、搜索输入、列过滤、工具栏过滤、侧栏选择 | 页面上实时收窄 |
 
 ### 过滤：A 层内 → 覆盖；跨层 → AND
 
@@ -313,7 +313,7 @@ top-level filters  >  initialParams.filters  >  MultiView.Tab.filters (context)
 ```
 finalFilter = (Layer A: chosen base)
         AND  (Layer B: workspaceFilter)
-        AND  (Layer C: tree filter, search, column filters, toolbar filters)
+        AND  (Layer C: pinned filters, tree filter, search, column filters, toolbar filters)
 ```
 
 每层加自己的约束；最终查询满足全部。在 `buildModelTableFilterCondition` 中实现。

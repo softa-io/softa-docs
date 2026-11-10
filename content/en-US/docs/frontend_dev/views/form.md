@@ -788,7 +788,7 @@ A write the server refuses per field (`ApiError.fieldErrors`, from field constra
 
 Recommended default layout:
 
-- Header: title + description
+- Header: title, with the model's description behind a help icon after it; a page may add a line about the record under it
 - Sticky toolbar:
   - left: built-in `FormEditStatus + FormPrimaryActions` (+ `FormWorkflowActions` when `ModelForm/ModelSideForm enableWorkflow=true`)
   - right: business actions area (custom actions + built-in Duplicate/Delete + More Actions)
@@ -817,6 +817,8 @@ In edit mode the form asks the server what the caller may do with the record (`P
 | `enableDelete`         | `boolean`                 | No       | auto                                  | Built-in delete action switch. Same three-state resolution as `enableCreate`. |
 | `enableUpdate`         | `boolean`                 | No       | auto                                  | Toolbar `Edit` button switch for route read-mode. `false` hides it; the form's own read-only state is unaffected. Gated on `update` (or `updatePermissionId`). |
 | `updatePermissionId`   | `string`                  | No       | -                                     | Permission id authorizing edit on this page, overriding the `MODEL_PERMISSIONS` model-keyed `update` lookup. For pages managed by a `customPermission` on a different model (workflow draft pages). |
+| `submitPermissionId`   | `string`                  | No       | -                                     | Permission id gating the approval buttons' **Submit** (and **Cancel Draft**, which rides on it) on an approved model's saved record, overriding the model-keyed `submit` lookup. For a model whose submit more than one page declares — a request the approval center also files (LeaveRequest, OvertimeRequest, ExpenseClaim, AttendanceExceptionRequest) — that lookup has no answer, and the button would show for everyone. |
+| `withdrawPermissionId` | `string`                  | No       | -                                     | The same for **Withdraw**, overriding the model-keyed `withdraw` lookup. |
 | `confirmDeleteMessage` | `string`                  | No       | `Delete this {modelLabel}? This action cannot be undone.` | Confirm text for built-in delete action. |
 | `timeline`      | `ModelFormTimelineConfig` | No       | -                                     | Timeline-model behavior toggles (`enableAddVersion` / `enableVersionPanel` / `versionSummaryFields`, all optional). Only consulted when `metaModel.timeline` is true; see "Timeline Models" below. |
 | `sliceId`       | `string \| null`          | No       | `?sliceId=` search param              | Timeline models, edit mode only: load this specific version (slice) instead of the as-of row (`searchList` by `sliceId` across the timeline). Full-page forms normally use the `?sliceId=<x>` search param (ignored in dialog mode); embedded forms pass the prop. |
@@ -852,9 +854,9 @@ Remote `Field.onChange` in `ModelForm`:
 | Prop          | Type        | Required | Default                                      | Notes                                     |
 | ------------- | ----------- | -------- | -------------------------------------------- | ----------------------------------------- |
 | `title`       | `string`    | No       | `metaModel.label` (fallback `pageTitle`) | Optional override.                        |
-| `description` | `string`    | No       | `metaModel.description`                      | Optional override.                        |
+| `description` | `string`    | No       | -                                            | A line under the title about this record — its code, period or state. Left out, the model's description (`metaModel.description`) shows behind a help icon after the title instead: it reads the same on every record, so it does not take a line of its own, as a field's description sits behind the icon after its label. `""` shows neither. |
 | `extras`      | `ReactNode` | No       | -                                            | Extra header content rendered near title. For timeline models in edit mode, the header automatically renders a `FormSliceBadge` before `extras`: the loaded version's effective range (`Current · 2026-01-01 → ongoing`, `9999-12-31` shown as `ongoing`) with a Current / Past / Future tone. It answers "which version am I looking at"; nothing renders for non-timeline models or in create mode. |
-| `children`    | `ReactNode` | No       | -                                            | Display-mode content below description. `Field` children render as read-only values via `FieldDisplayScope`. Use `Group` for inline layout. |
+| `children`    | `ReactNode` | No       | -                                            | Display-mode content under the title (after the `description` line, when there is one). `Field` children render as read-only values via `FieldDisplayScope`. Use `Group` for inline layout. |
 
 **FormHeader with display-mode children:**
 
@@ -985,6 +987,7 @@ import { FormBody, FormTab } from "@/components/views/form/components/FormBody";
 | `children`  | `ReactNode` | No       | -       | Custom actions. Recommended: `<Action type="..." />`. |
 | `className` | `string`    | No       | -       | Extra wrapper class for toolbar container.           |
 | `leading`   | `ReactNode` | No       | -       | Fills the left zone, e.g. a compact record summary. Toolbar-placed actions then move to the right zone, after Edit / Save and before Create New / More. |
+| `trailing`  | `ReactNode` | No       | -       | The page's own controls in the right zone, after the record's approval actions (and the toolbar-placed actions, when `leading` is given) and right before Create New / More — buttons `<Action>` cannot express, such as an approver's Approve / Reject with their dialogs, which then sit where a form's own Submit / Withdraw do. Toolbar-placed actions stay in the left zone. Like any other content it keeps the toolbar visible only through the buttons it renders. |
 
 An empty toolbar is not drawn. When nothing inside it rendered — no button, no add-version date input, no edit-status pill — the frame (border, padding, sticky bar) is hidden too, so a reader with no action on the page sees the title run straight into the content instead of an empty box. Each control still decides its own visibility (Edit by the update permission, Create New / More Actions by theirs, Save / Cancel by the mode); the toolbar asks what actually rendered, through the `[data-form-toolbar]` rule in `src/styles/globals.css`, rather than recomputing those conditions. Anything new placed in the toolbar is covered as long as it renders a `button` or `input`; a purely textual item would need the same `data-form-edit-status` marker to keep the toolbar visible. Content passed as `leading` (e.g. a record summary) keeps it visible too, so a reader with no action still sees it.
 
