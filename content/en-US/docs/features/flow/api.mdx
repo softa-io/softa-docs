@@ -92,7 +92,7 @@ Base path: `/flow/bundles`
 | `GET` | `/flow/bundles/{bundleId}?include=design` | One revision's summary, optionally with the canvas-complete design snapshot |
 | `POST` | `/flow/bundles/{bundleId}/activate` | Make this revision the flow's effective one (rollback = roll-forward) |
 
-Each returns `FlowBundleSummaryView`: `bundleId`, `flowId`, `flowName`, `revision`, `scenario`, `triggerType`, `sync`, `rollbackOnFail`, `compiledAt`, `publishedAt`, `nodeCount`, `transitionCount`, and from the stored revision `active` — whether it is the flow's effective one (one per flow) — and `changeDescription`, as written when it was published. The list without `flowId` is read from the compiled revisions and leaves those two out.
+Each returns `FlowBundleSummaryView`: `bundleId`, `flowId`, `flowName`, `revision`, `scenario`, `publishedAt`, and from the stored revision `active` — whether it is the flow's effective one (one per flow) — and `changeDescription`, as written when it was published. The revision history reads the revisions' own columns, not their compiled definitions. The list without `flowId` is read from the compiled revisions and leaves those two out.
 
 ### Node Descriptor APIs
 
@@ -122,7 +122,7 @@ Base path: `/flow/instances` — launch, reads and approval actions on runtime i
 | Method | Path | Description |
 |---|---|---|
 | `POST` | `/flow/instances/start` | Start an Automation flow whose trigger is `Api`, by `flowId` or a pinned `bundleId`; any other flow is refused |
-| `GET` | `/flow/instances/{instanceId}?includeTrace=` | Get one runtime instance (trace excluded by default), with `initiatorName`, its submitter's name (not stored). Without the record's values: `inputPayload`, `variables` and `returnData` are left out, as they are from every approval action's answer (approve, reject, return, transfer, CC, CC read, withdraw) — the variables hold the record's fields as submitted, past the steps' field permissions, so a field a step hid could be read here. The record is read through `/record` alone |
+| `GET` | `/flow/instances/{instanceId}` | Get one runtime instance, without its trace (read through `/trace`), with `initiatorName`, its submitter's name (not stored). Without the record's values: `variables` and `returnData` are left out, as they are from every approval action's answer (approve, reject, return, transfer, CC, CC read, withdraw) — the variables hold the record's fields as submitted, past the steps' field permissions, so a field a step hid could be read here. The record is read through `/record` alone |
 | `GET` | `/flow/instances/{instanceId}/summary` | The instance as a row of `POST /flow/instances/search` shows it (`FlowInstanceSummaryView`, composed the same way): the steps it waits on with the approvers still to act, what a record's approval kept of its record, `awaitingRevision`, `recordDeleted` / `recordCancelled`, `effectStatus`, every user and department named; on the caller's own approval waiting on its approvers, `withdrawable` and `urge`, and on their own record's approval that failed, `withdrawable` (taking the record back). Allowed to whoever may view the instance |
 | `GET` | `/flow/instances/{instanceId}/design` | The revision the instance runs on, exactly as `GET /flow/bundles/{bundleId}?include=design` returns it (`FlowBundleDetailView`: its `summary` and the `design` snapshot taken at publish) — to draw the instance's diagram. Allowed to whoever may view the instance: the bundle is read past their permissions on `FlowBundle`, which an approver seldom holds |
 | `GET` | `/flow/instances/{instanceId}/overlay` | Per-node run state for canvas painting |
@@ -150,7 +150,7 @@ Base path: `/flow/instances` — launch, reads and approval actions on runtime i
 |---|---|---|
 | `POST` | `/flow/instances/withdraw` | Withdraw an Approval instance: its submitter, while it waits on its approvers and the flow's `withdrawPolicy` permits it (`WithdrawPolicyGuard`). On a record's approval that failed, its submitter takes the record back whatever the policy, while the record still waits on it — as `withdrawRecord` does: a draft again, the failed instance kept |
 | `GET` | `/flow/instances/{instanceId}/withdraw` | Whether the caller may withdraw the instance now — `true` exactly when a withdrawal would be accepted, by the same `WithdrawPolicyGuard`. Allowed to whoever may view the instance |
-| `POST` | `/flow/instances/urge` | Remind the approvers the approval waits on — its submitter only, on a flow whose `urgeEnabled` is not turned off. Each waiting step is urged at most once per the flow's `urgeIntervalHours` (default 4), by the submitter or an administrator alike; each step urged gets its own `URGE` history entry, and when every step is still inside the interval the urge is refused. Returns `FlowUrgeStatus`, not the instance |
+| `POST` | `/flow/instances/urge` | Remind the approvers the approval waits on — its submitter only, on a flow whose `urgeEnabled` is not turned off. The reminder's text goes in `comment` (at most 256 characters); a default one when empty. Each waiting step is urged at most once per the flow's `urgeIntervalHours` (default 4), by the submitter or an administrator alike; each step urged gets its own `URGE` history entry, and when every step is still inside the interval the urge is refused. Returns `FlowUrgeStatus`, not the instance |
 | `GET` | `/flow/instances/{instanceId}/urge` | Whether the caller may urge the approval now, and if not, when (`FlowUrgeStatus`) — never, for the submitter of a flow that turns `urgeEnabled` off. Allowed to whoever may view the instance |
 | `POST` | `/flow/instances/comment` | Add a comment audit entry while the instance runs — its participants only: the submitter and the people it gives or gave a task to, by the same rule as viewing it (an approver whose step another's vote carried still comments; an administrator who urged it does not). An instance that has ended takes no more comments. Returns `true`, not the instance |
 
@@ -242,18 +242,12 @@ The approval page (`/home/approvals/{instanceId}`, the link of every approval em
 
 ### Instance search
 
-`POST /flow/instances/search` (the caller's own approvals) and `POST /flow/monitor/instances/search` (across submitters, see [Monitor](#monitor)) take the same `FlowInstanceSearchRequest` and return the same rows, newest first, paged by `pageNumber` (default 1) and `pageSize` (default 50). Filters combine with AND:
+`POST /flow/instances/search` (the caller's own approvals) and `POST /flow/monitor/instances/search` (across submitters, see [Monitor](#monitor)) take the same `FlowInstanceSearchRequest` and return the same rows, newest first, paged by `pageNumber` (default 1) and `pageSize` (default 50). The caller's own search is always pinned to the record approvals they submitted; the rest combine with AND on top, narrowing it, never widening it:
 
 | Filter | Matches |
 |---|---|
-| `flowId`, `status`, `modelName`, `rowId` | The instance's own columns (`rowId` with `modelName`) |
-| `createdFrom` / `createdTo` | When it started — for a record's approval, when the record was submitted |
-| `initiatorId` | The monitor search only; the caller's own search always pins it to them |
-| `subjectId`, `subjectDeptId` | A record's approval by the employee it is about, or by that employee's department, as at submission |
-| `effectiveDateFrom` / `effectiveDateTo` | A record's approval by the date the record takes effect |
-| `recordCode` | A record's approval by the record's own number (contains) |
 | `awaitingRevision` | Approvals returned to their submitter that neither a later submission of the record replaced nor the record's cancellation closed (`superseded` unset) — records still waiting to be edited and submitted again |
-| `filters` / `orders` | Conditions and a sort on the stored fields of `FlowInstance`, as a metadata-driven table sends them; `orders` replaces newest first. See [Filtering and sorting a list](#filtering-and-sorting-a-list) |
+| `filters` / `orders` | Conditions and a sort on the stored fields of `FlowInstance`, as a metadata-driven table sends them — by flow, status, submitter, employee, department, effective date, record number or start time, all go here; `orders` replaces newest first. See [Filtering and sorting a list](#filtering-and-sorting-a-list) |
 
 A row (`FlowInstanceSummaryView`) leaves out the heavy state columns and the trace — fetch the instance or its overlay for those. It carries:
 
@@ -273,13 +267,7 @@ The approval center's lists — the task boxes of `POST /flow/approvalTasks/sear
 
 ### Automation APIs
 
-Base path: `/flow/automation` — trigger firing; it neither reads nor acts on an existing instance.
-
-| Method | Path | Description |
-|---|---|---|
-| `POST` | `/flow/automation/trigger` | Fire a trigger event and start matching flows. `Submit`, `Cron`, `Api` and `Subflow` events are refused: those flows start by record submission, on their own schedule, by id, or from a parent flow |
-
-Async-task and timer resumes have no REST endpoint: `FlowAsyncTaskConsumer`, `FlowTimerConsumer` and the due-timer sweep of the maintenance cron call `FlowRuntimeEngine` in-process.
+Automation flows have no endpoint to fire them by hand: data changes, schedules and subflows are started by in-process consumers, and an `Api`-triggered flow is started by id through `POST /flow/instances/start`. Async-task and timer resumes have no REST endpoint: `FlowAsyncTaskConsumer`, `FlowTimerConsumer` and the due-timer sweep of the maintenance cron call `FlowRuntimeEngine` in-process.
 
 ### Event Logs
 
@@ -308,7 +296,7 @@ Each task `/search` lists (`FlowApprovalTaskView`) comes with its instance's con
 | Field | Holds |
 |---|---|
 | `actorName` | Its holder's name |
-| `actorNames` | The names of every account it names, by account id: its candidates, who approved, rejected, closed or blocks it |
+| `actorNames` | The names of the accounts it names, by account id: its holder and who closed it |
 | `instanceTitle`, `modelName` / `rowId`, `instanceStatus`, `initiator`, `submittedTime` | Its instance's context |
 | `subject`, `subjectDept`, `effectiveDate`, `recordCode`, `summary` | What a record's approval recorded of its record |
 | `currentSteps` | Where a request still in approval stands now: the steps its instance waits on, with the approvers still to act, named; one query per page |
@@ -324,8 +312,8 @@ The tasks are a projection of the approval history, brought up to date on every 
 
 | Task | One per | Status |
 |---|---|---|
-| Approval task | Approver and turn | Closes with what its holder did: <Status>Approved</Status> <Status>Rejected</Status> <Status>Returned</Status> <Status>Transferred</Status> <Status>Delegated</Status>; a task its holder did not act on closes <Status>Withdrawn</Status> after a withdrawal, else <Status tone="cancel">Canceled</Status> (another approver ended the step, an administrator terminated the approval) |
-| CC task | Recipient, step and cycle | <Status>Pending</Status> until they read it, then <Status>Read</Status>, ending when they read it |
+| Approval task | Approver and step | Closes with what its holder did: <Status>Approved</Status> <Status>Rejected</Status> <Status>Returned</Status> <Status>Transferred</Status> <Status>Delegated</Status>; a task its holder did not act on closes <Status>Withdrawn</Status> after a withdrawal, else <Status tone="cancel">Canceled</Status> (another approver ended the step, an administrator terminated the approval) |
+| CC task | Recipient and step | <Status>Pending</Status> until they read it, then <Status>Read</Status>, ending when they read it |
 
 - An approval task closes with what its holder did even when the same action went on to record more (the next step approving itself, a CC as the approval ended). Closed, it stays as it is: the others' later votes do not copy it.
 - A task, open or closed, keeps its holder a participant of the instance (see [Instance APIs](#instance-apis)): the approver a termination cleared still opens the approval from their task email.

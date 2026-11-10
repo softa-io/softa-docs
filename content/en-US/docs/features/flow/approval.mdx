@@ -278,7 +278,7 @@ The approval mode (`config.approvalMode`) decides how many approvals pass the st
 
 - **It applies only to a step that may have several approvers**: several groups, or one that names several people or is a role, a position or department members. A step whose one group names one person, or is a supervisor, a department leader or a department HRBP (one person each; a department leader or HRBP is several only when a variable names several departments), passes on that one's approval whatever mode it holds — the outcome any mode would give — so the designer does not show the setting and validation does not judge it.
 - **A rejection has no threshold: one approver's rejection rejects the approval**, however many approvals the step counts — an all-approve step (会签) and an any-one step (或签) alike, as mainstream approval products have it. An approver who already approved the step cannot then reject it.
-- One actor can only cast one effective vote per cycle.
+- One actor casts one effective vote per step.
 - **Vote counts are fixed when a step starts**, and capped by the approvers the step has: no more approvals than approvers. A transfer leaves the count as it is; an administrator reassignment that merges two seats caps it by the same rule — and a step the merge leaves with every approval it needs passes there and then (an all-approve step of three whose other two approved, the third's seat merged into one of theirs).
 - **When the step finds fewer approvers than the threshold** (at least 3 required, 2 resolved, say — or some resolved were dropped for having left or been frozen), the step asks for what the approvers it has can give: 2 of 2.
 
@@ -323,13 +323,13 @@ CC is the whole approval's setting, set only in the flow settings; an approval s
 - **When**: on submit (`OnSubmit`); once approved (`OnApproved`, as the whole approval ends approved); once rejected (`OnRejected`, as it ends rejected — at the first rejection).
 - **Who**: `recipientSource`, one group in the shape of each of an approval step's `approverSources` — specific people, or people found by a rule: the supervisor of the employee the record is about, a department leader, a role, a position, a department's members…. They are found as in [Approver resolution](#approver-resolution), past the submitter's data permissions; someone whose account cannot act is not CC'd. Several groups at one timing are several rules.
 
-The recipient has a CC task in their CC list, an inbox notice, and is a participant: they view and comment. Someone already CC'd on the same node and cycle — by a rule or by hand — is not CC'd again. Approvers can also CC by hand as they act, one person or several at once — see [Approval actions](#approval-actions).
+The recipient has a CC task in their CC list, an inbox notice, and is a participant: they view and comment. Someone already CC'd on the same node — by a rule or by hand — is not CC'd again. Approvers can also CC by hand as they act, one person or several at once — see [Approval actions](#approval-actions).
 
 <Dev title="When rules run and how they are recorded">
 
 - A once-approved rule runs whichever run ends the approval — an approval, a retry, an administrator's reassignment (or, on a revision published before approval flows held people and routes only, a timer or an async task resuming it): it is run where the instance completes, with the "Approved" notice, not by each action that may lead there.
 - Specific people are written `{"type": "Users", "userIds": [...]}`.
-- A rule's CC is recorded like a manual one: one `CC` entry per recipient, with no actor — no person sent it — on the start node (on submit, recorded before the start runs through any step; once approved too when no approval step was passed on the way) or on the step whose action ended the approval — once approved, the approval step completed last — in that node's current cycle.
+- A rule's CC is recorded like a manual one: one `CC` entry per recipient, with no actor — no person sent it — on the start node (on submit, recorded before the start runs through any step; once approved too when no approval step was passed on the way) or on the step whose action ended the approval — once approved, the approval step completed last.
 
 </Dev>
 
@@ -387,7 +387,7 @@ An approver's action needs the instance waiting on approval, and the actor an ap
 | Reject | Comment required | One rejection is enough (see [Approval threshold](#approval-threshold)): instance <Status>Rejected</Status>, every branch ends, record <Status>Rejected</Status> | Submitter |
 | Return | The flow allows it (`returnEnabled`); comment required | Instance <Status>Returned</Status>, record back to draft. Always returns to the submitter, never to an earlier step | Submitter |
 | Transfer | Not yet voted; the target is neither the actor nor already on the step, and their account can act | The target takes the actor's seat, votes needed unchanged. It is the one way an approver hands a task on: the manual "delegate" did the same under another name and is gone; past `DELEGATE` entries still show | New approver |
-| CC | Not yet voted; one person or several at once. Whoever already sees the approval from the step — its approvers, the actor among them, and anyone CC'd on it this cycle — is skipped; refused when nobody is left, and as a whole when anyone chosen cannot act, naming them | The targets become participants who can view and comment | CC recipients (inbox only) |
+| CC | Not yet voted; one person or several at once. Whoever already sees the approval from the step — its approvers, the actor among them, and anyone already CC'd on it — is skipped; refused when nobody is left, and as a whole when anyone chosen cannot act, naming them | The targets become participants who can view and comment | CC recipients (inbox only) |
 | Comment | Any participant; instance not ended | Writes one entry, changes no status | Nobody |
 
 ### Submitter actions
@@ -482,7 +482,7 @@ Once an approval ends, the framework writes the outcome back to the record, then
 
 </Lead>
 
-- When a record's approval completes, is rejected, returned, withdrawn or cancelled (terminated by an administrator), `approvalStatus` is set to the result — `Draft` after a return or a withdrawal. `afterOutcome(record, outcome)` gets the type, the deciding user and their comment (none for an automatic approval; the administrator and their reason for a termination).
+- When a record's approval completes, is rejected, returned, withdrawn or cancelled (terminated by an administrator), `approvalStatus` is set to the result — `Draft` after a return or a withdrawal. `afterOutcome(record, outcome)` gets the type and the approval instance's id (none for a cancelled draft); who decided and what they said are in the approval's history.
 - A result lands only on a record still `Pending`: a finished instance saved again (on a comment or a CC read) changes nothing, and `afterOutcome` runs once per result.
 - In `afterOutcome`, keep to writes in this database that belong with the result; anything that leaves it — a payment, an external system — goes after the commit.
 - A failed instance writes nothing and leaves its record `Pending`, with three ways out: its submitter takes the record back by withdrawing it (a draft again); an administrator terminates the approval (the record `Cancelled`); when it failed after an approval, an administrator runs the steps after the approval again (see [When a step after an approval fails](#when-a-step-after-an-approval-fails)).
@@ -511,7 +511,7 @@ Once an approval ends, the framework writes the outcome back to the record, then
 | <Status>InProgress</Status> | The approval is in progress: the step it waits on now, as it stands (`current`, with the approvers still asked), then the steps after it |
 | <Status>Refused</Status> | The submission would be refused |
 | <Status>NoFlow</Status> | The document has no enabled approval flow |
-| <Status>SeveralFlows</Status> | Several flows apply, listed in `candidates` |
+| <Status>SeveralFlows</Status> | Several flows apply: `message` names them |
 
 The walk assumes every approval step approved; `steps` lists the approval steps in the order the approval reaches them, each with an `outcome`:
 
@@ -630,7 +630,7 @@ Only an instance that failed after an approval runs again; one that failed other
 | A non-draft record is frozen, and so are the rows it owns by cascade, which also cannot be added under it | Write refused by the approval lock |
 | The framework alone writes the approval fields; a new record is always a draft with no submitter | Write refused (sending back the stored value is not a change) |
 | At most one of the document's enabled approval flows has its submit condition hold for a submission; when none does, the default (the flow without a condition) takes it, and with no default either it cannot be submitted; the employee the record is about cannot be empty | Submission refused with the reason |
-| Only an approver of the current step can act; one vote per user per cycle | Action refused |
+| Only an approver of the current step can act; one vote per user per step | Action refused |
 | Reject, return, terminate and reassign need a comment or reason; a comment or reason is at most 256 characters | Action refused |
 | Return only where the flow allows it (`returnEnabled`), always to the submitter | Action refused; a batch return skips the task |
 | Withdrawal by the submitter only, while the `withdrawPolicy` allows it | Action refused |

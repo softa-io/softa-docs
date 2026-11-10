@@ -24,7 +24,6 @@ The table gives the terms the Flow pages use and their names in the code; the su
 | Scenario | `FlowScenario` | Approval flow (`Approval`) or automation flow (`Automation`), chosen when the flow is created and fixed from then on |
 | Trigger | `trigger` | The flow's one way to start, configured on its start node |
 | Step | an approval node; `PendingApproval` at run time | One stay of an approval node in an instance |
-| Cycle | `cycle` | The graph has no cycles, so each node is entered once per instance and the cycle is always 1 (the field remains) |
 | Submitter | the record's `submitterId`, the instance's `initiatorId` | The account that pressed Submit — possibly HR submitting on an employee's behalf. Only they withdraw, urge, or take back a failed approval |
 | Employee | the handler's `subject()` (default `employeeId`), the instance's `subjectId` | The employee the record is about; approvers are found from them — their supervisor, their department. Not "applicant": on documents HR raises (a salary adjustment, a transfer) the employee applied for nothing |
 | Approver | a login account id | Someone the current step found; they need an account that signs in |
@@ -199,7 +198,7 @@ Design cases as combinations of status × role × configuration; each point belo
 - Any one, unanimous, at least N and percentage govern approval only, and show and apply only where a step may have several approvers; with one named person, or a supervisor, department head or HRBP, one approval passes the step.
 - One rejection rejects, whatever the step's votes; an approver who already approved the step cannot reject it.
 - Fewer approvers found than the threshold: capped by headcount, never stuck.
-- One person, one vote per cycle.
+- One person, one vote per step.
 - Submitter as approver: auto-approve or require approval; a general manager's own request on a step naming the general manager passes by default. When someone else submitted and the employee is an approver of a step, they always approve themselves.
 - Approver dedup: global, contiguous, none.
 

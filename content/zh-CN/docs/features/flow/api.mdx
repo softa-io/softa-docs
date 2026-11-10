@@ -92,7 +92,7 @@
 | `GET` | `/flow/bundles/{bundleId}?include=design` | 一个修订版摘要，可选含画布完整设计快照 |
 | `POST` | `/flow/bundles/{bundleId}/activate` | 使此修订版成为流程的生效修订版（回滚 = 向前滚动） |
 
-它们都返回 `FlowBundleSummaryView`：`bundleId`、`flowId`、`flowName`、`revision`、`scenario`、`triggerType`、`sync`、`rollbackOnFail`、`compiledAt`、`publishedAt`、`nodeCount`、`transitionCount`，以及来自保存的修订版的 `active`——是否为流程的生效修订版（每个流程一个）——和发布时填写的 `changeDescription`。不带 `flowId` 的列表从编译后的修订版读取，没有这两项。
+它们都返回 `FlowBundleSummaryView`：`bundleId`、`flowId`、`flowName`、`revision`、`scenario`、`publishedAt`，以及来自保存的修订版的 `active`——是否为流程的生效修订版（每个流程一个）——和发布时填写的 `changeDescription`。修订历史只读修订版自己的列，不解析编译结果。不带 `flowId` 的列表从编译后的修订版读取，没有这两项。
 
 ### 节点描述符 API
 
@@ -122,7 +122,7 @@
 | Method | Path | 说明 |
 |---|---|---|
 | `POST` | `/flow/instances/start` | 按 `flowId` 或固定的 `bundleId` 启动触发器为 `Api` 的 Automation 流程；其他流程一律拒绝 |
-| `GET` | `/flow/instances/{instanceId}?includeTrace=` | 获取一个运行时实例（默认排除 trace），带 `initiatorName`：提交人的姓名（不存库）。不含单据的值：`inputPayload`、`variables`、`returnData` 都去掉，各审批动作（通过、驳回、退回、转交、抄送、读抄送、撤回）的返回也一样——variables 里是提交时的单据字段，不受步骤字段权限约束，某一步隐藏的字段原本能从这里读到。单据只经 `/record` 读取 |
+| `GET` | `/flow/instances/{instanceId}` | 获取一个运行时实例，不含 trace（经 `/trace` 读取），带 `initiatorName`：提交人的姓名（不存库）。不含单据的值：`variables`、`returnData` 都去掉，各审批动作（通过、驳回、退回、转交、抄送、读抄送、撤回）的返回也一样——variables 里是提交时的单据字段，不受步骤字段权限约束，某一步隐藏的字段原本能从这里读到。单据只经 `/record` 读取 |
 | `GET` | `/flow/instances/{instanceId}/summary` | 该实例在 `POST /flow/instances/search` 中的那一行（`FlowInstanceSummaryView`，组装方式相同）：当前等待的步骤及尚未处理的审批人、记录的审批为其记录记下的内容、`awaitingRevision`、`recordDeleted` / `recordCancelled`、`effectStatus`，所有用户和部门都显示名称；对调用方自己那些正在等待审批人的审批，还有 `withdrawable` 和 `urge`；对其自己失败的单据审批，还有 `withdrawable`（取回单据）。可查看该实例的人均可调用 |
 | `GET` | `/flow/instances/{instanceId}/design` | 实例所运行的修订版，与 `GET /flow/bundles/{bundleId}?include=design` 的返回完全相同（`FlowBundleDetailView`：`summary` 与发布时的 `design` 快照）——用于绘制实例的流程图。可查看该实例的人均可调用：bundle 越过他们对 `FlowBundle` 的权限读取，而审批人很少有这项权限 |
 | `GET` | `/flow/instances/{instanceId}/overlay` | 画布绘制的每节点运行状态 |
@@ -150,7 +150,7 @@
 |---|---|---|
 | `POST` | `/flow/instances/withdraw` | 撤回 Approval 实例：由其提交人撤回，且实例正在等待审批人、流程的 `withdrawPolicy` 允许（`WithdrawPolicyGuard`）。对失败的单据审批，其提交人不受撤回策略限制，在单据仍在等这次审批时取回单据——和 `withdrawRecord` 一样：单据回到草稿，失败的实例保留 |
 | `GET` | `/flow/instances/{instanceId}/withdraw` | 调用方现在能否撤回该实例——恰在撤回会被接受时为 `true`，判断同样出自 `WithdrawPolicyGuard`。可查看该实例的人均可调用 |
-| `POST` | `/flow/instances/urge` | 提醒审批所等待的审批人——仅限提交人，且流程的 `urgeEnabled` 没有关闭。每个等待中的步骤在流程的 `urgeIntervalHours`（默认 4 小时）内最多被催办一次，无论由提交人还是管理员催办；每个被催办的步骤各记一条 `URGE` 历史，若所有步骤都仍在间隔内则拒绝催办。返回 `FlowUrgeStatus`，而非实例 |
+| `POST` | `/flow/instances/urge` | 提醒审批所等待的审批人——仅限提交人，且流程的 `urgeEnabled` 没有关闭。附言放在 `comment`（最多 256 字），空时用默认文案。每个等待中的步骤在流程的 `urgeIntervalHours`（默认 4 小时）内最多被催办一次，无论由提交人还是管理员催办；每个被催办的步骤各记一条 `URGE` 历史，若所有步骤都仍在间隔内则拒绝催办。返回 `FlowUrgeStatus`，而非实例 |
 | `GET` | `/flow/instances/{instanceId}/urge` | 调用方现在能否催办该审批，若不能则何时可以（`FlowUrgeStatus`）；流程关闭了 `urgeEnabled` 时，提交人始终不能催办。可查看该实例的人均可调用 |
 | `POST` | `/flow/instances/comment` | 在实例运行期间添加评论审计条目——仅限其参与者：提交人以及它给过或正给着任务的人，与查看实例的规则相同（别人一票就通过的步骤里没投票的审批人仍可评论；催办过它的管理员不行）。已结束的实例不再接受评论。返回 `true`，而非实例 |
 
@@ -242,18 +242,12 @@
 
 ### 实例搜索
 
-`POST /flow/instances/search`（调用方自己的审批）和 `POST /flow/monitor/instances/search`（跨提交人，见[监控](#监控)）接受同一个 `FlowInstanceSearchRequest` 并返回同样的行，最新在前，按 `pageNumber`（默认 1）和 `pageSize`（默认 50）分页。过滤条件以 AND 组合：
+`POST /flow/instances/search`（调用方自己的审批）和 `POST /flow/monitor/instances/search`（跨提交人，见[监控](#监控)）接受同一个 `FlowInstanceSearchRequest` 并返回同样的行，最新在前，按 `pageNumber`（默认 1）和 `pageSize`（默认 50）分页。调用方自己的搜索总是固定为其本人提交的单据审批；其余条件以 AND 组合在上面，只能收窄、不能放宽：
 
 | 过滤条件 | 匹配 |
 |---|---|
-| `flowId`、`status`、`modelName`、`rowId` | 实例自身的列（`rowId` 需配合 `modelName`） |
-| `createdFrom` / `createdTo` | 实例启动的时间——对记录的审批，即记录提交的时间 |
-| `initiatorId` | 仅监控搜索采纳；调用方自己的搜索总是固定为其本人 |
-| `subjectId`、`subjectDeptId` | 按记录所涉及的员工（当事员工）或该员工的部门筛选记录的审批，以提交时为准 |
-| `effectiveDateFrom` / `effectiveDateTo` | 按记录的生效日期筛选记录的审批 |
-| `recordCode` | 按记录自身的编号筛选记录的审批（包含匹配） |
 | `awaitingRevision` | 已退回给提交人、之后既没有被该记录的新提交取代、也没有因记录作废而关闭（未标 `superseded`）的审批——仍在等待修改并重新提交的记录 |
-| `filters` / `orders` | 针对 `FlowInstance` 存储字段的条件与排序，形式与元数据驱动的表格发出的一致；`orders` 取代“最新在前”。见[筛选与排序列表](#筛选与排序列表) |
+| `filters` / `orders` | 针对 `FlowInstance` 存储字段的条件与排序，形式与元数据驱动的表格发出的一致——按流程、状态、提交人、当事员工、部门、生效日期、单据编号、启动时间筛选都写在这里；`orders` 取代“最新在前”。见[筛选与排序列表](#筛选与排序列表) |
 
 每一行（`FlowInstanceSummaryView`）不含笨重的状态列和 trace——需要时请获取实例或其 overlay。它包含：
 
@@ -273,13 +267,7 @@
 
 ### 自动化 API
 
-基础路径：`/flow/automation`——触发事件；它不读取也不操作已有实例。
-
-| Method | Path | 说明 |
-|---|---|---|
-| `POST` | `/flow/automation/trigger` | 触发事件并启动匹配流程。`Submit`、`Cron`、`Api`、`Subflow` 类型的事件会被拒绝：这些流程分别由提交记录、自己的调度、按 id 启动、父流程调用来启动 |
-
-异步任务与定时器的恢复没有 REST 端点：`FlowAsyncTaskConsumer`、`FlowTimerConsumer` 以及维护 cron 的到期定时器扫描在进程内直接调用 `FlowRuntimeEngine`。
+自动化流程没有手动触发的端点：数据变化、定时、子流程由进程内的消费者触发，`Api` 触发的流程用 `POST /flow/instances/start` 按 id 启动。异步任务与定时器的恢复没有 REST 端点：`FlowAsyncTaskConsumer`、`FlowTimerConsumer` 以及维护 cron 的到期定时器扫描在进程内直接调用 `FlowRuntimeEngine`。
 
 ### 事件日志
 
@@ -308,7 +296,7 @@
 | 字段 | 内容 |
 |---|---|
 | `actorName` | 持有人的姓名 |
-| `actorNames` | 它提到的每个账号的姓名，按账号 id：候选人，以及同意、驳回、关闭或挡住这条任务的人 |
+| `actorNames` | 它提到的账号的姓名，按账号 id：持有人和关闭这条任务的人 |
 | `instanceTitle`、`modelName` / `rowId`、`instanceStatus`、`initiator`、`submittedTime` | 其实例的上下文 |
 | `subject`、`subjectDept`、`effectiveDate`、`recordCode`、`summary` | 记录的审批为其记录记下的内容 |
 | `currentSteps` | 审批中的单据现在停在哪里：实例正在等的步骤和还没处理的审批人，带名称；每页一次查询 |
@@ -324,8 +312,8 @@
 
 | 任务 | 粒度 | 状态 |
 |---|---|---|
-| 审批任务 | 每位审批人每一轮一条 | 以持有人自己做的事结束：<Status>Approved</Status> <Status>Rejected</Status> <Status>Returned</Status> <Status>Transferred</Status> <Status>Delegated</Status>；持有人没处理过的任务，撤回后为 <Status>Withdrawn</Status>，否则为 <Status tone="cancel">Canceled</Status>（别的审批人结束了这一步、管理员终止了审批） |
-| 抄送任务 | 每位接收人在每个步骤、每一轮一条 | 读之前是 <Status>Pending</Status>，读后为 <Status>Read</Status>，结束时间为读的时间 |
+| 审批任务 | 每位审批人在每个步骤一条 | 以持有人自己做的事结束：<Status>Approved</Status> <Status>Rejected</Status> <Status>Returned</Status> <Status>Transferred</Status> <Status>Delegated</Status>；持有人没处理过的任务，撤回后为 <Status>Withdrawn</Status>，否则为 <Status tone="cancel">Canceled</Status>（别的审批人结束了这一步、管理员终止了审批） |
+| 抄送任务 | 每位接收人在每个步骤一条 | 读之前是 <Status>Pending</Status>，读后为 <Status>Read</Status>，结束时间为读的时间 |
 
 - 审批任务以持有人自己做的事结束，即使同一个动作随后又记了别的（下一步自动通过、审批结束时的抄送）；结束后保持不变：别人之后的投票不会复制它。
 - 任务不论开着还是已关闭，都让持有人仍是实例的参与者（见[实例 API](#实例-api)）：终止时被清掉的审批人仍能从待办邮件打开审批。

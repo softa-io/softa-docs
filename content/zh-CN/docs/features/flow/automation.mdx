@@ -43,8 +43,6 @@ flowchart LR
 | `Api` | 被显式按 id 启动 | `POST /flow/instances/start`；不匹配任何事件 |
 | `Subflow` | 被父流程的子流程节点调用 | 在调用方里一次跑完：不能含定时、异步任务这类会等待的节点（发布时检查，`SUBFLOW_WAITS`）；不能调回上层正在运行的流程 |
 
-`POST /flow/automation/trigger` 可以手动投递一个触发事件（`Submit`、`Cron`、`Api`、`Subflow` 类型会被拒绝）。
-
 ### Cron 触发的流程
 
 Cron 触发的流程拥有自己的调度：触发器的 `cronExpression`，采用 cron-starter 运行的 Quartz 格式（`second minute hour day-of-month month day-of-week [year]`，例如 `0 0 9 ? * MON-FRI` 表示工作日 09:00，按调度器所在时区）。Automation 流程可以按调度运行，Approval 流程不可以（见 [Flow 场景](./index#flow-场景)）。
@@ -211,10 +209,10 @@ stateDiagram-v2
 | 触发源 | 启动契约 |
 |---|---|
 | `EntityChange` | 模型的一条变更日志。每条变更日志对每个流程最多启动一次运行：重投的变更日志会返回它已启动的那次运行，而同一行的不同变更各自启动自己的运行 |
-| `Cron` | 流程自己的 Quartz 调度；只能由它启动（见 [Cron 触发的流程](#cron-触发的流程)）：其他 cron 任务的触发不会启动它，`POST /flow/automation/trigger` 也拒绝该类型 |
-| `Api`（仅 AUTOMATION 场景） | 只能按 id 显式启动；不匹配任何事件，`POST /flow/automation/trigger` 拒绝该类型 |
+| `Cron` | 流程自己的 Quartz 调度；只能由它启动（见 [Cron 触发的流程](#cron-触发的流程)）：其他 cron 任务的触发不会启动它 |
+| `Api`（仅 AUTOMATION 场景） | 只能按 id 显式启动（`POST /flow/instances/start`）；不匹配任何事件 |
 | `Subflow`（仅 AUTOMATION 场景） | 只能由父流程的 Subflow 节点运行；同样不能作为事件触发 |
-| `Submit`（仅 APPROVAL 场景） | 流程模型（它的单据）的记录被提交时启动，可以再用条件写明它审批哪些记录。只能由提交记录启动（见[审批业务记录](./integration#审批业务记录)）；变更日志永远不会产生它，`POST /flow/automation/trigger` 也拒绝它 |
+| `Submit`（仅 APPROVAL 场景） | 流程模型（它的单据）的记录被提交时启动，可以再用条件写明它审批哪些记录。只能由提交记录启动（见[审批业务记录](./integration#审批业务记录)）；变更日志永远不会产生它 |
 
 `EntityChange` 由变更日志触发，因此声明为 `@Model(enableAuditLog = false)` 的模型永远不会触发它，同步、异步都不会——见[审计日志开关](../../backend_dev/model_dev/annotation#审计日志开关enableauditlog)。
 

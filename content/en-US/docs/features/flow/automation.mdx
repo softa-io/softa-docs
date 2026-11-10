@@ -43,8 +43,6 @@ An automation flow declares one trigger and starts from that one entry only: a d
 | `Api` | Started explicitly by id | `POST /flow/instances/start`; matches no event |
 | `Subflow` | Called by a parent flow's Subflow node | Runs inside its caller, in one go: no nodes that wait — a timer, an async task (checked on publish, `SUBFLOW_WAITS`); no calling a flow already running above it |
 
-`POST /flow/automation/trigger` posts a trigger event by hand (`Submit`, `Cron`, `Api` and `Subflow` events are refused).
-
 ### Cron-triggered flows
 
 A Cron-triggered flow owns its schedule: the trigger's `cronExpression`, in the Quartz format cron-starter runs (`second minute hour day-of-month month day-of-week [year]`, e.g. `0 0 9 ? * MON-FRI` for 09:00 on weekdays, in the scheduler's time zone). Automation flows may run on a schedule, Approval flows may not (see [Flow Scenarios](./index#flow-scenarios)).
@@ -211,10 +209,10 @@ The supported trigger sources are `TriggerSource` sealed sub-types; see [Flow Sc
 | Source | Start contract |
 |---|---|
 | `EntityChange` | A change log of the model. Each change log starts a run at most once per flow: a redelivered change log returns the run it already started, while distinct changes of one row each start their own |
-| `Cron` | The flow's own Quartz schedule; started only by it (see [Cron-triggered flows](#cron-triggered-flows)): other cron jobs' ticks never start it, and `POST /flow/automation/trigger` refuses the type |
-| `Api` (AUTOMATION scenario only) | Started explicitly by id; no event matches it, and `POST /flow/automation/trigger` refuses the type |
+| `Cron` | The flow's own Quartz schedule; started only by it (see [Cron-triggered flows](#cron-triggered-flows)): other cron jobs' ticks never start it |
+| `Api` (AUTOMATION scenario only) | Started explicitly by id (`POST /flow/instances/start`); no event matches it |
 | `Subflow` (AUTOMATION scenario only) | Run only from a parent's Subflow node; refused as an event likewise |
-| `Submit` (APPROVAL scenario only) | Started when a record of the flow's model (its document) is submitted; it may also name, by a condition, which of its records it takes. Started only by record submission (see [Approving Business Records](./integration#approving-business-records)); change logs never produce it and `POST /flow/automation/trigger` refuses it |
+| `Submit` (APPROVAL scenario only) | Started when a record of the flow's model (its document) is submitted; it may also name, by a condition, which of its records it takes. Started only by record submission (see [Approving Business Records](./integration#approving-business-records)); change logs never produce it |
 
 `EntityChange` is fired from the change log, so a model declared `@Model(enableAuditLog = false)` never triggers it, synchronously or asynchronously — see [Audit log switch](../../backend_dev/model_dev/annotation#audit-log-switch-enableauditlog).
 
