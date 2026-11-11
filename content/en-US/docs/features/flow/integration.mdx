@@ -26,7 +26,7 @@ A business record — a leave request, an expense claim — is approved by an Ap
 
 `ApprovalModelController` gives every such model the same three endpoints, granted per model like any other: `POST /{Model}/submit?id=`, `POST /{Model}/withdraw?id=` (body `{comment}`, optional) and `POST /{Model}/cancel?id=`, through `FlowClient`. What a submission would do is answered for every model by `GET /flow/instances/preview`.
 
-Every record has an **employee**: the employee it is about, whom the organization-relative approver sources start from (see [Approver Resolution](./approval#approver-resolution)). It is the model's `employeeId` unless the handler's `subject()` names another field (`Transfer::getTransfereeId`); either way a many-to-one onto the employee model (`softa.flow.org.employee-model`), which the boot checks. A record whose employee is empty is not submitted. The submission carries it to the flow as the start variable `_subjectId`.
+Every record has an **employee**: the employee it is about, whom the organization-relative approver sources start from (see [Approver Resolution](./approval#approver-resolution)). It is the model's `employeeId` unless the handler's `subject()` names another field (`Transfer::getTransfereeId`); either way a many-to-one onto the employee model, `Employee`, which the boot checks. A record whose employee is empty is not submitted. The submission carries it to the flow as the start variable `_subjectId`.
 
 ### Framework and handler
 
@@ -183,7 +183,7 @@ Before enabling `flow-starter` in a real app, verify each item below, grouped as
 
 **Organization and directory**
 
-- check the organization follows the default HR conventions, or override `softa.flow.org.*`, or provide your own `OrganizationService` — implementing `getUnusableAccounts` too, or every account counts as able to act, and `getRoleNames`, or a step handed to roles (`AssignToRole`) names them by id and code
+- check the organization follows the default HR conventions, or else provide your own `OrganizationService` — implementing `getUnusableAccounts` too, or every account counts as able to act, and `getRoleNames`, or a step handed to roles (`AssignToRole`) names them by id and code
 - point `softa.flow.org.directory-model` at a projection of the employees that shows only what a directory does, and give every role a scope on it — a role without one finds nobody in the pickers; an application with its own `OrganizationService` implements the five directory methods, or the pickers find nobody
 
 **Permissions**
@@ -197,64 +197,27 @@ Before enabling `flow-starter` in a real app, verify each item below, grouped as
 **Notifications**
 
 - for approval emails: set `system.site-url` (the link in each email) and give each tenant the `flow.*` mail templates — or turn `emailNotification` off on the flows; provide your own `ApprovalNotificationService` for SMS or IM
-- set `flow.notification.failure-role-codes` if failed approvals should reach roles other than `TENANT_ADMIN`
 
 **Message queue and task nodes**
 
 - enable Pulsar topics if using triggers or async tasks
-- for `Timer` nodes, set `mq.topics.flow-timer.topic` (a Timer node schedules its own wake-up) and switch on the maintenance cron `flow_timer_sweep` for wake-ups lost on the way (see [Automation](./automation#trigger-and-messaging-integration))
-- enable `CALL_SERVICE` explicitly (plus its bean-name allow-list) if flows need to invoke Spring beans; all other task node types ship working executors, conditionally registered on their capability beans
+- every task node type ships a working executor, conditionally registered on its capability beans
 
 ## Configuration
 
 <Lead>
 
-These are the properties flow-starter reads; the models and fields the default organization service reads sit under `softa.flow.org.*`, each one overridable.
+These are the properties flow-starter reads; the models and fields the default organization service reads are fixed in the code (see [organization data](./approval#approver-resolution)), only the directory model is set.
 
 </Lead>
 
 | Property | Default | What it does |
 |---|---|---|
-| `flow.notification.failure-role-codes` | `TENANT_ADMIN` | The roles whose holders are told, besides the submitter, when a record's approval fails |
-| `flow.trigger-cache-ttl-seconds` | `60` | How long the trigger-matching cache keeps an entry (see [Persistence Model](./api#persistence-model)) |
 | `flow.automation.retention-days` | `30` | How many days a finished automation run is kept before the maintenance cron `flow_automation_purge` deletes it |
-| `flow.task.builtin.call-service.enabled` | `false` | Turns the `CallService` task node on |
-| `flow.task.call-service.allow-list` | empty | Required once `CallService` is on: the bean-name prefixes it may call, comma-separated |
-| `flow.task.builtin.query-records.enabled` | `true` | `false` to register your own `QueryRecords` executor |
-| `softa.flow.org.*` | see below | The models and fields the default `FlowOrgService` reads the organization from (`OrganizationServiceProperties`) |
+| `softa.flow.org.directory-model` | the employee model | The directory model the pickers search, with the caller's row scope; see [Directory](./api#directory) |
 | `system.site-url` | none | The prefix of the link in approval emails (`/home/approvals/{instanceId}`); empty when unset |
 | `mq.topics.*` | none | Each producer and consumer registers only when its topic is set — see [Trigger And Messaging Integration](./automation#trigger-and-messaging-integration) |
 
-<Dev title="softa.flow.org.* and its defaults">
-
-| Property | Default |
-|---|---|
-| `employee-model` | `Employee` |
-| `directory-model` | unset: the employee model; see [Directory](./api#directory) |
-| `account-id-field` | `userId` |
-| `name-field` | `fullName` |
-| `code-field` | `code` |
-| `dept-id-field` | `departmentId` |
-| `position-id-field` | `jobPositionId` |
-| `supervisor-id-field` | `piEmployeeId` |
-| `department-model` | `Department` |
-| `dept-name-field` | `name` |
-| `dept-code-field` | `code` |
-| `dept-leader-id-field` | `picEmpId` |
-| `dept-hrbp-id-field` | `hrbpEmpId` |
-| `parent-dept-id-field` | `parentId` |
-| `role-model` | `UserRoleRel` |
-| `role-id-field` | `roleId` |
-| `role-user-id-field` | `userId` |
-| `role-definition-model` | `Role` |
-| `role-code-field` | `code` |
-| `role-name-field` | `name` |
-| `account-model` | `UserAccount` |
-| `account-status-field` | `status` |
-| `approver-account-statuses` | `Active` |
-| `max-dept-depth` | `10`, how far a department lookup walks up or down, against cycles |
-
-</Dev>
 
 ## Extension Points
 
@@ -269,7 +232,6 @@ An application bean of the same type replaces or adds to the default.
 | `ModelApprovalHandler<T>` | none; one per approval model | The record's business part: checks, title and routing variables, what a result sets off (see [Approving Business Records](#approving-business-records)) |
 | `OrganizationService` | `FlowOrgService` | Finding approvers in the organization, whether an account can act, the directory (see [Approver Resolution](./approval#approver-resolution)) |
 | `ApprovalNotificationService` | `MessageApprovalNotificationService` (inbox + email) | Replaces all notices; to add a channel, declare a bean of your own that calls the default first, then sends yours (see [Notifications](./approval#notifications)) |
-| `FlowClient` | `InProcessFlowClient` | The in-process port business modules approve records through (see [API & Data](./api#api-overview)) |
-| `TaskExecutor` | the bundled executors | One executor per task node type — two for one type fail the boot; to replace the bundled `QueryRecords`, switch it off first (see [Configuration](#configuration)) |
+| `TaskExecutor` | the bundled executors | One executor per task node type — two for one type fail the boot |
 | `FlowValidator` | the built-in validators | Further publish checks, reported with the built-in diagnostics; an `Error` stops a publish |
 | `flowDeadLetterPolicy` | at most 3 redeliveries | The dead-letter policy every flow-starter Pulsar consumer shares; a message still failing goes to the broker's default DLQ topic (`<topic>-<subscription>-DLQ`) |

@@ -6,6 +6,8 @@
 
 </Lead>
 
+短信是平台提供的服务：提供商、国家路由、短信模板和模板绑定都只有平台一份，表里没有租户列，租户看不到也配不了。短信发送记录也只在平台的页面上看，没有租户视图。
+
 ## 发送短信
 
 <Lead>
@@ -41,7 +43,7 @@ List<Long> ids = messageService.sendSmsBatch(List.of(
 | `templateCode`、`templateVariables` | 模板和变量 |
 | `providerConfigId` | 指定提供商，跳过按国家的路由 |
 | `externalTemplateId`、`signName` | 提供商侧的模板 id 和签名；模板绑定上有设置时以绑定为准 |
-| `scope` | `TENANT`（默认）或 `PLATFORM`：决定用哪一层的模板、扣哪个额度；提供商照常按国家路由，见[租户层与平台层](./index#租户层与平台层) |
+| `scope` | `TENANT`（默认）或 `PLATFORM`：对短信没有作用，只记在记录上。模板和提供商路由都只有平台一份；记录记在调用时所在的租户名下、扣它的额度，见[租户层与平台层](./index#租户层与平台层) |
 
 批量方法接受 1 到 500 条独立消息，一条一个号码、一条记录，先全部检查再写，按输入顺序返回 id。
 
@@ -49,7 +51,7 @@ List<Long> ids = messageService.sendSmsBatch(List.of(
 
 <Lead>
 
-短信模板按 `code` 在发送范围那一层找：`TENANT` 只找当前租户自己的模板，`PLATFORM` 只找平台层的，不会跨层兜底。占位符用 `{{ 变量名 }}`。
+短信模板只有平台一份，`code` 在整张表里唯一，按 `code` 找，与发送范围无关。占位符用 `{{ 变量名 }}`。
 
 </Lead>
 
@@ -63,7 +65,7 @@ POST /SmsTemplate/createOne
 }
 ```
 
-有的提供商要求用它那边审核过的模板和签名发送（如阿里云、腾讯云）。这时给模板加**提供商绑定** `SmsTemplateProviderBinding`：每家提供商一行，写明外部模板 id、签名，可以限定国家，并有自己的优先级。模板缺失或渲染出错，记录以 `TEMPLATE_NOT_RESOLVABLE` 失败；渲染出空内容，以 `CONTENT_INVALID` 失败。
+有的提供商要求用它那边审核过的模板和签名发送（如阿里云、腾讯云）。这时给模板加**提供商绑定** `SmsTemplateProviderBinding`：每家提供商一行，写明外部模板 id、签名，可以限定国家，并有自己的优先级。这类提供商收到的是模板变量而不是渲染好的正文：阿里云按变量名填，腾讯云按位置填，`{1}`、`{2}`… 依次对应 softa 短信模板内容里变量出现的先后（首次投递时定下，重试不变）。模板缺失或渲染出错，记录以 `TEMPLATE_NOT_RESOLVABLE` 失败；渲染出空内容，以 `CONTENT_INVALID` 失败。
 
 ## 提供商路由
 
@@ -96,7 +98,7 @@ flowchart LR
 - **精确匹配完全优先。** 只要有一条路由行匹配收件人国家，就只用这一层的提供商，不会再并入默认提供商。路由行指向的提供商都已停用或不存在时，按没有路由处理，改用默认提供商。
 - **默认只在没有路由行时使用。** 没有 `region_code = '*'` 这种通配行，「其他国家」由 `isDefault = true` 表达。
 - **要让默认提供商也服务某个已配置的国家，就给这个国家再加一条路由行。** 这样已经明确配置过的国家不会误走别的通道（比如台湾的短信不会走大陆专线）。
-- **租户优先。** 对收件人的国家，先用租户自己的路由行，租户没有给这个国家配置时才用平台层的；默认提供商也是先租户、后平台。路由按记录所在的租户进行，`PLATFORM` 范围的短信也一样。
+- **不分租户。** 路由只有平台这一份，每个租户的短信、`PLATFORM` 范围的短信都按它走。
 
 例如下面的配置：
 
@@ -130,7 +132,7 @@ flowchart LR
 
 <Dev title="内置的提供商与实现">
 
-内置适配器：Twilio、Infobip、Bird、CM、Sinch、阿里云、腾讯云（`SmsProvider`）。国家由 [libphonenumber](https://github.com/google/libphonenumber) 从 E.164 号码按最长前缀解析，所以 `+886…` 是 TW，不会被 `+86` 误认为 CN。候选由 `SmsProviderDispatcher` 给出，与模板绑定求交由 `SmsRoutingPlanner` 完成；绑定跟随模板所在的层：平台模板的绑定是平台层的行。提供商配置在 Redis 里缓存 5 分钟，修改或删除时自动清除。message-starter 要求 classpath 上有 `reference-data-starter`，国家路由离不开它。
+内置适配器：Twilio、Infobip、Bird、CM、Sinch、阿里云、腾讯云（`SmsProvider`）。国家由 [libphonenumber](https://github.com/google/libphonenumber) 从 E.164 号码按最长前缀解析，所以 `+886…` 是 TW，不会被 `+86` 误认为 CN。候选由 `SmsProviderDispatcher` 给出，与模板绑定求交由 `SmsRoutingPlanner` 完成。`SmsProviderConfig`、`SmsProviderRegion`、`SmsTemplate`、`SmsTemplateProviderBinding` 都不是多租户模型，没有 `tenant_id` 列。提供商配置在 Redis 里缓存 5 分钟，任何写入（管理界面的保存也一样）提交后都会清掉它的缓存，修改立即生效。提供商的 `apiKey`、`apiSecret` 加密存储，接口读取时打码；修改时不传这两个字段就保留原值。message-starter 要求 classpath 上有 `reference-data-starter`，国家路由离不开它。
 
 </Dev>
 
@@ -140,4 +142,4 @@ flowchart LR
 
 ## 状态参考
 
-短信发送记录的状态与邮件相同，见[发送记录的状态](./index#发送记录的状态)；短信没有退信，<Status>Sent</Status> 是终态。
+短信发送记录的状态与邮件相同，见[发送记录的状态](./index#发送记录的状态)；短信没有退信，<Status>Sent</Status> 是终态。记录上的 `tenantId` 说明它记在谁名下、扣了谁的额度；`SmsSendRecord` 不分租户，它的列表、详情和重试接口拒绝租户调用方。

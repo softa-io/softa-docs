@@ -40,7 +40,7 @@ The table gives the terms the Flow pages use and their names in the code; the su
 | Summary | `summary` | The handler's one-line description (at most 256 characters), copied onto the instance and its tasks at submission |
 | Approval lock | `ApprovalLockValidator` | The write check that freezes a non-draft record and the lines it owns |
 | Approval handler | `ModelApprovalHandler` | What a business module implements for each approval model — see [Integration](./integration) |
-| Failure-notice roles | `flow.notification.failure-role-codes` | Who, besides the submitter, hears that an approval failed; default `TENANT_ADMIN` |
+| Failure notice | `TENANT_ADMIN` | Besides the submitter, the tenant's administrators (the built-in `TENANT_ADMIN` role) hear that an approval failed; not configurable |
 
 ## Transaction boundaries
 
@@ -123,7 +123,7 @@ Left to right is what the step does, in order. Two cases need nobody to wait for
 </FlowFigure>
 
 1. **Find approvers**: the people each group names or finds make one pool, each once; accounts that cannot sign in are dropped silently, and a supervisor or department head who cannot approve passes the step up. See [Approver Resolution](./approval#approver-resolution).
-2. **Nobody found**: the step's strategy decides — `Error` (the default), `AutoApprove` (recorded as `Auto-approved (no approver)`), or `AssignToRole` (those who can act in the roles, less the submitter and the employee, any one deciding; votes are counted on). A step that only names its people stops with an error whatever it holds.
+2. **Nobody found**: the step's strategy decides — `Error` (the default), `AutoApprove` (recorded as `Auto-approved (no approver)`), or `AssignToRole` (those who can act in the roles, any one deciding; a submitter or employee among them is an approver like any other; votes are counted on). A step that only names its people stops with an error whatever it holds.
 3. **Count votes**: the approval mode gives how many must approve, capped by the approvers the step has. See [Approval Threshold](./approval#approval-threshold).
 4. **Apply delegation**: an approver with a delegation rule in force has the task go to the delegate, the votes unchanged; not when the delegate cannot act or is already on the step.
 5. **Submitter and dedup**: a submitter among the approvers is counted as approved under the flow's "when the submitter is an approver" setting (the employee is not, when someone else submitted); someone who approved an earlier step is, under approver dedup. See [Auto-approval](./approval#auto-approval).
@@ -188,9 +188,9 @@ Design cases as combinations of status × role × configuration; each point belo
 
 - The N-th supervisor, from the employee or from the submitter (they differ when HR submits on someone's behalf); a level who cannot approve passes the step to the first one above who can.
 - A missing department head, or one who cannot approve, defers to the parent department's; by role, by position, department members.
-- An account that cannot sign in (none, not activated, invitation not accepted, frozen, left) counts as nobody; the three strategies when nobody is found: error, auto-approve, assign to role (`Skip` is no longer offered; one saved earlier still runs as auto-approve).
+- An account that cannot sign in (none, not activated, invitation not accepted, frozen, left) counts as nobody; the three strategies when nobody is found: error, auto-approve, assign to role.
 - A step that only names its people stops with an error when none of them can act.
-- Assign to role: any role member decides; the submitter and the employee are left out.
+- Assign to role: any role member decides; a submitter or employee among them is an approver like any other (the submitter's own step goes as "when the submitter is an approver" has it).
 - While a delegation rule is in force, new tasks go to the delegate; not when the delegate's account cannot act; tasks already waiting are untouched.
 
 ### Votes and automatic approval

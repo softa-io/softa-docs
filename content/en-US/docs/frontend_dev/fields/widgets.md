@@ -236,7 +236,7 @@ Value contract: `string` in `"MM-dd"` format, or `undefined` when cleared.
 
 ### `CronEditor`
 
-A Quartz cron expression — the dialect the backend scheduler runs (cron-starter's `SysCron`, flow-starter's Cron triggers and Timer nodes): `second minute hour day-of-month month day-of-week [year]`, day of week 1–7 = SUN–SAT, one of the two day fields `?`. The field is a button that says what the schedule means, in the server's words, with the expression beneath it; it opens a panel whose **Repeat** select picks how to edit it:
+A Quartz cron expression — the dialect the backend scheduler runs (cron-starter's `SysCron`, flow-starter's Cron triggers): `second minute hour day-of-month month day-of-week [year]`, day of week 1–7 = SUN–SAT, one of the two day fields `?`. The field is a button that says what the schedule means, in the server's words, with the expression beneath it; it opens a panel whose **Repeat** select picks how to edit it:
 
 - a common schedule — Every few minutes (1, 2, 3, 4, 5, 6, 10, 12, 15, 20 or 30: the steps that divide an hour), Every hour (at minute mm), Every day, Every weekday (Mon–Fri), Every week (on chosen days) and Every month (on day d), the last four at a time hh:mm;
 - Custom — the fields one by one in tabs (Minute, Hour, Day, Month), each Every / Specific / Range / Interval. The Day tab picks the day **by day of month or by day of week**: Quartz takes one, and the other is written `?`;

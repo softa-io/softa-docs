@@ -28,7 +28,7 @@
 | [通讯录](#通讯录) | `/flow/directory` | 人员和部门选择框列出的内容 |
 | [监控](#监控) | `/flow/monitor` | 管理员的监控台 |
 
-**进程内：`FlowClient`。** 宿主应用若在进程内嵌入引擎，应通过 `FlowClient` 门面（`io.softa.starter.flow.api`）集成，而不是绕回 REST。它只覆盖业务模块要做的事——单据的审批：`submitRecord`、`previewValues`、`withdrawRecord`、`cancelRecord`。
+**进程内：`FlowClient`。** 宿主应用若在进程内嵌入引擎，应通过 `FlowClient`（`io.softa.starter.flow.api`，一个具体类，自动配置注册，不需要也不能替换）集成，而不是绕回 REST。它只覆盖业务模块要做的事——单据的审批：`submitRecord`、`previewValues`、`withdrawRecord`、`cancelRecord`。
 
 审批人处理任务、用户查看自己的待办、读取单据的审批历史和预览已保存单据的审批，以及启动触发器为 `Api` 的 Automation 流程（`POST /flow/instances/start`），都经由 REST。只有当应用没有定义自己的 `FlowClient` bean 时，`FlowAutoConfiguration` 才注册默认的 `InProcessFlowClient`。让业务模型走审批的步骤见[业务接入](./integration)。
 
@@ -66,7 +66,7 @@
 |---|---|---|
 | `POST` | `/flow/designs` | 创建草稿：`scenario`、初始 `designJson`（记录触发器在 `trigger` 里写明模型），审批流另带单据 `modelName`（必填，触发器按它生成）。见[流程的起点](./index#流程的起点触发器与它写明的模型) |
 | `GET` | `/flow/approvalModels` | 应用能审批的单据，以及每张单据已有审批流的名称（`flowNames`） |
-| `GET` | `/flow/cron/preview?expression=&count=` | 按发布时的标准判断一个 cron 表达式（Cron 触发器的或定时节点的）：`valid`、拒绝时的 `message`、文字含义 `description`，以及在服务器时区 `zone` 里接下来的几次运行（`count`，1–10，默认 5） |
+| `GET` | `/flow/cron/preview?expression=&count=` | 按发布时的标准判断一个 cron 表达式（Cron 触发器的）：`valid`、拒绝时的 `message`、文字含义 `description`，以及在服务器时区 `zone` 里接下来的几次运行（`count`，1–10，默认 5） |
 | `POST` | `/flow/expressions/preview` | 用示例 `variables` 在流程所用的沙箱引擎上试算一个表达式——或在 `template` 时插值一段文字的 `{{ }}` 占位符：返回 `valid`、`result` 及其 `resultType`，或无法运行的原因 `message`。不读写任何数据 |
 | `GET` | `/flow/designs?keyword=&scenario=&subflowTargets=&pageNumber=&pageSize=` | 分页草稿列表（不含画布）；`subflowTargets=true` 只留子流程节点能调用的流程——启用中、生效修订版带 Subflow 触发器的自动化流程 |
 | `GET` | `/flow/designs/{id}` | 加载一个草稿（画布 + 乐观锁 version） |
@@ -267,7 +267,7 @@
 
 ### 自动化 API
 
-自动化流程没有手动触发的端点：数据变化、定时、子流程由进程内的消费者触发，`Api` 触发的流程用 `POST /flow/instances/start` 按 id 启动。异步任务与定时器的恢复没有 REST 端点：`FlowAsyncTaskConsumer`、`FlowTimerConsumer` 以及维护 cron 的到期定时器扫描在进程内直接调用 `FlowRuntimeEngine`。
+自动化流程没有手动触发的端点：数据变化、Cron 调度、子流程由进程内的消费者触发，`Api` 触发的流程用 `POST /flow/instances/start` 按 id 启动。异步任务的恢复没有 REST 端点：`FlowAsyncTaskConsumer` 在进程内直接调用 `FlowRuntimeEngine`。
 
 ### 事件日志
 
@@ -444,7 +444,7 @@
 
 </Dev>
 
-<Dev title="存储适配器与 bundle 缓存（OrmFlowBundleRegistry、flow.trigger-cache-ttl-seconds）">
+<Dev title="存储适配器与 bundle 缓存（OrmFlowBundleRegistry）">
 
 本模块的主要存储适配器：
 
@@ -453,7 +453,7 @@
 
 `OrmFlowBundleRegistry` 启动时不加载任何内容，并按租户缓存：
 
-- **触发匹配**读取租户里启用中流程的活动 bundle 的索引，在该租户自己的上下文中于其第一个事件时加载（空结果也会保留），并与平台共享 bundle（`tenantId = 0`）合并；没有租户的上下文只匹配共享 bundle。条目存活 `flow.trigger-cache-ttl-seconds`（默认 `60`）。发布、激活修订版、停用或启用流程会立即在执行该操作的实例上丢弃该租户的条目；其他实例在 TTL 内获知变更。没有流程关注的模型的变更日志不会被转换为触发事件。
+- **触发匹配**读取租户里启用中流程的活动 bundle 的索引，在该租户自己的上下文中于其第一个事件时加载（空结果也会保留），并与平台共享 bundle（`tenantId = 0`）合并；没有租户的上下文只匹配共享 bundle。条目存活 60 秒，不可配置：每次写数据、每条变更日志、每次提交和审批预览都要用它，不能每次都查库。发布、激活修订版、停用或启用流程会立即在执行该操作的实例上丢弃该租户的条目；其他实例在 TTL 内获知变更。没有流程关注的模型的变更日志不会被转换为触发事件。
 - **定义**按 `bundleId` 缓存在有界 LRU 中（已发布的修订版永不改变）。其他租户的 bundle 无论是否已缓存都读作不存在；平台共享 bundle 对每个租户可见。
 - **流程的活动修订版**每次查找都从数据库读取——流程停用时没有——因此按 `flowId` 启动会跟随在任一实例上进行的发布、回滚、停用或启用。
 
@@ -476,16 +476,17 @@
 </Lead>
 
 - 描述符包含标签、图标、排序、config schema、默认 config 以及允许的场景
-- config 字段的 `type` 指定编辑器用哪种控件；`cron` 类型的字段是一个 cron 表达式，编辑器通过 `GET /flow/cron/preview` 预览它
+- config 字段的 `type` 指定编辑器用哪种控件
+- 每个任务节点的 config schema 在执行器自己的字段之后都有 `outputVariable`（`string`，Output variable）：结果写进的变量
 - 设置项装的是什么，就决定它的类型，编辑器据此给出合适的输入：运行时插值的文字用 `template`（正文加 `multiline`），AviatorScript 用 `expression`，一组文字（收件人、字段名）用 `stringList`，自由 JSON 载荷用 `json`，变量名用 `variableRef`，记录用选择器——`rolePicker` / `userPicker` / …，或写明 `model` 的 `recordPicker`（如邮件模板）——给了 `valueField`（`code`）就存它而不是 id，`allowCustom` 允许填写没有对应记录的值；`keyValueMap` 用 `valueType` 说明值是什么（`expression`、`template`）
 - 审批步骤的 `approverSources` 按 HR 管理员常用的顺序给出来源——指定人员，组织里的（上级、部门负责人、HRBP），然后是按群体的（角色、岗位、部门成员）——每个选项带着编辑器判断哪些设置适用所需的信息：`names`（指定人员放在哪个字段，`userIds`）和 `findsOne`（这个来源最多找到一个人）。只对部分步骤生效的设置用 `appliesWhen` 说明：`severalApprovers`（审批模式、`minCount`、`percentage`）或 `approversFoundByRule`（空审批人策略及其角色）；引擎在其他步骤上按同样的规则忽略它，所以编辑器只在适用时显示它
 
-`TaskExecutorDescriptorProvider` 仅暴露实际注册为 Spring bean 的执行器对应的任务节点，因此像 `QUERY_AI` 和 `ASYNC_TASK` 这类条件执行器仅在其依赖存在时出现。
+`FlowNodeDescriptorRegistry` 只为实际注册为 Spring bean 的执行器列出任务节点，因此像 `QUERY_AI` 和 `ASYNC_TASK` 这类条件执行器仅在其依赖存在时出现。
 
 <Dev title="描述符从哪里来">
 
-- 结构描述符来自 `BuiltinNodeDescriptorProvider`
-- 由执行器支持的任务描述符来自 `TaskExecutorDescriptorProvider`
+- 结构描述符来自 `BuiltinNodeDescriptorProvider`，任务节点的由 `FlowNodeDescriptorRegistry` 按注册的 `TaskExecutor` 生成
+- 没有描述符的扩展接口：节点类型是枚举 `FlowNodeType`，新增一种要改 flow-starter 本身
 
 </Dev>
 

@@ -57,18 +57,19 @@ On a record's first delivery attempt, the processor turns the caller's request i
 
 | Step | Mail | SMS |
 |---|---|---|
-| 1 | Find the template: with a `templateId`, that row (a test send from the editor: what was previewed is what goes out, a disabled template included); otherwise the enabled template with that `templateCode` in the send scope's tier | The enabled template with that `templateCode` in the send scope's tier |
+| 1 | Find the template, in the send scope's tier: with a `templateId`, that row (a test send from the editor: what was previewed is what goes out, a disabled template included); otherwise the enabled template with that `templateCode` | The enabled template with that `templateCode`; SMS templates exist once, on the platform, whatever the send scope |
 | 2 | Render the subject and body the caller did not give; fill in the template's priority, Reply-To, attachments and preferred server, a value the caller gave always winning | When the caller gave no content, render it from the template |
 | 3 | Check the content: a body present and within the length limit, a well-formed Reply-To | Content present |
-| 4 | Choose the server: the caller's, else the template's preferred one, else the default server; fill in the server's Reply-To and read-receipt settings; the from address and name are read from the server configuration at each send | Choose providers by the recipient's country, intersect them with the template's provider bindings, and settle the provider, external template id and signature |
-| 5 | Charge the monthly quota. It comes last, so a message that cannot go out uses none | Same as mail |
+| 4 | Choose the server: the caller's, else the template's preferred one, else the send scope's default server (relayed through the platform's when the tenant has none); record the server's owner, `serverOwner`; fill in the server's Reply-To and read-receipt settings; the from address and name are read from the server configuration at each send | Choose providers by the recipient's country, intersect them with the template's provider bindings, and settle the provider, external template id and signature |
+| 5 | Charge the day's and the month's quota when a platform send server carries the mail, relayed tenant mail included; a tenant's own server is not charged. It comes last, so a message that cannot go out uses none | Charge the day's and the month's quota for every SMS, last as well |
 | 6 | Write the result back to the record | Same as mail |
 
 | Marker code | When | What to do |
 |---|---|---|
-| `TEMPLATE_NOT_RESOLVABLE` | The template does not exist, none is enabled under the code, or rendering fails | Create, enable or fix the template |
-| `CONFIG_NOT_RESOLVABLE` | No send server is available; the server has neither a from address nor a username; no SMS provider serves the recipient's country | Complete the configuration |
-| `MONTHLY_QUOTA_EXCEEDED` | This month's quota is used up | Raise the quota, see [Monthly quotas](#monthly-quotas) |
+| `TEMPLATE_NOT_RESOLVABLE` | The template does not exist, none is enabled under the code, or rendering fails; for a mail template in the other tier, the message names the scope to use | Create, enable or fix the template, or send with the right scope |
+| `CONFIG_NOT_RESOLVABLE` | No send server is available; the server named is not in the send scope's table; the server has neither a from address nor a username; a tenant server's host is inside the deployment; no SMS provider serves the recipient's country | Complete the configuration |
+| `DAILY_QUOTA_EXCEEDED` | Today's cap is reached | Retry the next day, or raise the daily cap, see [Send quotas](#send-quotas) |
+| `MONTHLY_QUOTA_EXCEEDED` | This month's quota is used up | Raise the quota, see [Send quotas](#send-quotas) |
 | `CONTENT_INVALID` | The render comes out empty, the body is over the limit, or the Reply-To is malformed | Fix the template or the content the caller gave |
 | (no marker code) | A database or cache error during preparation | Classified by keywords in the error message; most come out as unknown errors and are retried automatically |
 
@@ -84,15 +85,17 @@ A failed send's error is classified first, then handled by its category: a tempo
 
 | Category | How an error falls into it | Handling |
 |---|---|---|
-| `TRANSIENT` | An error code starting with 421 or 450–452, or `SMTP_MailSendException`; an error message containing timeout, connection reset, unavailable or try again (contention on the monthly quota count falls here) | Retry |
+| `TRANSIENT` | An SMTP 4xx reply (`SMTP_421`, `SMTP_451` and so on), an `SMTP_MailSendException` with no reply code (the server could not be reached, say), or an error code starting with 421 or 450–452; an error message containing timeout, connection reset, unavailable or try again (contention on the quota count falls here) | Retry |
 | `QUOTA` | An error code containing LIMIT, QUOTA or THROTTL (`QUOTA_EXCEEDED` when a local rate-limit window is full); an error message containing rate limit, too many requests, quota or throttle | Retry, after at least 5 minutes |
-| `UNKNOWN` | An error not recognized, `SMTP_MailAuthenticationException` included | Retry |
-| `PERMANENT` | An error code starting with 550, 551 or 553; an error message containing no such user, user unknown or does not exist | <Status>Failed</Status> |
-| `INVALID_INPUT` | An error code starting with 552, or `CONTENT_INVALID`; an error message containing invalid address, malformed, bad recipient or no recipient | <Status>Failed</Status> |
-| `AUTH` | An error code starting with 530 or 535; an error message containing unauthorized, forbidden, invalid credentials or authentication failed | <Status>Failed</Status> |
-| `CONFIG` | The marker codes `CONFIG_NOT_RESOLVABLE`, `TEMPLATE_NOT_RESOLVABLE` and `MONTHLY_QUOTA_EXCEEDED` | <Status>Failed</Status> |
+| `UNKNOWN` | An error not recognized | Retry |
+| `PERMANENT` | An SMTP 5xx reply (`SMTP_550`, `SMTP_554` and so on, except for the two classes below), or an error code starting with 550, 551 or 553; an error message containing no such user, user unknown or does not exist | <Status>Failed</Status> |
+| `INVALID_INPUT` | `SMTP_552` (message too large), `SMTP_AddressException`, an error code starting with 552, or `CONTENT_INVALID`; an error message containing invalid address, malformed, bad recipient or no recipient | <Status>Failed</Status> |
+| `AUTH` | `SMTP_530`, `SMTP_534`, `SMTP_535`, `SMTP_538`, `SMTP_MailAuthenticationException`, or an error code starting with 530 or 535; an error message containing unauthorized, forbidden, invalid credentials or authentication failed | <Status>Failed</Status> |
+| `CONFIG` | The marker codes `CONFIG_NOT_RESOLVABLE`, `TEMPLATE_NOT_RESOLVABLE`, `DAILY_QUOTA_EXCEEDED` and `MONTHLY_QUOTA_EXCEEDED` | <Status>Failed</Status> |
 
-The error code is looked at first, and the error message only when the code is not recognized. Mail is sent through Spring, so by the time an SMTP failure gets here it has been wrapped as a `MailSendException` (a refusal by the server, a mail too large and a temporary fault all become this) or a `MailAuthenticationException` (an authentication failure); its error code is `SMTP_` followed by the exception's class name, with no SMTP reply code. So **for now, mail whose recipient is refused or whose authentication fails is retried too, and dead-lettered after 5 retries**, instead of failing at once; the actual cause is in the record's `error_message`.
+The error code is looked at first, and the error message only when the code is not recognized. Mail is sent through Spring, which wraps an SMTP failure as a `MailSendException` or a `MailAuthenticationException`; `SmtpMailTransport` digs the server's reply code out of the refused messages and the exception chain and records the error code as `SMTP_` followed by it (`SMTP_550` for a recipient that does not exist), or as `SMTP_` followed by the exception's class name when there is none. So a refused recipient or a failed login goes straight to <Status>Failed</Status>, while a temporary refusal (4xx) is retried as usual.
+
+An error code longer than 100 characters, or an error message longer than 1000, is cut to that length, ending in "…", before it is written to the record, so that a long one does not keep the failure from being recorded; the dead-letter table's `last_error_msg` is cut at 1000 characters too.
 
 | Retry | Approximate wait |
 |---|---|
@@ -136,8 +139,9 @@ Once the cause is fixed, press Retry on the send record to send it again. The re
 
 </Lead>
 
-- **One record**: `POST /MailSendRecord/retry?id=` / `POST /SmsSendRecord/retry?id=`. <Status>Pending</Status>, <Status>Retry</Status>, <Status>Failed</Status> and <Status>DeadLetter</Status> can all be retried; <Status>Sent</Status> and in-flight <Status>Sending</Status> are refused.
-- **In bulk**: `POST /MailSendRecord/retryByIds` / `POST /SmsSendRecord/retryByIds`, body `{"ids": [...]}`. Retryable records are requeued; <Status>Sent</Status>, <Status>Sending</Status> and records a worker claimed meanwhile are skipped without an error; it returns how many were actually requeued. Use it to resend a batch once the mail server is back or the missing configuration is in place.
+- **One record**: the platform's pages use `POST /MailSendRecord/retry?id=` / `POST /SmsSendRecord/retry?id=`, a tenant's mail send log page `POST /TenantMailSendRecord/retry?id=`. <Status>Pending</Status>, <Status>Retry</Status>, <Status>Failed</Status> and <Status>DeadLetter</Status> can all be retried; <Status>Sent</Status> and in-flight <Status>Sending</Status> are refused.
+- **In bulk**: `POST /MailSendRecord/retryByIds` / `POST /SmsSendRecord/retryByIds` / `POST /TenantMailSendRecord/retryByIds`, body `{"ids": [...]}`. Retryable records are requeued; <Status>Sent</Status>, <Status>Sending</Status> and records a worker claimed meanwhile are skipped without an error; it returns how many were actually requeued. Use it to resend a batch once the mail server is back or the missing configuration is in place.
+- **Who can retry what**: the platform can retry any record on its pages, whose two endpoints (`/MailSendRecord`, `/SmsSendRecord`) refuse a tenant caller. A tenant, on its mail send log page (`/TenantMailSendRecord`), can retry only the records filed under it; another tenant's record answers like a missing one, and a bulk retry skips it.
 - Pressing it again is safe: the claim goes by version, so nothing is sent twice.
 - `retry_count` keeps counting, and a manual retry itself counts as one. A record whose retries are already used up (a dead letter, say) gets just this one chance, and another failure returns it to <Status>DeadLetter</Status>; one with retries left goes on retrying automatically on later temporary failures as usual, until 5 have been made in all.
 
@@ -160,22 +164,26 @@ A send record whose retries are used up becomes <Status>DeadLetter</Status> and 
 - When a poison message is archived and `softa.message.dlq.alert.recipients` is set, an alert mail goes to those addresses. For other alerting (Slack, PagerDuty), consume the DLQ topic or watch the table.
 - For a listener to send its poison messages to the dead-letter table, give its `@PulsarListener` `deadLetterPolicy = "commonDlqPolicy"` and set `softa.message.dlq.topic`.
 
-## Monthly quotas
+## Send quotas
 
 <Lead>
 
-The platform can give each tenant a monthly ceiling on mail and SMS sends. A send record is charged once, when it is prepared, and retries are not charged again; once the quota is used up, new sends fail with `MONTHLY_QUOTA_EXCEEDED`: raise the quota, then press Retry to send them.
+The platform can give each tenant two ceilings on mail and SMS sends, a monthly allowance and a daily cap, both counting the sends that go through the platform's infrastructure. A send record is charged to the day and the month once, when it is prepared, and retries are not charged again. Once the day's cap is reached, new sends fail with `DAILY_QUOTA_EXCEEDED`; once the month's quota is used up, with `MONTHLY_QUOTA_EXCEEDED`. The next day, or after raising the limit, press Retry to send them.
 
 </Lead>
 
-- Quotas are set per tenant on `TenantMessageQuota` and maintained by the platform operator (the single-record create, update and delete endpoints can be called only from the platform tier); a tenant without one uses `softa.message.quota.mail-monthly-default` / `sms-monthly-default`, and when that is unset there is no limit (sends are still counted, for reporting).
-- The quota bucket follows the send scope: a `TENANT` send draws on the tenant's own quota, a `PLATFORM` send on the platform's own (`tenant_id = -1`; set it very large: it is there to stop runaway or malicious mass sending).
-- It is a commercial ceiling, not rate limiting: a send over the quota is not queued or delayed; it fails.
-- `GET /TenantMessageQuota/usage?tenantId=` returns a bucket's usage this month and the ceiling currently in force; a tenant can read only its own bucket. Each bucket has one usage row per month, never deleted, so past usage is a plain query.
+- Quotas are set per tenant on `TenantMessageQuota` (`mailMonthlyLimit`, `smsMonthlyLimit`, `mailDailyLimit`, `smsDailyLimit`) and maintained by the platform operator: every write can be made only by the platform, single rows, batches and imports alike (`TenantMessageQuotaWriteValidator`); a tenant without one uses `softa.message.quota.mail-monthly-default` / `sms-monthly-default` / `mail-daily-default` / `sms-daily-default`, and when that is unset there is no limit (sends are still counted, for reporting).
+- **Why a daily cap**: the platform's send servers and SMS providers are shared by every tenant, and their own daily limits (see [Rate limits](#rate-limits)) count all tenants together. Without a day of its own, one tenant's burst could take the whole day, leaving the others unable to send until midnight.
+- **What is counted**: every SMS, and mail a platform send server carries, the platform's own and tenants' relayed mail alike. A tenant's mail through its own send server costs the platform nothing and is not counted.
+- The quota bucket is the tenant the record is filed under, whatever the scope: a platform notice made for a tenant (a security notice about one of its accounts, the sign-in code or password reset of someone with an account in that one company, a subscription reminder) draws on that tenant's quota and is refused once it is spent. A send no tenant can be named for draws on the platform's own (`tenant_id = -1`; set it very large: it is there to stop runaway or malicious mass sending).
+- It is a commercial ceiling, not rate limiting: a send over the quota is not queued or delayed; it fails. The day's count starts again at midnight (server time zone).
+- `GET /TenantMessageQuota/usage?tenantId=` returns a bucket's usage this month and today, with the ceilings currently in force; a tenant can read only its own bucket. Each bucket has one usage row per month, never deleted, so past usage is a plain query; daily usage keeps no history.
 
 <Dev title="How the count works, and how conflicts are handled">
 
 The count lives in the database: one `TenantMessageUsage` row per bucket per calendar month, read, checked against the ceiling and incremented under the ORM's optimistic lock (`versionLock`), each attempt in its own `REQUIRES_NEW` transaction. When a bucket's sends are prepared in a burst, every delivery worker on every instance is updating the same row, so losing the race is common: a loser rereads and tries again, and after 5 losses in a row this preparation gives up as a temporary error; the record goes to <Status>Retry</Status> and is not taken for a used-up quota. When the quota was charged but the preparation could not be written back, that charge stays: a small over-count, which can be reconciled against the send records.
+
+The daily count lives in Redis: one key per bucket per channel per day (`quota:{channel}:daily:{tenantId}:{yyyy-MM-dd}`, expiring after two days), checked against the cap and incremented in one Lua script, shared by every instance. The day is charged before the month: a send the day refuses costs the month nothing, and a send the month refuses, or one given up over counter contention, is handed back to the day. If Redis is flushed, the day's count starts again from zero.
 
 </Dev>
 
@@ -187,10 +195,10 @@ Each send server and each SMS provider can have two windows: a daily send limit 
 
 </Lead>
 
-- The fields are `daily_send_limit` and `rate_limit_per_minute` on `MailSendServerConfig` / `SmsProviderConfig`; empty or 0 means no limit for that window.
-- The counters live in Redis, kept apart by tenant and config (`rl:{channel}:{daily|min}:{tenantId}:{configId}:{window}`), so several instances share one budget.
+- The fields are `daily_send_limit` and `rate_limit_per_minute` on the send servers (a tenant's `MailSendServerConfig`, the platform's `PlatformMailSendServer`) and on `SmsProviderConfig`; empty or 0 means no limit for that window.
+- The counters live in Redis, one per config (`rl:{channel}:{daily|min}:{configId}:{window}`), shared by every instance and not split by tenant: when several tenants share a platform send server or an SMS provider, the limit caps the total sent through it. How much each tenant may send is the [send quotas](#send-quotas)' business.
 - The check comes after preparation and before the send: a rate-limited record is already prepared, and is sent straight away when tried again.
-- It protects the external service's quota and has nothing to do with [monthly quotas](#monthly-quotas).
+- It protects the external service's quota. How much of it one tenant may take is the daily cap's business, in [Send quotas](#send-quotas).
 
 ## Monitoring and troubleshooting
 
@@ -211,10 +219,10 @@ Retries are logged at WARN; <Status>Failed</Status> and <Status>DeadLetter</Stat
 
 ### A user says it never arrived
 
-1. Find the record in Mail Send Record (or SMS Send Record): search mail by recipient or subject, filter SMS by number.
+1. Find the record: a tenant looks in its own mail send log (`TenantMailSendRecord`); the platform in Mail Send Record (or SMS Send Record), SMS records being on the platform's side only. Search mail by recipient or subject, filter SMS by number.
 2. Look at its status:
    - <Status>Pending</Status> or <Status>Sending</Status> for a long time: check that the delivery loop is running and its workers are not all tied up by a slow server; a record <Status>Sending</Status> for more than 5 minutes is put back to retry automatically.
    - <Status>Retry</Status>: read the error code and reason; it is tried again when `next_retry_at` comes.
-   - <Status>Sent</Status>: the server accepted it, so the problem is further along. For mail, check the record's bounce flag (a bounce received changes the status to <Status>Failed</Status>), then have the user check their spam folder; for SMS, check the provider's receipt.
+   - <Status>Sent</Status>: the server accepted it, so the problem is further along. For mail, check the record's bounce flag (a bounce received changes the status to <Status>Failed</Status>), then have the user check their spam folder. A bounce is matched only by a receive server of the same owner: mail sent through a tenant's own server shows no bounce unless the tenant has configured a receive server; for relayed mail, the bounce itself is among the platform's received mail. For SMS, check the provider's receipt.
    - <Status>Failed</Status> or <Status>DeadLetter</Status>: fix the cause the error code points to, see [First attempt: preparing the record](#first-attempt-preparing-the-record) and [Failures and retries](#failures-and-retries).
 3. Once it is fixed, press Retry.

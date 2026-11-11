@@ -101,7 +101,7 @@ Every flow declares a trigger, and **the trigger is the flow's start contract** 
 
 An explicit start and a Subflow call both run an Automation flow, so `Api` and `Subflow` belong to Automation alone.
 
-Settings belong to one scenario too: `withdrawPolicy`, `returnEnabled`, `urgeEnabled`, `urgeIntervalHours`, `remindAfterHours`, `approverDedup`, `selfApproval`, `emailNotification` and `cc` to Approval flows; `sync` / `rollbackOnFail` to Automation flows, and a sync flow — which runs inside the writer's transaction — may not contain a Timer, AsyncTask or Approval node. The compiler rejects a flow that breaks any of these rules.
+Settings belong to one scenario too: `withdrawPolicy`, `returnEnabled`, `urgeEnabled`, `urgeIntervalHours`, `remindAfterHours`, `approverDedup`, `selfApproval`, `emailNotification` and `cc` to Approval flows; `sync` / `rollbackOnFail` to Automation flows, and a sync flow — which runs inside the writer's transaction — may not contain an AsyncTask or Approval node. The compiler rejects a flow that breaks any of these rules.
 
 <Dev title="How scenarios are implemented, and the scenarios removed">
 
@@ -164,16 +164,16 @@ What a trigger "matches" depends on the scenario: a submission goes to the one a
 
 <Lead>
 
-An approval flow holds people and routes only — Start, End, Approval and the gateways; Timer, the tasks, Subflow and ReturnValue are for automation flows.
+An approval flow holds people and routes only — Start, End, Approval and the gateways; the tasks, Subflow and ReturnValue are for automation flows.
 
 </Lead>
 
 Current node types:
 
-- Control: `Start`, `End`, `Timer`
+- Control: `Start`, `End`
 - Routing: `InclusiveGateway`, `ParallelFork`, `ParallelJoin` (shown as "Join": it closes a fork's branches, or an inclusive gateway's)
 - Human: `Approval`
-- Task: `Script`, `CreateRecord`, `GetRecord`, `UpdateRecord`, `DeleteRecord`, `QueryRecords`, `ValidateData`, `Transform`, `CallService`, `CallWebhook`, `SendEmail`, `SendSms`, `SendInboxNotification`, `QueryAI`, `AsyncTask`, `GenerateFile`
+- Task: `Script`, `CreateRecord`, `GetRecord`, `UpdateRecord`, `DeleteRecord`, `QueryRecords`, `ValidateData`, `Transform`, `CallWebhook`, `SendEmail`, `SendInboxNotification`, `QueryAI`, `AsyncTask`, `GenerateFile` (the send-SMS node `SendSms` is gone; see [Bundled Task Executors](./automation#bundled-task-executors))
 - Subflow: `Subflow`
 - Data: `ReturnValue`
 
@@ -183,13 +183,13 @@ Each node type declares the scenarios that may use it; the palette and the compi
 |---|---|
 | `Start`, `End`, `InclusiveGateway`, `ParallelFork`, `ParallelJoin` | Approval, Automation |
 | `Approval` | Approval |
-| every other — `Timer`, the tasks, `Subflow`, `ReturnValue` | Automation |
+| every other — the tasks, `Subflow`, `ReturnValue` | Automation |
 
 So the steps after an approval decide nothing but who approves next, and what can stop them is a person's or a route's (see [When a step after an approval fails](./approval#when-a-step-after-an-approval-fails)): nothing an approval runs writes, calls out, sends or waits, nothing a retry could repeat. What an approval's outcome should set off is an Automation flow's, started by the record's change. A revision published before this rule keeps running as it was until it is published again; a draft holding such a node is refused at publish.
 
 Node-behavior invariants:
 
-- **`Subflow` is a step like any other, run in one go**: the child must be an enabled Automation flow with a `Subflow` trigger, it must not call a flow already running above it, and it must not wait — publishing refuses a `Timer` or an `AsyncTask` in a flow with a `Subflow` trigger, and the designer offers only the flows a Subflow node can call. What still goes wrong at run time throws, and fails the automation run as any failing step does. Model human steps in an Approval flow, not a child.
+- **`Subflow` is a step like any other, run in one go**: the child must be an enabled Automation flow with a `Subflow` trigger, it must not call a flow already running above it, and it must not wait — publishing refuses an `AsyncTask` in a flow with a `Subflow` trigger, and the designer offers only the flows a Subflow node can call. What still goes wrong at run time throws, and fails the automation run as any failing step does. Model human steps in an Approval flow, not a child.
 - **`ParallelFork` branches execute serially** (deterministic order), not wall-clock-parallel — the gateway models routing topology, not concurrency.
 
 The graph itself has to meet these rules. A draft may break them — saving never validates — but it cannot publish:
@@ -204,7 +204,7 @@ Diagnostics name what they are about as people see it on the canvas: a node by i
 <Dev title="Scenario declarations, subflow targets and graph diagnostics">
 
 - Each `FlowNodeType` declares the scenarios that may use it with `FlowNodeType.getScenarios()`; a node in a scenario that may not use it is `INVALID_SCENARIO_NODE`.
-- A `Timer` or an `AsyncTask` in a flow with a `Subflow` trigger is `SUBFLOW_WAITS`; the designer lists the flows a Subflow node can call with `GET /flow/designs?subflowTargets=true`.
+- An `AsyncTask` in a flow with a `Subflow` trigger is `SUBFLOW_WAITS`; the designer lists the flows a Subflow node can call with `GET /flow/designs?subflowTargets=true`.
 - Graph diagnostics: no `Start` or several is `NO_START_NODE` / `MULTIPLE_START_NODES`, a cycle `GRAPH_CYCLE`, an unreachable node `UNREACHABLE_NODE`, a missing label `MISSING_NODE_LABEL` (on the node's `label` field).
 - A diagnostic still carries the ids in `nodeId` / `edgeId` for the editor to anchor it; one about a connection — a condition, a default edge — carries its `edgeId` and the `nodeId` it leaves.
 
@@ -288,7 +288,7 @@ A flow has an on/off switch, apart from which revision is effective: off, nothin
 
 A flow is on when created.
 
-- **Off**, nothing starts it: no submission picks it, no data change or schedule fires it, and an API start (by `flowId`, or pinned to a revision by `bundleId`) and a parent flow's Subflow node are refused — "it was never published, or it is disabled". With several app instances, choosing the flow at submission and matching data changes read each instance's own cache: the instance that switched it off sees it at once, the others within `flow.trigger-cache-ttl-seconds` (default 60 seconds).
+- **Off**, nothing starts it: no submission picks it, no data change or schedule fires it, and an API start (by `flowId`, or pinned to a revision by `bundleId`) and a parent flow's Subflow node are refused — "it was never published, or it is disabled". With several app instances, choosing the flow at submission and matching data changes read each instance's own cache: the instance that switched it off sees it at once, the others within 60 seconds.
 - The effective revision stays as it is, so switching it back on runs the same one; activating another revision and publishing leave the switch as it is — a flow can be prepared and published while off, then switched on.
 - **A flow is switched off only once nothing of it is left running**: refused while any of its instances has not finished — pending, running or waiting, a record still in approval among them — and, for an automation flow, while a flow that may still run it as a subflow calls it: an enabled flow's effective revision, or the revision an unfinished instance of another flow runs on (an instance keeps the revision it started on). The refusal says how many instances are left, or names the callers. A failed instance has ended: it does not hold the flow on.
 - **A published flow is never deleted**: its revisions, instances and approval history refer to it; a flow that was never published is deleted freely.

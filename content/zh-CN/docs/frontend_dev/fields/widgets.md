@@ -236,7 +236,7 @@
 
 ### `CronEditor`
 
-Quartz cron 表达式，也就是后端调度器运行的写法（cron-starter 的 `SysCron`、flow-starter 的 Cron 触发器和定时节点）：`second minute hour day-of-month month day-of-week [year]`，星期 1–7 = SUN–SAT，日、周两个字段有一个写 `?`。字段显示为一个按钮，上面是服务端给出的调度含义，下面是表达式；点开面板，用 **Repeat** 选择编辑方式：
+Quartz cron 表达式，也就是后端调度器运行的写法（cron-starter 的 `SysCron`、flow-starter 的 Cron 触发器）：`second minute hour day-of-month month day-of-week [year]`，星期 1–7 = SUN–SAT，日、周两个字段有一个写 `?`。字段显示为一个按钮，上面是服务端给出的调度含义，下面是表达式；点开面板，用 **Repeat** 选择编辑方式：
 
 - 常用调度——Every few minutes（1、2、3、4、5、6、10、12、15、20 或 30 分钟，都能整除一小时）、Every hour（第 mm 分）、Every day、Every weekday（周一到周五）、Every week（勾选星期几）、Every month（每月第 d 天），后四种再选时间 hh:mm；
 - Custom——按字段逐个设置，分 Minute、Hour、Day、Month 四个页签，每个字段可选 Every / Specific / Range / Interval。Day 页签先选**按每月几号还是按星期几**：Quartz 只取其中一个，另一个写 `?`；

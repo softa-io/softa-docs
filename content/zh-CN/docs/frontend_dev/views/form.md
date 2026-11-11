@@ -820,6 +820,7 @@ resolver 的上下文（`@mode`、`USER_ID`、声明的字段类型）在 **reso
 | `submitPermissionId`   | `string`                  | No       | -                                     | 审批类单据已保存记录上 **Submit**（**Cancel Draft** 随它）的权限 id，覆盖按模型查找的 `submit`。同一模型的 submit 在多个页面声明时——审批中心也提交的单据（LeaveRequest、OvertimeRequest、ExpenseClaim、AttendanceExceptionRequest）——按模型查不出结果，按钮会对所有人显示，由页面自己指定。 |
 | `withdrawPermissionId` | `string`                  | No       | -                                     | 同上，用于 **Withdraw**，覆盖按模型查找的 `withdraw`。 |
 | `confirmDeleteMessage` | `string`                  | No       | `Delete this {modelLabel}? This action cannot be undone.` | 内置删除动作的确认文案。 |
+| `onDeleted` | `() => void` | No | - | 内置删除删掉记录之后去哪里，代替默认的模型列表（记录路由的上一级）。用于没有列表可回的独立页面——审批中心单据页上的申请删掉后回到打开它的地方。 |
 | `timeline`      | `ModelFormTimelineConfig` | No       | -                                     | 时间轴模型行为开关（`enableAddVersion` / `enableVersionPanel` / `versionSummaryFields`，均可选）。仅当 `metaModel.timeline` 为 true 时生效；见下文「时间轴模型」。 |
 | `sliceId`       | `string \| null`          | No       | `?sliceId=` 搜索参数                  | 仅时间轴模型的编辑模式：加载指定版本（切片）而非 as-of 行（按 `sliceId` 跨时间轴 `searchList`）。整页表单通常用 `?sliceId=<x>` 搜索参数（对话框模式忽略）；嵌入式表单直接传该 prop。 |
 | `relatedMetaModelsByPath` | `Record<string, MetaModel>` | No | - | 表单计划触达不到的关联模型元数据，以持有它们的字段路径为键（`employeeProfileId`，而非 `EmployeeProfile`）。表单计划通过静态遍历 `children` 获知表单的嵌套模型，因此经由页面自有组件渲染的关联对它不可见：嵌套行不会按其自身模型的字段规则校验，其中的 widget 也拿不到元数据来显示必填星号或取值边界。处于这种情况的页面（向导步骤、定制的行内视图）通常已为提交载荷持有这些元数据，可以在这里声明。合并时优先级低于表单计划的结果：遍历确实触达的路径以计划为准。 |

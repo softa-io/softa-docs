@@ -101,7 +101,7 @@ flowchart LR
 
 显式启动和 Subflow 调用运行的都是 Automation 流程，因此 `Api` 和 `Subflow` 只属于 Automation。
 
-设置项也各属一个场景：`withdrawPolicy`、`returnEnabled`、`urgeEnabled`、`urgeIntervalHours`、`remindAfterHours`、`approverDedup`、`selfApproval`、`emailNotification` 和 `cc` 属于 Approval 流程；`sync` / `rollbackOnFail` 属于 Automation 流程，而 sync 流程在写数据的事务里运行，不能包含 Timer、AsyncTask 或 Approval 节点。违反任一规则的流程会被编译器拒绝。
+设置项也各属一个场景：`withdrawPolicy`、`returnEnabled`、`urgeEnabled`、`urgeIntervalHours`、`remindAfterHours`、`approverDedup`、`selfApproval`、`emailNotification` 和 `cc` 属于 Approval 流程；`sync` / `rollbackOnFail` 属于 Automation 流程，而 sync 流程在写数据的事务里运行，不能包含 AsyncTask 或 Approval 节点。违反任一规则的流程会被编译器拒绝。
 
 <Dev title="场景的实现与已去掉的场景">
 
@@ -164,16 +164,16 @@ flowchart LR
 
 <Lead>
 
-审批流只放人和路由的节点——开始、结束、审批和网关；定时、任务、子流程和返回值节点只能用在自动化流程里。
+审批流只放人和路由的节点——开始、结束、审批和网关；任务、子流程和返回值节点只能用在自动化流程里。
 
 </Lead>
 
 当前的节点类型：
 
-- 控制：`Start`、`End`、`Timer`
+- 控制：`Start`、`End`
 - 路由：`InclusiveGateway`、`ParallelFork`、`ParallelJoin`（显示为「Join」：收拢分叉的分支，或包容网关的分支）
 - 人工：`Approval`
-- 任务：`Script`、`CreateRecord`、`GetRecord`、`UpdateRecord`、`DeleteRecord`、`QueryRecords`、`ValidateData`、`Transform`、`CallService`、`CallWebhook`、`SendEmail`、`SendSms`、`SendInboxNotification`、`QueryAI`、`AsyncTask`、`GenerateFile`
+- 任务：`Script`、`CreateRecord`、`GetRecord`、`UpdateRecord`、`DeleteRecord`、`QueryRecords`、`ValidateData`、`Transform`、`CallWebhook`、`SendEmail`、`SendInboxNotification`、`QueryAI`、`AsyncTask`、`GenerateFile`（发短信节点 `SendSms` 已去掉，见[内置任务执行器](./automation#内置任务执行器)）
 - 子流程：`Subflow`
 - 数据：`ReturnValue`
 
@@ -183,13 +183,13 @@ flowchart LR
 |---|---|
 | `Start`、`End`、`InclusiveGateway`、`ParallelFork`、`ParallelJoin` | Approval、Automation |
 | `Approval` | Approval |
-| 其他所有节点——`Timer`、各任务节点、`Subflow`、`ReturnValue` | Automation |
+| 其他所有节点——各任务节点、`Subflow`、`ReturnValue` | Automation |
 
 所以审批之后的步骤只决定下一步由谁审批，能让它们停下的只有人或路由（见[审批之后的步骤出错](./approval#审批之后的步骤出错)）：审批里运行的东西不写数据、不调外部、不发消息、不等待，重跑也没有什么会重复。审批结果要引发的事，由记录的变化启动一个 Automation 流程来做。这条规则之前发布的修订版照旧运行，直到再次发布；审批流的草稿里有人和路由以外的节点，发布时被拒绝。
 
 节点行为不变量：
 
-- **`Subflow` 是一个普通步骤，一次跑完**：子流程必须是启用中、带 `Subflow` 触发器的 Automation 流程，不能调回上层正在运行的流程，也不能等待——带 `Subflow` 触发器的流程发布时不能含 `Timer`、`AsyncTask`，设计器也只列能调用的流程。运行时仍出的问题会报错，和其他步骤出错一样让这次自动化运行失败。人工步骤应建模在 Approval 流程中，而非子流程。
+- **`Subflow` 是一个普通步骤，一次跑完**：子流程必须是启用中、带 `Subflow` 触发器的 Automation 流程，不能调回上层正在运行的流程，也不能等待——带 `Subflow` 触发器的流程发布时不能含 `AsyncTask`，设计器也只列能调用的流程。运行时仍出的问题会报错，和其他步骤出错一样让这次自动化运行失败。人工步骤应建模在 Approval 流程中，而非子流程。
 - **`ParallelFork` 分支串行执行**（确定性顺序），而非墙钟并行——该网关建模路由拓扑，而非并发。
 
 图本身要满足以下几条。草稿可以违反——保存从不校验——但不能发布：
@@ -204,7 +204,7 @@ flowchart LR
 <Dev title="场景声明、子流程目标与图的诊断码">
 
 - 每个 `FlowNodeType` 用 `FlowNodeType.getScenarios()` 声明允许使用它的场景；节点放错场景报 `INVALID_SCENARIO_NODE`。
-- 带 `Subflow` 触发器的流程含 `Timer`、`AsyncTask` 报 `SUBFLOW_WAITS`；设计器用 `GET /flow/designs?subflowTargets=true` 列出能调用的流程。
+- 带 `Subflow` 触发器的流程含 `AsyncTask` 报 `SUBFLOW_WAITS`；设计器用 `GET /flow/designs?subflowTargets=true` 列出能调用的流程。
 - 图的诊断：没有 `Start` 或有多个报 `NO_START_NODE` / `MULTIPLE_START_NODES`，有环报 `GRAPH_CYCLE`，走不到的节点报 `UNREACHABLE_NODE`，缺名称报 `MISSING_NODE_LABEL`（定位到节点的 `label` 字段）。
 - 诊断仍把 id 放在 `nodeId` / `edgeId` 里，供编辑器定位；关于连线的诊断（条件、默认边）同时带 `edgeId` 和它出发的 `nodeId`。
 
@@ -288,7 +288,7 @@ flowchart LR
 
 流程新建时为启用。
 
-- **停用后**，什么都不会再启动它：提交时不会选中它，数据变化和定时都不会触发它，通过 API 启动（按 `flowId`，或固定到某个修订版的 `bundleId`）和父流程的子流程节点都会被拒绝——「从未发布，或已停用」。多实例部署时，提交选流程和数据变化触发读的是各实例自己的缓存：做停用的那个实例立即生效，其他实例最多在 `flow.trigger-cache-ttl-seconds`（默认 60 秒）后跟上。
+- **停用后**，什么都不会再启动它：提交时不会选中它，数据变化和定时都不会触发它，通过 API 启动（按 `flowId`，或固定到某个修订版的 `bundleId`）和父流程的子流程节点都会被拒绝——「从未发布，或已停用」。多实例部署时，提交选流程和数据变化触发读的是各实例自己的缓存：做停用的那个实例立即生效，其他实例最多在 60 秒后跟上。
 - 生效的修订版保持不变，再启用时运行的还是它；激活另一个修订版、发布新修订版都不改变启停状态——可以在停用状态下准备并发布好，再启用上线。
 - **流程里什么都不在运行时才能停用**：只要还有没走完的实例——等待中、运行中、挂起，审批中的单据都算——就拒绝停用；自动化流程还要看谁会把它当子流程调用：启用中的流程的生效修订版，或别的流程没走完的实例所用的修订版（实例一直按启动时的修订版运行），有就拒绝。拒绝信息会说明还剩几个实例，或列出调用方。失败的实例已经结束，不算在内。
 - **发布过的流程不能删除**：它的修订版、实例和审批记录都引用它；从未发布过的流程可以直接删除。

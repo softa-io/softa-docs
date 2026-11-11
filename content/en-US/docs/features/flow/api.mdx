@@ -28,7 +28,7 @@ A business module submits, withdraws and cancels records, and previews a record 
 | [Directory](#directory) | `/flow/directory` | What the people and department pickers list |
 | [Monitor](#monitor) | `/flow/monitor` | The administrators' console |
 
-**In-process: `FlowClient`.** Host applications embedding the engine in-process should integrate through the `FlowClient` facade (`io.softa.starter.flow.api`) rather than looping back over REST. The port covers what a business module does — a record's approval: `submitRecord`, `previewValues`, `withdrawRecord`, `cancelRecord`.
+**In-process: `FlowClient`.** Host applications embedding the engine in-process should integrate through `FlowClient` (`io.softa.starter.flow.api`, one class the auto-configuration registers — nothing to implement or replace) rather than looping back over REST. The port covers what a business module does — a record's approval: `submitRecord`, `previewValues`, `withdrawRecord`, `cancelRecord`.
 
 Approvers act, people read their tasks, a record's approval history and a saved record's approval preview are read, and an Automation flow with an `Api` trigger is started (`POST /flow/instances/start`), through REST. `FlowAutoConfiguration` registers the default `InProcessFlowClient` only when the application defines no `FlowClient` bean of its own. Putting a business model through approval is described in [Integration](./integration).
 
@@ -66,7 +66,7 @@ Base path: `/flow/designs` — the dedicated surface for the graphical editor (h
 |---|---|---|
 | `POST` | `/flow/designs` | Create a draft: `scenario`, the starting `designJson` (its `trigger` names a record trigger's model), and for an Approval flow its document `modelName` (required; the trigger is made from it). See [A flow's start](./index#a-flows-start-its-trigger-and-the-model-it-names) |
 | `GET` | `/flow/approvalModels` | The documents the application approves, each with the names of its approval flows (`flowNames`) |
-| `GET` | `/flow/cron/preview?expression=&count=` | A cron expression — a Cron trigger's or a Timer's — as publishing judges it: `valid`, the refusal `message`, its `description` in words, and its next runs (`count`, 1–10, default 5) in the server's `zone` |
+| `GET` | `/flow/cron/preview?expression=&count=` | A cron expression — a Cron trigger's — as publishing judges it: `valid`, the refusal `message`, its `description` in words, and its next runs (`count`, 1–10, default 5) in the server's `zone` |
 | `POST` | `/flow/expressions/preview` | Try an expression — or, with `template`, a text's `{{ }}` placeholders — over sample `variables` on the sandboxed engine flows run with: `valid`, the `result` and its `resultType`, or the `message` why it does not run. Nothing is read or written |
 | `GET` | `/flow/designs?keyword=&scenario=&subflowTargets=&pageNumber=&pageSize=` | Paged draft list (canvas excluded); `subflowTargets=true` keeps the flows a Subflow node can call — the enabled Automation flows whose effective revision declares a Subflow trigger |
 | `GET` | `/flow/designs/{id}` | Load one draft (canvas + optimistic-lock version) |
@@ -267,7 +267,7 @@ The approval center's lists — the task boxes of `POST /flow/approvalTasks/sear
 
 ### Automation APIs
 
-Automation flows have no endpoint to fire them by hand: data changes, schedules and subflows are started by in-process consumers, and an `Api`-triggered flow is started by id through `POST /flow/instances/start`. Async-task and timer resumes have no REST endpoint: `FlowAsyncTaskConsumer`, `FlowTimerConsumer` and the due-timer sweep of the maintenance cron call `FlowRuntimeEngine` in-process.
+Automation flows have no endpoint to fire them by hand: data changes, Cron schedules and subflows are started by in-process consumers, and an `Api`-triggered flow is started by id through `POST /flow/instances/start`. Async-task resumes have no REST endpoint: `FlowAsyncTaskConsumer` calls `FlowRuntimeEngine` in-process.
 
 ### Event Logs
 
@@ -444,7 +444,7 @@ Its `variables` are JSON, which the app writes a `Long` or a `BigDecimal` into a
 
 </Dev>
 
-<Dev title="Storage adapters and the bundle cache (OrmFlowBundleRegistry, flow.trigger-cache-ttl-seconds)">
+<Dev title="Storage adapters and the bundle cache (OrmFlowBundleRegistry)">
 
 Primary storage adapters in this module:
 
@@ -453,7 +453,7 @@ Primary storage adapters in this module:
 
 `OrmFlowBundleRegistry` loads nothing at startup and caches per tenant:
 
-- **Trigger matching** reads an index of the active bundles of the tenant's enabled flows, loaded in that tenant's own context on its first event (an empty result is kept too) and merged with the platform-shared bundles (`tenantId = 0`); a context without a tenant matches the shared ones only. Entries live for `flow.trigger-cache-ttl-seconds` (default `60`). Publishing, activating a revision, or disabling or enabling a flow drops the tenant's entry at once on the instance that did it; other instances pick the change up within the TTL. Change logs of models no flow watches are not turned into trigger events.
+- **Trigger matching** reads an index of the active bundles of the tenant's enabled flows, loaded in that tenant's own context on its first event (an empty result is kept too) and merged with the platform-shared bundles (`tenantId = 0`); a context without a tenant matches the shared ones only. Entries live for 60 seconds, not configurable: every write, change-log message, submission and approval preview asks the index, so it cannot be read from the database each time. Publishing, activating a revision, or disabling or enabling a flow drops the tenant's entry at once on the instance that did it; other instances pick the change up within the TTL. Change logs of models no flow watches are not turned into trigger events.
 - **Definitions** are cached by `bundleId` in a bounded LRU (a published revision never changes). A bundle of another tenant reads as not found, whether cached or not; platform-shared bundles are visible to every tenant.
 - **The active revision of a flow** is read from the database on every lookup — none while the flow is disabled — so starting by `flowId` follows a publish, rollback, disable or enable made on any instance.
 
@@ -476,16 +476,17 @@ The editor palette is built from `FlowNodeDescriptor` records exposed through `/
 </Lead>
 
 - descriptors include label, icon, sort order, config schema, default config, and allowed scenarios
-- a config field's `type` names the editor's control; a `cron` field is a cron expression the editor previews through `GET /flow/cron/preview`
+- a config field's `type` names the editor's control
+- every task node's config schema has an `outputVariable` (`string`, Output variable) after its executor's own fields: the variable its result is written to
 - what a setting holds decides its type, so the editor offers the right input: `template` for text interpolated as the node runs (`multiline` for a body), `expression` for AviatorScript, `stringList` for a list of texts (recipients, field names), `json` for a free JSON payload, `variableRef` for a variable's name, a picker for a record — `rolePicker` / `userPicker` / … , or `recordPicker` naming its `model` (a mail template) — storing `valueField` (`code`) instead of the id when given, and taking a typed value no record holds with `allowCustom`; a `keyValueMap`'s `valueType` says what its values are (`expression`, `template`)
 - an approval step's `approverSources` offers its sources in the order an HR administrator reaches for them — specific people, the organization's (supervisor, department leader, HRBP), then the groups' (role, position, department members) — each option saying what the editor needs to tell which settings apply: `names` (the field a group of specific people names them in, `userIds`) and `findsOne` (the source finds one person at most). A setting that applies only to some steps says so in `appliesWhen`: `severalApprovers` (the approval mode, `minCount`, `percentage`) or `approversFoundByRule` (the empty-approver strategy and its roles); the engine ignores it elsewhere, by the same rules, so the editor shows it only where it applies
 
-`TaskExecutorDescriptorProvider` only exposes task nodes for executors that are actually registered as Spring beans, so conditional executors such as `QUERY_AI` and `ASYNC_TASK` only appear when their dependencies are present.
+`FlowNodeDescriptorRegistry` lists task nodes only for executors that are actually registered as Spring beans, so conditional executors such as `QUERY_AI` and `ASYNC_TASK` only appear when their dependencies are present.
 
 <Dev title="Where descriptors come from">
 
-- structural descriptors come from `BuiltinNodeDescriptorProvider`
-- executor-backed task descriptors come from `TaskExecutorDescriptorProvider`
+- structural descriptors come from `BuiltinNodeDescriptorProvider`; the task nodes' are made by `FlowNodeDescriptorRegistry` from the registered `TaskExecutor`s
+- there is no descriptor extension point: node types are the `FlowNodeType` enum, and a new one is a change to flow-starter itself
 
 </Dev>
 

@@ -6,6 +6,8 @@ An SMS goes to one number. The recipient's country decides which provider sends 
 
 </Lead>
 
+SMS is a service the platform provides: providers, country routes, SMS templates and template bindings exist once, on the platform, in tables with no tenant column; tenants can neither see nor configure them. The SMS send log, too, is read on the platform's pages only, with no tenant view.
+
 ## Sending SMS
 
 <Lead>
@@ -41,7 +43,7 @@ List<Long> ids = messageService.sendSmsBatch(List.of(
 | `templateCode`, `templateVariables` | The template and its variables |
 | `providerConfigId` | Names the provider, skipping routing by country |
 | `externalTemplateId`, `signName` | The provider-side template id and signature; when the template's binding sets them, the binding wins |
-| `scope` | `TENANT` (default) or `PLATFORM`: decides which tier's template is used and which quota is charged; the provider is routed by country as usual, see [Tenant tier and platform tier](./index#tenant-tier-and-platform-tier) |
+| `scope` | `TENANT` (default) or `PLATFORM`: has no effect for SMS and is only recorded on the send. Templates and provider routing exist once, on the platform; the record is filed under, and draws on the quotas of, the tenant the call is made in, see [Tenant tier and platform tier](./index#tenant-tier-and-platform-tier) |
 
 The batch method takes 1 to 500 independent messages, each with one number and one record; it checks them all before writing any, and returns the ids in input order.
 
@@ -49,7 +51,7 @@ The batch method takes 1 to 500 independent messages, each with one number and o
 
 <Lead>
 
-SMS templates are looked up by `code` in the tier the send scope names: `TENANT` looks only at the current tenant's own templates, `PLATFORM` only at the platform tier's, with no fallback across tiers. Placeholders use `{{ variable }}`.
+SMS templates exist once, on the platform, each `code` unique across the table; a template is looked up by `code`, whatever the send scope. Placeholders use `{{ variable }}`.
 
 </Lead>
 
@@ -63,7 +65,7 @@ POST /SmsTemplate/createOne
 }
 ```
 
-Some providers (Aliyun and Tencent Cloud, for example) require sending with a template and signature they have approved. For these, give the template **provider bindings** (`SmsTemplateProviderBinding`): one row per provider, stating the external template id and signature, optionally limited to a country, and with its own priority. A missing template or a rendering error fails the record with `TEMPLATE_NOT_RESOLVABLE`, and empty rendered content with `CONTENT_INVALID`.
+Some providers (Aliyun and Tencent Cloud, for example) require sending with a template and signature they have approved. For these, give the template **provider bindings** (`SmsTemplateProviderBinding`): one row per provider, stating the external template id and signature, optionally limited to a country, and with its own priority. Such a provider is sent the template variables rather than the rendered text: Aliyun fills them by name, Tencent Cloud by position, `{1}`, `{2}`… taking the variables in the order the softa SMS template's content names them (fixed on the first attempt, the same on every retry). A missing template or a rendering error fails the record with `TEMPLATE_NOT_RESOLVABLE`, and empty rendered content with `CONTENT_INVALID`.
 
 ## Provider routing
 
@@ -96,7 +98,7 @@ One provider account usually serves many countries, so routing has a table of it
 - **An exact match wins outright.** As soon as any route row matches the recipient's country, only the providers of the matching rows are used; the default providers are not merged in. When the providers the route rows point to are all disabled or missing, the country is treated as having no route, and the default providers are used instead.
 - **Defaults are used only when there are no route rows.** There is no wildcard row such as `region_code = '*'`; "every other country" is expressed by `isDefault = true`.
 - **To have a default provider also serve a configured country, add another route row for that country.** That way a country configured explicitly never goes out through another channel by mistake (SMS to Taiwan never goes through a mainland-China-only line, for example).
-- **Tenant first.** For the recipient's country, the tenant's own route rows are used first, and only when the tenant has configured nothing for that country are the platform tier's used; default providers, too, are the tenant's first and then the platform's. Routing goes by the tenant the record belongs to, `PLATFORM`-scope SMS included.
+- **Not split by tenant.** There is one set of routes, the platform's, and every tenant's SMS goes by it, `PLATFORM`-scope SMS too.
 
 For example, with this configuration:
 
@@ -130,7 +132,7 @@ The chosen provider, external template id and signature are written to the recor
 
 <Dev title="Built-in providers and implementation">
 
-Built-in adapters: Twilio, Infobip, Bird, CM, Sinch, Aliyun, Tencent Cloud (`SmsProvider`). [libphonenumber](https://github.com/google/libphonenumber) parses the country from the E.164 number by the longest prefix, so `+886…` is TW and is not mistaken for CN because of `+86`. `SmsProviderDispatcher` gives the candidates, and `SmsRoutingPlanner` intersects them with the template's bindings; bindings follow the template's tier: a platform template's bindings are platform-tier rows. Provider configs are cached in Redis for 5 minutes and evicted automatically on update or delete. message-starter requires `reference-data-starter` on the classpath; country routing cannot work without it.
+Built-in adapters: Twilio, Infobip, Bird, CM, Sinch, Aliyun, Tencent Cloud (`SmsProvider`). [libphonenumber](https://github.com/google/libphonenumber) parses the country from the E.164 number by the longest prefix, so `+886…` is TW and is not mistaken for CN because of `+86`. `SmsProviderDispatcher` gives the candidates, and `SmsRoutingPlanner` intersects them with the template's bindings. `SmsProviderConfig`, `SmsProviderRegion`, `SmsTemplate` and `SmsTemplateProviderBinding` are none of them multi-tenant models and have no `tenant_id` column. Provider configs are cached in Redis for 5 minutes, and every write, a save in the admin UI included, evicts the entry when it commits, so a change takes effect at once. A provider's `apiKey` and `apiSecret` are stored encrypted and masked when read through the API; leave them out of an update to keep the stored values. message-starter requires `reference-data-starter` on the classpath; country routing cannot work without it.
 
 </Dev>
 
@@ -140,4 +142,4 @@ A record is <Status>Sent</Status> as soon as the provider accepts the message. W
 
 ## Status reference
 
-SMS send records have the same statuses as mail, see [Send record statuses](./index#send-record-statuses); SMS has no bounces, so <Status>Sent</Status> is final.
+SMS send records have the same statuses as mail, see [Send record statuses](./index#send-record-statuses); SMS has no bounces, so <Status>Sent</Status> is final. A record's `tenantId` says whom it is filed under and whose quota it was charged to; `SmsSendRecord` is not split by tenant, and its list, detail and retry endpoints refuse a tenant caller.

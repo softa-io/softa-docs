@@ -26,7 +26,7 @@
 
 `ApprovalModelController` 为每个这样的模型提供同样的三个端点，与其他端点一样按模型授权：`POST /{Model}/submit?id=`、`POST /{Model}/withdraw?id=`（请求体 `{comment}`，可选）和 `POST /{Model}/cancel?id=`，均经由 `FlowClient`。提交会产生什么，对所有模型都由 `GET /flow/instances/preview` 回答。
 
-每条记录都有一个**当事员工**：记录所涉及的员工，基于组织关系的审批人源从他开始解析（见[审批人解析](./approval#审批人解析)）。它是模型的 `employeeId`，除非处理器的 `subject()` 指定了另一个字段（`Transfer::getTransfereeId`）；无论哪种，都必须是指向员工模型（`softa.flow.org.employee-model`）的多对一字段，启动时会检查。当事员工为空的记录不能提交。提交会把它作为启动变量 `_subjectId` 带给流程。
+每条记录都有一个**当事员工**：记录所涉及的员工，基于组织关系的审批人源从他开始解析（见[审批人解析](./approval#审批人解析)）。它是模型的 `employeeId`，除非处理器的 `subject()` 指定了另一个字段（`Transfer::getTransfereeId`）；无论哪种，都必须是指向员工模型 `Employee` 的多对一字段，启动时会检查。当事员工为空的记录不能提交。提交会把它作为启动变量 `_subjectId` 带给流程。
 
 ### 框架与处理器的分工
 
@@ -183,7 +183,7 @@ seed-starter 以 `SeedFileLoadedEvent` 公布某个文件写入的行，`SeedFlo
 
 **组织与通讯录**
 
-- 确认组织遵循默认的 HR 约定，或覆盖 `softa.flow.org.*`，或提供自己的 `OrganizationService`——同时实现 `getUnusableAccounts`，否则每个账号都视为能使用；以及 `getRoleNames`，否则转给角色（`AssignToRole`）的步骤只能按 id 和编码称呼这些角色
+- 确认组织遵循默认的 HR 约定，否则提供自己的 `OrganizationService`——同时实现 `getUnusableAccounts`，否则每个账号都视为能使用；以及 `getRoleNames`，否则转给角色（`AssignToRole`）的步骤只能按 id 和编码称呼这些角色
 - 把 `softa.flow.org.directory-model` 指向一个只放通讯录字段的员工投影模型，并给每个角色配上它的范围——没有范围的角色在选择框里找不到任何人；使用自己的 `OrganizationService` 的应用要实现五个通讯录方法，否则选择框找不到任何人
 
 **权限**
@@ -197,64 +197,27 @@ seed-starter 以 `SeedFileLoadedEvent` 公布某个文件写入的行，`SeedFlo
 **通知**
 
 - 审批邮件：配置 `system.site-url`（每封邮件中的链接），并为每个租户提供 `flow.*` 邮件模板——或在流程上关闭 `emailNotification`；如需短信或 IM，提供自己的 `ApprovalNotificationService`
-- 若失败的审批应通知 `TENANT_ADMIN` 以外的角色，配置 `flow.notification.failure-role-codes`
 
 **消息队列与任务节点**
 
 - 若使用触发或异步任务，启用 Pulsar topics
-- 若使用 `Timer` 节点，配置 `mq.topics.flow-timer.topic`（定时节点自己安排唤醒），并开启维护任务 `flow_timer_sweep` 兜底丢失的唤醒（见[自动化](./automation#触发与消息集成)）
-- 若流程需要调用 Spring bean，显式启用 `CALL_SERVICE`（及其 bean 名允许列表）；其余任务节点类型均附带可用执行器，并按其能力 bean 条件注册
+- 任务节点类型均附带可用执行器，按其能力 bean 条件注册
 
 ## 配置项
 
 <Lead>
 
-flow-starter 读取的配置项如下；默认组织服务读取的模型和字段都在 `softa.flow.org.*` 下，可以逐项覆盖。
+flow-starter 读取的配置项如下；默认组织服务读取的模型和字段写在代码里（见[组织数据](./approval#审批人解析)），能配的只有通讯录模型。
 
 </Lead>
 
 | 配置项 | 默认值 | 作用 |
 |---|---|---|
-| `flow.notification.failure-role-codes` | `TENANT_ADMIN` | 记录的审批失败时，除提交人外还通知哪些角色的持有人 |
-| `flow.trigger-cache-ttl-seconds` | `60` | 触发匹配缓存的存活秒数（见[持久化模型](./api#持久化模型)） |
 | `flow.automation.retention-days` | `30` | 已结束的自动化运行保留天数，之后由维护任务 `flow_automation_purge` 清理 |
-| `flow.task.builtin.call-service.enabled` | `false` | 启用 `CallService` 任务节点 |
-| `flow.task.call-service.allow-list` | 空 | 启用 `CallService` 时必填：允许调用的 bean 名前缀，逗号分隔 |
-| `flow.task.builtin.query-records.enabled` | `true` | 设为 `false` 以注册自己的 `QueryRecords` 执行器 |
-| `softa.flow.org.*` | 见下 | 默认组织服务 `FlowOrgService` 读取的模型和字段（`OrganizationServiceProperties`） |
+| `softa.flow.org.directory-model` | 员工模型 | 选择框搜索的通讯录模型，按调用方的行范围读取，见[通讯录](./api#通讯录) |
 | `system.site-url` | 无 | 审批邮件里的链接（`/home/approvals/{instanceId}`）的前缀；不配置时链接为空 |
 | `mq.topics.*` | 无 | 对应的生产者、消费者只在配置了主题时注册，见[触发与消息集成](./automation#触发与消息集成) |
 
-<Dev title="softa.flow.org.* 的各项及默认值">
-
-| 配置项 | 默认值 |
-|---|---|
-| `employee-model` | `Employee` |
-| `directory-model` | 不设即员工模型，见[通讯录](./api#通讯录) |
-| `account-id-field` | `userId` |
-| `name-field` | `fullName` |
-| `code-field` | `code` |
-| `dept-id-field` | `departmentId` |
-| `position-id-field` | `jobPositionId` |
-| `supervisor-id-field` | `piEmployeeId` |
-| `department-model` | `Department` |
-| `dept-name-field` | `name` |
-| `dept-code-field` | `code` |
-| `dept-leader-id-field` | `picEmpId` |
-| `dept-hrbp-id-field` | `hrbpEmpId` |
-| `parent-dept-id-field` | `parentId` |
-| `role-model` | `UserRoleRel` |
-| `role-id-field` | `roleId` |
-| `role-user-id-field` | `userId` |
-| `role-definition-model` | `Role` |
-| `role-code-field` | `code` |
-| `role-name-field` | `name` |
-| `account-model` | `UserAccount` |
-| `account-status-field` | `status` |
-| `approver-account-statuses` | `Active` |
-| `max-dept-depth` | `10`，向上或向下遍历部门的最大层数，防止环 |
-
-</Dev>
 
 ## 扩展点
 
@@ -269,7 +232,6 @@ flow-starter 读取的配置项如下；默认组织服务读取的模型和字�
 | `ModelApprovalHandler<T>` | 无，每个审批模型一个 | 单据的业务部分：校验、标题与路由变量、结果的后续动作（见[审批业务记录](#审批业务记录)） |
 | `OrganizationService` | `FlowOrgService` | 从组织里找审批人、判断账号能否办理、通讯录（见[审批人解析](./approval#审批人解析)） |
 | `ApprovalNotificationService` | `MessageApprovalNotificationService`（站内信 + 邮件） | 替换整个通知；要加通道时声明自己的 bean，先调用默认实现再发自己的（见[通知](./approval#通知)） |
-| `FlowClient` | `InProcessFlowClient` | 业务模块调用审批的进程内端口（见[接口与数据](./api#api-概览)） |
-| `TaskExecutor` | 内置执行器 | 每种任务节点一个执行器，同一种注册两个会启动失败；要换掉内置的 `QueryRecords`，先关掉它（见[配置项](#配置项)） |
+| `TaskExecutor` | 内置执行器 | 每种任务节点一个执行器，同一种注册两个会启动失败 |
 | `FlowValidator` | 内置校验器 | 追加的发布校验，诊断与内置的一起报告，`Error` 阻止发布 |
 | `flowDeadLetterPolicy` | 最多重投 3 次 | flow-starter 的 Pulsar 消费者共用的死信策略，超过次数的消息进入 broker 默认的 DLQ 主题（`<topic>-<subscription>-DLQ`） |

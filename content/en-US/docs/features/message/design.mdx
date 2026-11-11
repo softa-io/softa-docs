@@ -2,7 +2,7 @@
 
 <Lead>
 
-This page tabulates and draws a few parts of the message design: the terms the pages use, which transaction acceptance and delivery each run in, and why the send record itself is the queue — plus known limitations and test points.
+This page tabulates and draws a few parts of the message design: the terms the pages use, which transaction acceptance and delivery each run in, why the send record itself is the queue, and why the platform's and the tenants' data are split by owner — plus known limitations and test points.
 
 </Lead>
 
@@ -22,9 +22,13 @@ The rules themselves live in the [Overview](./index), [Delivery & Retries](./del
 | Error category | `ErrorCategory` | Decides whether a failure is retried, fails or becomes a dead letter — see [Failures and retries](./delivery#failures-and-retries) |
 | Stuck-send sweep | `ZombieRecordSweeper` | Puts records stuck in <Status>Sending</Status> for over 5 minutes back to retry |
 | Dead letter | the `DEAD_LETTER` status, the `dead_letter_message` table | Records whose retries are used up, and poison messages Pulsar could not process |
-| Send scope | `MessageScope`: `TENANT`, `PLATFORM` | Which tier the template is looked up in and which quota is charged; for mail with no server named, also which tier's default server is used |
-| Platform tier | `tenant_id = -1` | The platform operator's configuration and templates, invisible to tenants |
-| Quota bucket | one row of `TenantMessageUsage` | One tenant's (or the platform's) usage count for one month |
+| Send scope | `MessageScope`: `TENANT`, `PLATFORM` | For mail, which tier the template and send server are looked up in; for SMS, only recorded on the send. It does not decide whom the record is filed under |
+| Platform tables | the `Platform*` models, and the SMS configuration tables | The platform operator's mail servers, mail templates and received mail, and all SMS configuration; not multi-tenant, only under platform navigation |
+| Attribution | `tenantId` on send records, quotas and usage | Whom a row is filed under: the tenant the send is made for (the call's tenant context), platform notices included; -1 when there is no tenant context. Also the quota bucket charged. The tables themselves are not split by tenant |
+| Server owner | `serverOwner`: `Tenant`, `Platform` | Whose send server carried a mail; retries replay it with the server's id, and bounces are matched by the same owner's receive servers |
+| Relay | `serverOwner = Platform` on a `TENANT` record | A tenant with no enabled default send server has its mail sent through the platform's default send server |
+| Tenant send log | `TenantMailSendRecord` | A read-only projection over the mail send record table, isolated by tenant, with no bodies, template variables or attachments |
+| Quota bucket | one tenant (or the platform, -1) | This month's usage is one row of `TenantMessageUsage`, today's one counter in Redis |
 | Daily / per-minute window | `dailySendLimit`, `rateLimitPerMinute` | Each server's and each provider's daily and per-minute caps, counted in Redis |
 | Route row | `SmsProviderRegion` | Which SMS providers a country may use |
 | Provider binding | `SmsTemplateProviderBinding` | An SMS template's template id and signature at one provider |
@@ -89,16 +93,26 @@ Earlier releases prepared the record at acceptance, then handed its id to a send
 - **Safe with several instances.** A claim is a version comparison on the record; it needs neither a distributed lock nor a broker consumer group.
 - **The scan's cost does not grow with the history.** A scan for due records runs for every send; it is two queries, each along its own status index, reading only the rows it returns — see [The delivery loop](./delivery#the-delivery-loop).
 
+## Why the data is split by owner
+
+Earlier releases kept the platform's configuration as `tenant_id = -1` rows of the tenants' tables, each resolution path reaching it through a `@CrossTenant` fallback of its own, and receiving fell back to the platform's mailbox too. Storage now follows two rules only; the rules themselves are in [Tenant tier and platform tier](./index#tenant-tier-and-platform-tier):
+
+- **Data that belongs to one side only is split by owner.** Servers, templates, and the data that follows a receive server (received mail, IMAP watermarks): the platform's copy is in a `Platform*` table, a tenant's in the original one. No table holds `-1` rows and nothing falls back, so a read of one table cannot reach the other side's data.
+- **Data the platform handles for everyone is one table not split by tenant.** The send records come under this rule for two reasons: they are the delivery queue, and a channel can have only one table for the delivery loop to scan; and one record can involve both sides — a tenant's mail relayed by the platform has the tenant's content and the platform's server, quota and bounces. What a tenant needs to see, it reads through the read-only projection `TenantMailSendRecord`.
+- **A matched bounce is not re-filed under the tenant.** A bounce the platform receives leaves only the bounce flag and code on the tenant's send record, and the bounce itself stays with the platform: ownership does not follow a mail's content, and the platform watches the bounce rate of the mail its own servers send — when it climbs, the provider throttles or suspends the account, which hits every tenant.
+
+A new table is placed by the same two rules: data that belongs to one side only, never crossing between the platform and the tenants, is split by owner; data the platform handles for everyone (delivery, metering, dead letters), or a row that involves both sides at once, goes in one table not split by tenant.
+
 ## Known limitations
 
 - **No switching servers or providers.** Once a record has its server or provider, a failure is retried on that same one only, and a manual Retry of a prepared record goes to it too. When a provider is down for a long time, changing the default server or a template's preferred server only affects sends not yet prepared; to move prepared mail to another route, point the server config it uses at the backup provider (host and credentials), and the retries go out with the new settings.
-- **Permanent mail failures are retried too, for now.** Once Spring has wrapped an SMTP failure, only the exception's class name is left, so an authentication failure or a refused recipient is handled as an unknown or temporary error, retried 5 times and then dead-lettered — see [Failures and retries](./delivery#failures-and-retries).
-- **Server and provider configs changed in the UI take up to 5 minutes to take effect.** Configs are cached for 5 minutes, and saving in the admin UI does not evict the cache.
 - **At least once.** When the send succeeds but recording the outcome fails, the message is sent again.
 - **No synchronous send.** The caller gets no "sent" result; it can only look at the record.
 - **Configuration problems are not reported at acceptance.** No server, a missing template or a used-up quota fails the record at delivery, and the caller gets no exception; ERROR-log alerts are how they are found.
 - **SMS receipts and providers' mail events are not wired in automatically.** The application adds its own endpoints to receive what they push.
 - **The mail fetch runs on one global schedule.** Every mailbox shares one `mail-fetch` scheduled task.
+- **A tenant with a send server but no receive server gets no bounces.** A bounce is matched only by a receive server of the same owner; for relayed mail, the bounce itself stays with the platform, and the tenant sees only the bounce flag on its send record.
+- **The platform can read everything that was sent.** The platform's send log reads the whole table, so the login codes and reset links in bodies and template variables, and the links in tenants' mail, are all visible there; a tenant's send log has none of them.
 - **One number per SMS; at most 500 per batch.**
 
 ## Test points
@@ -108,15 +122,20 @@ Earlier releases prepared the record at acceptance, then handed its id to a send
 - No recipient, a malformed address or number, neither content nor a template: throws, writes nothing, and the caller's transaction can still commit.
 - After the caller rolls back, the record does not exist and is never delivered.
 - One invalid item in a batch: the whole batch is rejected and nothing is written; when all are valid, the ids come back in input order.
-- Sending inside `ContextUtils.inTenantContext`: the record belongs to the tenant given; sending `PLATFORM` with no tenant context: the record is in the platform tier.
+- Sending inside `ContextUtils.inTenantContext`: the record is filed under the tenant given and charged to its quota, `TENANT` and `PLATFORM` alike; sending with no tenant context: filed under -1 and charged to the platform's own quota.
 
 ### Preparing and sending
 
-- `TENANT` uses only the current tenant's templates and servers, and the platform tier's when the tenant has no default server; `PLATFORM` uses the platform tier's templates and quota, and for mail with no server named, only the platform tier's default server.
+- Mail with `TENANT`: the current tenant's template; its enabled default send server when it has one (`serverOwner = Tenant`, no quota charged), otherwise relayed through the platform's default server (`serverOwner = Platform`, the tenant's quota charged).
+- Mail with `PLATFORM`: the platform's template and send servers only, charged to the quota of the tenant the record is filed under (the platform's own when there is none); a tenant's default server is not used even when it has one.
+- A template code in the other tier: the record fails with `TEMPLATE_NOT_RESOLVABLE`, the message naming the scope to use; a server id from the other table: it fails with `CONFIG_NOT_RESOLVABLE`.
+- A tenant creating or importing a template with a platform template's code, or a template whose preferred server is another owner's: the save is refused.
+- A tenant server whose host resolves to loopback, a private range or `169.254.169.254`: the save is refused; with DNS changed after the save, the send is stopped before connecting and the record fails with `CONFIG_NOT_RESOLVABLE`.
 - A missing template, a missing server, a used-up quota, a render that comes out empty: the record is <Status>Failed</Status> with the right marker code and an ERROR log; once the gap is filled, Retry prepares the record afresh and sends it.
 - A retry renders nothing again, chooses no server again and charges no quota again: after the template is changed, an already prepared record still goes out with the old content.
 - A mail whose `templateId` points at a disabled template is sent all the same; `templateCode` finds enabled templates only.
 - SMS: with a country route, the default provider is not used; with neither a route nor a default, the record fails; the template binding's external template id and signature are written into the record.
+- SMS: `TENANT` and `PLATFORM` make no difference: the same templates and routes, and the record's owner and quota follow the tenant the send is made for.
 
 ### Failures, retries and recovery
 
@@ -130,8 +149,17 @@ Earlier releases prepared the record at acceptance, then handed its id to a send
 
 - Two instances running at once: each record is sent once.
 - One tenant sending a batch in a burst: the monthly usage matches the number sent; a record whose count update conflicts goes to <Status>Retry</Status>, not <Status>Failed</Status>.
+- One tenant reaching its daily cap: the records after it fail with `DAILY_QUOTA_EXCEEDED`, the monthly usage stops growing, and the other tenants send as usual; a Retry the next day sends them.
+
+### Visibility
+
+- A tenant reading the lists or details of `/MailSendRecord` or `/SmsSendRecord`: refused; reading `TenantMailSendRecord`: only the records filed under it (the platform's notices made for it included), with no bodies or template variables, and none of the platform's own mail.
+- A tenant asking `/api/mail/status` or `/api/sms/status` about another tenant's record: nothing found.
+- A tenant's own role granted navigations under a platform prefix: those navigations, and the permissions under them, take no effect.
 
 ### Receiving
 
 - The same mail fetched twice is stored once.
 - A bounce turns the matching <Status>Sent</Status> into <Status>Failed</Status> and records the bounce code; a read receipt records the read time.
+- A tenant with no receive server fetching: "not configured", and the platform's mailbox is not read.
+- The platform's receive server getting a bounce of a tenant's relayed mail: the tenant's send record is marked bounced, and the bounce itself is only in `PlatformMailReceiveRecord`; a tenant's receive server getting the same bounce does not mark that record.

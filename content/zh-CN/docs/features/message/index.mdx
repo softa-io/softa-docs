@@ -7,7 +7,7 @@ message-starter 给应用发三种消息：邮件、短信和站内信。业务�
 </Lead>
 
 <RoleCards>
-<RoleCard title="管理员" href="/zh-CN/docs/features/message/email/">配置发件服务器、短信提供商和模板；给租户设月度额度</RoleCard>
+<RoleCard title="管理员" href="/zh-CN/docs/features/message/email/">平台和租户各自配置发件、收信服务器和邮件模板；平台配置短信，给租户设发送额度</RoleCard>
 <RoleCard title="开发者" href="#从业务代码发送">调用 MessageService 发邮件、短信和站内信；替别的租户发；依赖与配置</RoleCard>
 <RoleCard title="运维" href="/zh-CN/docs/features/message/delivery/">发送失败怎样重试、卡住怎样恢复、什么时候手动重发；看哪些指标和日志</RoleCard>
 <RoleCard title="排查「没收到」" href="/zh-CN/docs/features/message/delivery/#监控与排查">按收件人找到发送记录，看状态和错误码，修好原因后重发</RoleCard>
@@ -25,9 +25,9 @@ message-starter 给应用发三种消息：邮件、短信和站内信。业务�
 
 - **调用方**：业务模块，以及 user-starter、Flow 通知等框架模块。调用 `MessageService`，拿到记录 id 就继续做自己的事。
 - **受理**（`MessageService`）：只检查调用方给错的东西：收件人、地址或号码格式、有没有内容或模板；每条消息写一条 <Status>Pending</Status> 记录。
-- **发送记录**（`MailSendRecord`、`SmsSendRecord`）：一条消息的全部经过：原样的请求、准备结果、尝试次数、错误码和原因、发送时间。
+- **发送记录**（`MailSendRecord`、`SmsSendRecord`）：一条消息的全部经过：原样的请求、准备结果、尝试次数、错误码和原因、发送时间。两张表都不分租户，记录上的 `tenantId` 只说明它记在谁名下，见[租户层与平台层](#租户层与平台层)。
 - **投递循环**（`DeliveryPoller`）：每个实例、每个渠道一组工作线程，认领到期的记录，交给处理器。
-- **处理器**：邮件、短信各一个。首次投递时准备记录（渲染模板、选服务器或提供商、扣月度额度），然后限流、发送、记下结果。
+- **处理器**：邮件、短信各一个。首次投递时准备记录（渲染模板、选服务器或提供商、扣当天和当月的额度），然后限流、发送、记下结果。
 - **外部服务**：SMTP 服务器、短信提供商。它们接收就算已发送；之后能否送达，要看退信或提供商的回执。
 - **卡住清理**（`ZombieRecordSweeper`）：每分钟把卡在 <Status>Sending</Status> 超过 5 分钟的记录放回重试。
 
@@ -43,7 +43,7 @@ message-starter 给应用发三种消息：邮件、短信和站内信。业务�
 
 <Dev title="每一步由谁实现">
 
-① ② ③：`MessageServiceImpl` 交给 `MailMessageHandler` / `SmsMessageHandler` 检查请求、建记录，写记录时在记录所属的租户里（`TenantScopes.inRecordOwnerContext`）。⑤ ⑥ ⑦ ⑬：`DeliveryPoller`。⑧–⑫：`MailDeliveryProcessor` / `SmsDeliveryProcessor`，⑩ 是 `RateLimiter`，⑫ 失败时交给 `SendFailureHandler` 决定重试、失败或死信。状态转换都走框架的 `versionLock`（`AbstractCasSendRecordServiceImpl`）。每一步落在哪个事务里，见[设计要点](./design#事务边界)。
+① ② ③：`MessageServiceImpl` 交给 `MailMessageHandler` / `SmsMessageHandler` 检查请求、建记录，并按调用时的租户上下文写上记录的 `tenantId`（发送记录表不是多租户表，ORM 不给它盖章）。⑤ ⑥ ⑦ ⑬：`DeliveryPoller`。⑧–⑫：`MailDeliveryProcessor` / `SmsDeliveryProcessor`，⑩ 是 `RateLimiter`，⑫ 失败时交给 `SendFailureHandler` 决定重试、失败或死信。状态转换都走框架的 `versionLock`（`AbstractCasSendRecordServiceImpl`）。每一步落在哪个事务里，见[设计要点](./design#事务边界)。
 
 </Dev>
 
@@ -104,9 +104,9 @@ Long smsId = messageService.sendSms(SendSmsDTO.ofTemplate(
 
 - **一个 DTO 一条消息。** 一封邮件可以有多个收件人，共用一条记录；一条短信只发一个号码。批量方法接受 1 到 500 条，先全部检查再写，按输入顺序返回 id。
 - **受理只查调用方的错。** 没有收件人、地址或号码格式不对、既没有内容也没有模板时，抛 `BusinessException`，什么都不写；邮件和短信的这种拒绝不会让调用方的事务只能回滚。不能因为一条提醒发不出去就让自己失败的调用方，捕获它并打 ERROR 日志，user-starter 的各类提醒就是这样做的。超出字段长度的值（主题 500 字、Reply-To 255 字、号码 50 字、短信内容 2000 字）要到写入时才报错，这时调用方的事务会被标记为只能回滚，批量里前面的几条已经写入。
-- **配置上的问题不在受理时报。** 没有服务器或提供商、模板缺失、月度额度用完，都在首次投递时让记录变为 <Status>Failed</Status>，带标记码并打 ERROR 日志，见[首次投递：准备记录](./delivery#首次投递准备记录)。调用方这时早已拿到记录 id。
+- **配置上的问题不在受理时报。** 没有服务器或提供商、模板缺失、当天或当月的额度用完，都在首次投递时让记录变为 <Status>Failed</Status>，带标记码并打 ERROR 日志，见[首次投递：准备记录](./delivery#首次投递准备记录)。调用方这时早已拿到记录 id。
 - **记录随调用方的事务提交。** 调用方回滚，记录也没有了，不会发出去。
-- **替别的租户发。** 记录属于发起调用时所在的租户。定时任务、带着租户信息的匿名链接要替某个租户发，在 `ContextUtils.inTenantContext(tenantId, …)` 里调用；没有租户上下文时发平台范围的消息（如登录验证码，这时还没有会话），记录记在平台层。
+- **替别的租户发。** 发送记录记在发起调用时所在的租户名下，`TENANT`、`PLATFORM` 都一样，并扣这个租户的额度。定时任务、带着租户信息的匿名链接、关于某个租户账户的平台通知，要替某个租户发，在 `ContextUtils.inTenantContext(tenantId, …)` 里调用。没有租户上下文时发出的，记在平台名下（`tenantId = -1`）。
 
 <Dev title="依赖、谁在调用、为什么没有同步发送">
 
@@ -120,7 +120,7 @@ Long smsId = messageService.sendSms(SendSmsDTO.ofTemplate(
 
 所有发邮件、短信的模块都直接依赖 message-starter 并调用 `MessageService`，中间没有请求事件，包括 user-starter 的登录验证码、邀请、账号变更提醒和订阅到期提醒。
 
-没有同步发送的变体：SMTP 返回 `250 OK` 不等于用户已经收到，而只有一条异步路径，请求线程就不会被外部服务拖住。写记录时从不跨租户（`TenantScopes.inRecordOwnerContext`），所以跨租户的调用方写下的记录也有租户。邮件、短信的受理方法声明了 `noRollbackFor = BusinessException`；站内信的没有，它的拒绝会让调用方的事务只能回滚。
+没有同步发送的变体：SMTP 返回 `250 OK` 不等于用户已经收到，而只有一条异步路径，请求线程就不会被外部服务拖住。发送记录表不是多租户表，ORM 不给它盖租户：受理时由代码写 `tenantId`，取当前上下文的租户，没有租户时为 -1，不看发送范围，所以跨租户的调用方写下的记录也有归属。邮件、短信的受理方法声明了 `noRollbackFor = BusinessException`；站内信的没有，它的拒绝会让调用方的事务只能回滚。
 
 </Dev>
 
@@ -128,25 +128,47 @@ Long smsId = messageService.sendSms(SendSmsDTO.ofTemplate(
 
 <Lead>
 
-开启多租户时，每个租户有自己的模板、发件服务器和短信提供商；平台层（`tenant_id = -1`）归平台运营方所有，对租户不可见。两层分开，不会合并：一次发送按它的范围，只在一层里找模板。
+开启多租户时，平台和租户的消息数据分开存放，只按两条规则：只属于一方的数据按归属分表；平台替所有租户处理的数据放在一张不分租户的表里，租户 id 只记归属。一次发送用发送范围 `MessageScope` 写明它是谁的消息。
 
 </Lead>
 
-| 发送范围 | 用于 | 模板 | 服务器 / 提供商 | 月度额度 |
-|---|---|---|---|---|
-| `TENANT`（默认） | 租户的业务消息 | 当前租户自己的模板 | 租户自己的；没有时由平台层兜底（邮件看默认服务器，短信按国家） | 租户的额度 |
-| `PLATFORM` | 账单、安全、合规等平台消息 | 平台层模板 | 邮件：没有指定服务器时只用平台层的默认服务器；短信：照常按国家路由 | 平台自己的额度（`tenant_id = -1`） |
+| 数据 | 平台的：不分租户，只挂在平台的导航下 | 租户的：多租户，每个租户只看到自己的 |
+|---|---|---|
+| 发件服务器 | `PlatformMailSendServer` | `MailSendServerConfig` |
+| 收信服务器 | `PlatformMailReceiveServer` | `MailReceiveServerConfig` |
+| 收到的邮件 | `PlatformMailReceiveRecord` | `MailReceiveRecord` |
+| IMAP 水位 | `PlatformMailFetchWatermark` | `MailFetchImapWatermark` |
+| 邮件模板 | `PlatformMailTemplate` | `MailTemplate` |
+| 短信提供商、国家路由、短信模板、模板绑定 | `SmsProviderConfig`、`SmsProviderRegion`、`SmsTemplate`、`SmsTemplateProviderBinding`：没有租户列，短信是平台的服务 | — |
+| 站内信 | — | `InboxNotification` |
 
-- **模板不共享。** 每个租户开通时，由应用的租户种子文件得到自己的一套模板，之后自己维护。两层都要用的模板（如公开的密码重置）在两份种子里各写一份。
-- **服务器和提供商对租户不可见。** 租户只能看到、选用自己的配置；平台层的配置只在租户没有配置时由调度静默兜底：邮件看租户有没有默认服务器；短信按国家，先看租户有没有路由行，再看有没有默认提供商。
-- **后台任务在记录所属的租户里执行。** 投递、定时收信、卡住清理都跨租户扫描，但认领、发送、恢复都在记录或配置自己的租户里进行；投递还沿用提交请求时的 trace id。
-- **平台层的行在租户里写不进去。** 发件服务器配置的写接口会把这种情况报成带说明的错误，而不是静默不生效。
-- 多租户关闭时没有过滤和盖章，一切按单租户运行。
-- 死信表是共享的基础设施表，不分租户。
+- **只属于一方的数据按归属分表。** 上表的每一行，平台和租户的数据各在自己的表里，读一张表不会回落到另一张。平台的配置不再是租户表里 `tenant_id = -1` 的行。
+- **平台集中处理的数据不分租户。** 发送记录（`MailSendRecord`、`SmsSendRecord`，也就是投递队列）、死信、额度和用量各是一张不分租户的表，租户 id（`tenantId`，死信表上是 `sourceTenantId`）只是归属列。平台的页面读整张表；租户经 `TenantMailSendRecord` 看自己的邮件发送记录：它是建在邮件发送记录表上的只读投影，按租户隔离，不含正文、模板变量和附件。短信发送记录没有租户视图。
 
-<Dev title="模板种子怎样到达存量租户">
+| 发送范围 | 用于 | 邮件模板 | 发件服务器 / 短信提供商 |
+|---|---|---|---|
+| `TENANT`（默认） | 租户的业务消息 | 当前租户的 `MailTemplate` | 邮件：租户启用的默认发件服务器，没有时由平台的默认发件服务器代发；短信：按国家路由 |
+| `PLATFORM` | 账号凭证、安全通知、账单等平台消息 | `PlatformMailTemplate` | 邮件：只用平台的发件服务器；短信：按国家路由 |
 
-模板由应用 `seed-manifest.yml` 里的租户文件种入，seed-starter 在租户开通时运行。同一个种子文件每个租户只跑一次，所以新模板以新的租户文件到达存量租户，由平台管理员运行。应用给模板文件标 `mode: append` 时，新模板直接加进该文件即可：平台管理员下次运行，只在缺这条模板的租户里创建；租户已有同 code 的模板、只是没有种子绑定（脚本插入或手工新建）时，按 code 补上绑定，原样保留，不再建第二条。修改存量租户已有的模板一律走数据迁移，同时修改种子文件，供之后开通的租户使用。
+- **记录归属和额度不看发送范围。** 消息是为哪个租户发的，记录就记在哪个租户名下、扣哪个租户的额度（每日上限和月度额度），额度用完同样拒发；平台范围的消息也一样，比如某个租户账户的安全通知、只在一家公司有账户的人的登录验证码和重置密码、订阅提醒。为哪个租户发，看调用时所在的租户上下文。确定不了租户的才记在平台名下（`-1`）、扣平台自己的额度，例如在多家公司都有账户的人的登录验证码和重置密码、平台自己人员的消息。
+
+- **一个模板 code 只在一层。** 租户模板不能用平台模板已有的 code，模板页、导入、种子加载等每条写入路径都会拒绝。发送范围和模板所在的层对不上时，记录以 `TEMPLATE_NOT_RESOLVABLE` 失败，错误信息写明应改用哪个范围。短信模板只有平台一份，发送范围对短信没有作用，只记在记录上。
+- **平台租户也有自己的租户层模板。** 平台租户（`-1`）用 `TENANT` 范围发的邮件（比如给平台人员新账号的邀请）读它自己的 `MailTemplate` 行，和别的租户一样，不会去平台模板里找。平台租户不跑租户种子，这些行要放进应用的 `data-platform` 种子文件。
+- **发件只能单向跨层。** 租户的邮件可以由平台代发；平台的邮件只走平台的服务器，不会经过租户配置的 SMTP。记录上记下发件服务器的所有者 `serverOwner`（`Tenant` / `Platform`）和服务器 id，重试按原样重放。
+- **收信不跨层。** 收到的邮件归它经过的收信服务器的所有者。退信和已读回执只能对上同一所有者的发件服务器发出的记录：平台的收信服务器对得上平台自己的邮件和平台代发的租户邮件，租户的收信服务器只对得上本租户经自己的服务器发出的邮件，见[邮件](./email#收信退信与已读回执)。
+- **额度只计平台的基础设施。** 每条短信都扣额度；邮件经平台的发件服务器发出时才扣，代发的租户邮件也扣；租户经自己的服务器发的不扣，见[发送额度](./delivery#发送额度)。
+- **安全通知归平台。** 所有密码重置，以及 `user.reset-user`、`user.enterprise-email-changed`、`user.login-mobile-changed` 三条安全通知，都按 `PLATFORM` 发送：用平台模板，只走平台的服务器，租户改不了它们的措辞，也拦不下它们。
+- **平台的页面挂在平台的导航下。** 平台的表不分租户，挂在租户能进的导航下，租户就能读到全部行。挡住租户的是权限层：平台前缀（`permission.platform-nav-prefixes`）下的导航不会算进租户管理员和顾问的菜单，permission-starter 也会从租户的自建角色里去掉这些导航以及挂在它们下面的权限。应用还可以把这些模型的路径列进 `permission.platform-only-patterns`，在路径上拦住租户管理员和顾问。
+- **发送记录另有一道防线。** `/MailSendRecord`、`/SmsSendRecord` 的列表和详情接口（`searchPage`、`searchList`、`getById`）和重试接口，在代码里也拒绝租户调用方；这两张表其余的通用模型接口交给权限层。租户在自己的邮件发送记录页（`/TenantMailSendRecord`）看和重试本租户的记录。`/api/mail/status`、`/api/sms/status` 对租户只回答本租户的记录。
+- **租户的服务器只能连外网。** 租户自己的发件、收信服务器，主机是或解析到部署内部的地址时，保存和每次连接前都会被拒绝，见[邮件](./email#租户服务器的主机)。
+- **后台任务在所有者的上下文里执行。** 投递、定时收信、卡住清理都跨租户扫描。投递和卡住清理在记录记在的租户里进行，投递还沿用提交请求时的 trace id；定时收信在服务器所有者的上下文里拉：平台的服务器在平台上下文里，租户的在该租户里。
+- **多租户关闭时只有一个所有者。** 不过滤也不盖章，发送范围不起作用：每次发送先用本部署自己的默认发件服务器和模板（`MailSendServerConfig`、`MailTemplate`），没有时再用平台表里的；按 id 指定的发件服务器，在哪张表里就用哪张表里的。
+
+<Dev title="模板种子怎样到达各层">
+
+租户模板由应用 `seed-manifest.yml` 里的租户文件种入，seed-starter 在租户开通时运行。同一个种子文件每个租户只跑一次，所以新模板以新的租户文件到达存量租户，由平台管理员运行。应用给模板文件标 `mode: append` 时，新模板直接加进该文件即可：平台管理员下次运行，只在缺这条模板的租户里创建；租户已有同 code 的模板、只是没有种子绑定（脚本插入或手工新建）时，按 code 补上绑定，原样保留，不再建第二条。修改存量租户已有的模板一律走数据迁移，同时修改种子文件，供之后开通的租户使用。
+
+平台模板 `PlatformMailTemplate` 在应用的平台种子文件里，随平台加载写入。平台文件改动后再加载会重写整份文件的行，平台管理员在页面上改过的平台模板会被覆盖。一个 code 只写在一份种子里：租户种子里出现平台模板的 code，加载时被拒绝。
 
 </Dev>
 
@@ -177,6 +199,8 @@ softa:
     quota:
       mail-monthly-default: 10000   # monthly ceiling for buckets with no TenantMessageQuota row; unset = unlimited
       sms-monthly-default: 10000
+      mail-daily-default: 2000      # daily cap for buckets with no TenantMessageQuota row; unset = unlimited
+      sms-daily-default: 2000
     dlq:
       topic: dev_demo_message_dlq   # unset = broker-poison archiving disabled
       max-redeliver: 2              # broker nacks before dead-lettering
@@ -185,6 +209,7 @@ softa:
     mail:
       debug: false                  # Jakarta Mail protocol debug — never enable in prod (leaks AUTH)
       send-concurrency: 4           # mails one instance sends in parallel (each worker holds an SMTP connection)
+      block-private-tenant-hosts: true  # refuse a tenant's mail server on an address inside the deployment (multi-tenant only)
       transport:
         connection-timeout: 5s      # SMTP/IMAP/POP3 connect timeout
         read-timeout: 30s           # SMTP/IMAP/POP3 read timeout
@@ -211,28 +236,27 @@ mq:
 
 <Dev title="active 控制怎样实现">
 
-这七个模型（`MailTemplate`、`MailSendServerConfig`、`MailReceiveServerConfig`、`SmsTemplate`、`SmsProviderConfig`、`SmsProviderRegion`、`SmsTemplateProviderBinding`）声明 `@Model(activeControl = true)`：`WhereBuilder` 给每次 FlexQuery 读取加上 `active = true`，所以解析、调度和列表的过滤一致，新写的查询也漏不掉它。All 页签用 `active IN (true, false)`，点名该字段从而抑制自动追加。必须读到停用行的地方用 `FilterControl.bypassActiveControl()`：按 id 解析（`findVisibleById`：调用方或模板指定的服务器、提供商，以及已准备记录的重放，所以停用的配置不会让进行中的重试变成 `CONFIG_NOT_RESOLVABLE`）、编辑器工具（`resolveAny`，模板启用前就能预览和提取变量）、平台行的写入探测，以及默认项的降级。普通 `getById` 不带这个过滤，不需要绕过。
+这十个模型（`MailTemplate` / `PlatformMailTemplate`、`MailSendServerConfig` / `PlatformMailSendServer`、`MailReceiveServerConfig` / `PlatformMailReceiveServer`、`SmsTemplate`、`SmsProviderConfig`、`SmsProviderRegion`、`SmsTemplateProviderBinding`）声明 `@Model(activeControl = true)`：`WhereBuilder` 给每次 FlexQuery 读取加上 `active = true`，所以解析、调度和列表的过滤一致，新写的查询也漏不掉它。All 页签用 `active IN (true, false)`，点名该字段从而抑制自动追加。必须读到停用行的地方用 `FilterControl.bypassActiveControl()`：编辑器工具（`resolveAny` / `findAnyByCode`，模板启用前就能预览和提取变量）和默认项的降级（`demoteOtherDefaults`，跳过停用行的话，它重新启用时会多出一个默认）。按 id 的读取不需要绕过：`getById` 本来就不带这个过滤，所以调用方或模板指定的服务器、提供商，以及已准备记录的重放，在配置停用后照样找得到，进行中的重试不会因此变成 `CONFIG_NOT_RESOLVABLE`。
 
 </Dev>
 
 ### 敏感字段加密
 
-邮件发件、收信服务器的密码已声明为加密字段（`encrypted = true`）：落库加密，接口读取时全部打码，扫描器会把这个标记同步到 `SysField`。短信提供商的 `apiKey`、`apiSecret` 没有声明，部署时要在 `SysField` 元数据里把它们标为 encrypted，否则明文存储，见[字段元数据的 `encrypted` 属性](../metadata/field)。
+邮件发件、收信服务器的密码（平台的和租户的表都是）已声明为加密字段（`encrypted = true`）：落库加密，接口读取时全部打码，扫描器会把这个标记同步到 `SysField`。短信提供商的 `apiKey`、`apiSecret` 也一样。已经明文存着的值照常能读（每次读到会打 WARN 日志，列出要处理的行），在平台的提供商页面重新填写保存一次就加密了，见[字段元数据的 `encrypted` 属性](../metadata/field)。
 
 ## 升级说明
 
 <Lead>
 
-2.9.12 起，发送记录本身就是投递队列，不再经过 `message_outbox` 表和 `mail-send`、`sms-send`、`mail-request`、`sms-request` 这四个 Pulsar 主题。从更早的版本升级时，逐条处理下面几项。
+升级到平台和租户分表的版本时，部署应用要在新 jar 启动前后各跑一次发版脚本搬数据（zingkey-hcm 的是 `Release-20261113/20261111-message-split-by-owner`）。
 
 </Lead>
 
-- 从应用配置里删掉这四个主题，已经没有代码读它们。
-- 下列配置项已删除，改成了代码常量，或者对应的行为总是开着：`softa.message.outbox.*`（`enabled`、`poll-interval-ms`；装了 message-starter 的实例都跑投递循环和卡住清理）、`softa.message.zombie.*`、`softa.message.retry.*`、`softa.message.mail.max-body-chars`、`softa.message.mail.smtp-pool.*`（连接复用改为每台发件服务器上的开关），以及 `softa.message.mail.fetch.*`。从应用配置里删掉；留着也会被忽略。
-- 三个默认值变了：`softa.message.mail.send-concurrency` 1 → 4、`softa.message.sms.send-concurrency` 1 → 10、`softa.message.dlq.max-redeliver` 5 → 2。邮件服务器对单个账号允许的并发连接数少于 4 时，把 `mail.send-concurrency` 调低。
-- 新增 `MailSendServerConfig.connectionReuseEnabled`（默认 true）。`scanner-scope` 覆盖 message-starter 的环境，扫描器会加上 `mail_send_server_config.connection_reuse_enabled` 列，已有的行取默认值；其他环境按该部署加目录列的方式加上这一列和它的目录行，加上之前所有服务器照旧复用连接。
-- 收信不再归档原始 EML，`MailReceiveRecord.emlFileId` 随之删除；解析出的正文和附件照旧保存。`scanner-scope` 覆盖的环境，扫描器会删掉 `mail_receive_record.eml_file_id` 列；其他环境这一列不再使用，可以手工删掉。
-- 框架事件 `MailRequestMessage` / `SmsRequestMessage`（softa-base）已删除。原来发布它们的代码改为调用 `MessageService`：`SendMailDTO.ofTemplate` / `SendSmsDTO.ofTemplate` 构造同样的模板发送；事件里指定了租户的，在 `ContextUtils.inTenantContext(tenantId, …)` 里调用。
-- 旧管道留下的 <Status>Pending</Status> / <Status>Retry</Status> 记录不需要迁移：投递循环按记录自己的 `status` 和 `next_retry_at` 认领。旧管道在受理时就准备了记录，所以多数已经准备好；服务器配置没有发件地址的邮件记录当时存的是空 `from_address`，在这里首次投递时会重新准备，月度额度会再扣一次。
-- 扫描器会给邮件发送记录加上 `platform_scope`、`template_id`、`template_code`、`template_variables`、`trace_id` 列，给短信发送记录加上 `platform_scope`、`template_variables`、`trace_id` 列，并把 `mail_send_record.body_mode` 改为可空。扫描器从不删除被删模型的表，所以 `message_outbox` 表和 `OutboxEntry` / `OutboxStatus` / `TopicRoute` 的目录行，要由部署应用在新 jar 启动之后用发版脚本删掉；那时 `message_outbox` 里还是 `NEW` 的行无害，对应的记录会从记录表直接投递。
-- 删掉基于 `OutboxEntry` 的页面（outbox 列表及其 Requeue 动作）；发送记录的 Retry 涵盖了 Requeue 的用途。
+- **新 jar 启动之前**（旧 jar 已停）：
+  - 照租户表建出 5 张 `Platform*` 表（不要 `tenant_id`），把 `-1` 的行连同 id 搬过去。模板只搬归平台的 code，`-1` 名下别的 code 是平台租户自己的租户模板，留在原表。
+  - 删掉 4 张短信配置表里租户的行。
+  - 搬走的行的种子绑定、附件的 `file_record.model_name` 跟着改。
+  - 给 `mail_send_record` 加上 `server_owner` 列，按每条记录的服务器所在的表回填。
+  - 这些都不能等扫描器：新 jar 只读 `Platform*` 表，重试已准备的记录时按 `server_owner` 找服务器；短信表里还有租户行时，扫描器建唯一键会失败。
+- **新 jar 启动之后**：删掉租户名下用了平台 code 的模板和 `user.contact-reset`。
+- **其他变化**：密码重置和三条安全通知改按 `PLATFORM` 发送；平台的页面用新模型，租户的发送记录页改用 `TenantMailSendRecord`，角色授权要相应迁移；收信不再回落到平台的收信服务器；新配置项 `softa.message.mail.block-private-tenant-hosts`（默认 true），租户的服务器确实在内网的环境把它设为 false。
