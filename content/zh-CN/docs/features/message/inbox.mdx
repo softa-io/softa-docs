@@ -34,8 +34,8 @@ inboxNotificationService.markAllAsRead(userId);
 | 字段 | 说明 |
 |---|---|
 | `recipientId` | 收件人的用户 id，必填 |
-| `title` | 标题，必填，最多 200 字 |
-| `content` | 内容，必填 |
+| `title` | 标题，必填；超过 200 字时截短，末尾加「…」，不会因此拒收 |
+| `content` | 内容，必填，长度不限 |
 | `notificationType` | `System`（默认）、`Workflow`、`Manual` |
 | `sourceModel`、`sourceId` | 通知关于哪个对象（模型名最多 50 字），用来按对象标记已读、从通知跳到对象 |
 | `expiredAt` | 过期时间，可选 |

@@ -825,6 +825,7 @@ In edit mode the form asks the server what the caller may do with the record (`P
 | `sliceId`       | `string \| null`          | No       | `?sliceId=` search param              | Timeline models, edit mode only: load this specific version (slice) instead of the as-of row (`searchList` by `sliceId` across the timeline). Full-page forms normally use the `?sliceId=<x>` search param (ignored in dialog mode); embedded forms pass the prop. |
 | `relatedMetaModelsByPath` | `Record<string, MetaModel>` | No | - | Metadata for related models the form plan cannot reach, keyed by the field path that holds them (`employeeProfileId`, not `EmployeeProfile`). The plan learns a form's nested models by walking `children` statically, so a relation rendered through a page's own component is invisible to it: the nested rows are then not validated against their own model's field rules, and the widgets inside them get no metadata to take a star or a bound from. A page in that position (a wizard step, a bespoke inline view) usually already holds the metadata for its submit payload and can state it here. Merged under what the plan found, so a path the walker did reach wins. |
 | `beforeSubmit`  | `(values, savedRecord, recordAccess) => boolean \| Promise<boolean>` | No | - | Asked after validation passes and before the write; resolve `false` to cancel the save (e.g. a declined confirmation). `savedRecord` is the loaded row in edit mode, `null` in create mode. `recordAccess` is the form's own record-level access answer (see "Record-level access"): `null` when there is none to consult, `undefined` while loading — read it here rather than querying it again in the page. |
+| `omitOnSubmit`  | `readonly string[]` | No | - | Fields the form shows but never writes, left out of every save, create and update alike: a value the server keeps — the expense claim's total, which its lines' `onChange` shows as they are edited. An onChange marks the field changed, and sent back the server would take it for an edit (the claim's write validator refuses a changed total). A form view states it as `FormViewSchema.omitOnSubmit`. |
 | `children`      | `ReactNode`               | Yes      | -                                     | Form page layout content (`FormHeader/FormToolbar/FormBody`).                               |
 
 Runtime field conditions:
@@ -845,10 +846,12 @@ Remote `Field.onChange` in `ModelForm`:
 - `with: ["a", "b"]`: sends only declared dependent fields in submit/API shape
 - `with: "all"`: sends current form submit shape
 - top-level registered XToMany fields are serialized as relation patch payloads, not raw UI rows
+- a top-level `OneToMany` table is a trigger itself: it asks once its rows settle after an edit (400ms after the last change), with the rows the form holds as `value`; the rows a record is loaded with ask nothing, and a paged table does not ask (fields page, Remote `Field.onChange`)
 - response `values` patch only returned keys; `null` clears a field
 - response `readonly` / `required` are field-name lists naming every field in that state; a field declared in `update` but left out of the list is reset to its metadata and local conditions
 - response `readonly` / `required` override local effective state until reset, cancel, reload, or a later response
-- this remote linkage runtime is implemented for `ModelForm`; it is not automatically available in standalone `DialogForm`
+- the same runtime serves `DialogForm` given an `editorRuntimeConfig` (the approve dialog, a flow's test run); a standalone `DialogForm` without one has none
+- a value an onChange applies marks its field changed, so a save sends it: a field the server keeps (a total it works out) goes in `omitOnSubmit`
 
 ### FormHeader Props
 

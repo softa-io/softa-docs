@@ -825,6 +825,7 @@ resolver 的上下文（`@mode`、`USER_ID`、声明的字段类型）在 **reso
 | `sliceId`       | `string \| null`          | No       | `?sliceId=` 搜索参数                  | 仅时间轴模型的编辑模式：加载指定版本（切片）而非 as-of 行（按 `sliceId` 跨时间轴 `searchList`）。整页表单通常用 `?sliceId=<x>` 搜索参数（对话框模式忽略）；嵌入式表单直接传该 prop。 |
 | `relatedMetaModelsByPath` | `Record<string, MetaModel>` | No | - | 表单计划触达不到的关联模型元数据，以持有它们的字段路径为键（`employeeProfileId`，而非 `EmployeeProfile`）。表单计划通过静态遍历 `children` 获知表单的嵌套模型，因此经由页面自有组件渲染的关联对它不可见：嵌套行不会按其自身模型的字段规则校验，其中的 widget 也拿不到元数据来显示必填星号或取值边界。处于这种情况的页面（向导步骤、定制的行内视图）通常已为提交载荷持有这些元数据，可以在这里声明。合并时优先级低于表单计划的结果：遍历确实触达的路径以计划为准。 |
 | `beforeSubmit`  | `(values, savedRecord, recordAccess) => boolean \| Promise<boolean>` | No | - | 校验通过后、写入之前调用；resolve 为 `false` 即取消保存（如用户拒绝了确认）。`savedRecord` 在编辑模式下是已加载的行，新建模式下为 `null`。`recordAccess` 是表单自身的记录级访问答复（见「记录级访问」）：没有可参考的答复时为 `null`，加载中为 `undefined`——在这里读取，不要在页面里再查一次。 |
+| `omitOnSubmit`  | `readonly string[]` | No | - | 表单显示但从不写入的字段，新建和更新都不提交：由服务端维护的值——如报销单总额，编辑明细时由明细的 `onChange` 实时显示。onChange 会把字段标成已修改，若随保存提交，服务端会当成一次修改（报销单的写入校验会拒绝改过的总额）。表单视图用 `FormViewSchema.omitOnSubmit` 声明。 |
 | `children`      | `ReactNode`               | Yes      | -                                     | 表单页面布局内容（`FormHeader/FormToolbar/FormBody`）。                               |
 
 运行时字段条件：
@@ -845,10 +846,12 @@ resolver 的上下文（`@mode`、`USER_ID`、声明的字段类型）在 **reso
 - `with: ["a", "b"]`：仅发送 submit/API 形状中声明的依赖字段
 - `with: "all"`：发送当前表单 submit 形状
 - 顶层注册的 XToMany 字段序列化为关联 patch 载荷，而非原始 UI 行
+- 顶层 `OneToMany` 表格本身也可以触发：编辑后行稳定下来（最后一次改动后 400ms）时请求一次，`value` 是表单持有的全部行；记录加载时带来的行不触发，分页表格不触发（见字段文档「远程 `Field.onChange`」）
 - 响应 `values` 仅 patch 返回的键；`null` 清空字段
 - 响应 `readonly` / `required` 是字段名列表，列出处于该状态的全部字段；在 `update` 中声明但未出现在列表中的字段，重置为其元数据与本地条件决定的状态
 - 响应 `readonly` / `required` 覆盖本地生效状态，直至 reset、cancel、reload 或后续响应
-- 此远程联动运行时针对 `ModelForm` 实现；独立 `DialogForm` 不自动可用
+- 带 `editorRuntimeConfig` 的 `DialogForm`（审批弹窗、流程试运行）使用同一套运行时；不带的独立 `DialogForm` 没有
+- onChange 回填的值会把字段标成已修改，保存时会被提交：服务端维护的字段（它算出的总额）放进 `omitOnSubmit`
 
 ### FormHeader Props
 
