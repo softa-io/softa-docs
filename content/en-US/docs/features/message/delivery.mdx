@@ -122,7 +122,7 @@ When an instance crashes or restarts after claiming a record, the record stays a
 
 </Lead>
 
-- 5 minutes is far longer than any send: the connect timeout defaults to 5 seconds and the read timeout to 30.
+- 5 minutes is far longer than any send: the connect timeout defaults to 5 seconds and the read timeout to 30. The application does not start when a channel's connect plus read timeout exceeds 2 minutes 30 seconds (half the window), or either is 0 (no timeout): a send that is only slow would otherwise be taken for a stuck one while in flight and sent again.
 - **At least once.** When the server has accepted a message but the record has not yet been changed to <Status>Sent</Status> (the database write failed, or the instance went down), the message is sent again 5 minutes later. A failure to write <Status>Sent</Status> is not a send failure: it does not go through retry; it is only logged at ERROR and left to the stuck-send sweep.
 
 <Dev title="ZombieRecordSweeper">

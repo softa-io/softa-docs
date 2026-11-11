@@ -207,15 +207,15 @@ softa:
       alert:
         recipients: ops@example.com # comma-separated; empty = no alert mail
     mail:
-      debug: false                  # Jakarta Mail protocol debug — never enable in prod (leaks AUTH)
+      debug: false                  # Jakarta Mail protocol debug, sends and fetches — never enable in prod (leaks AUTH)
       send-concurrency: 4           # mails one instance sends in parallel (each worker holds an SMTP connection)
       block-private-tenant-hosts: true  # refuse a tenant's mail server on an address inside the deployment (multi-tenant only)
-      transport:
+      transport:                    # connect + read at most 2m30s, neither zero (checked at startup)
         connection-timeout: 5s      # SMTP/IMAP/POP3 connect timeout
         read-timeout: 30s           # SMTP/IMAP/POP3 read timeout
     sms:
       send-concurrency: 10          # SMS one instance sends in parallel
-      transport:
+      transport:                    # same limit as mail
         connection-timeout: 5s      # HTTPS RestClient connect timeout
         read-timeout: 30s           # HTTPS RestClient read timeout
 ```
