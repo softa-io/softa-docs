@@ -127,6 +127,7 @@ List<Long> ids = messageService.sendMailBatch(List.of(
 </Lead>
 
 - 主题按 `{{ 变量名 }}` 做简单替换，变量缺失时原样留着；正文用 Pebble 渲染，可以用 `{% for %}` 循环，HTML 正文里输出的变量会自动转义（确实要输出 HTML 时用 `| raw`）。
+- 日期和时间变量按接口的格式输出：`LocalDateTime` 是 `2026-11-12 13:00:40`，`LocalDate` 是 `2026-11-12`，用的是服务器本地时间，不带时区。调用方传日期对象本身，不要先 `toString()`，否则会原样输出 ISO 串 `2026-11-12T13:00:40.123456789`。变量随发送记录存成 JSON，模板拿到的是这段文字；要换格式，给 `date` 过滤器写明原格式：`{{ time | date("dd/MM/yyyy HH:mm", existingFormat="yyyy-MM-dd HH:mm:ss") }}`。
 - 按 code 找时只认启用的模板；给了 `templateId` 时用那一行，不管是否启用（编辑器试发用）。
 - 模板缺失或渲染出错，记录以 `TEMPLATE_NOT_RESOLVABLE` 失败，调用方不会收到异常。code 在另一层时同样失败，错误信息写明应改用哪个范围发送。
 - 租户模板不能用平台模板已有的 code：模板页、导入、种子加载等每条写入路径都会拒绝。平台模板只在平台的页面上维护，租户看不到也改不了。
