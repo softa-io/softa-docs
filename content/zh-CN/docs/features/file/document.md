@@ -39,11 +39,13 @@ templateType = RICH_TEXT
 - 使用 `{{ variable }}` 占位符语法。
 - 对通过 `LoopRowTableRenderPolicy` 以循环表格行渲染的 OneToMany 字段，使用 `{{#fieldName}}`。
 - OneToMany 字段由模型元数据自动识别；SubQueries 会自动构建以加载关联数据。
+- 日期和时间字段按接口的格式输出：日期时间是 `2026-11-12 13:00:40`，日期是 `2026-11-12`，不是 ISO 的 `2026-11-12T13:00:40`。循环表格行里也一样。
 
 ### RICH_TEXT 模板
 
 - `htmlTemplate` 存储带 `{{ variable }}` 占位符的 HTML。
 - 占位符通过 Pebble 渲染为最终 HTML。
+- 日期和时间字段同样按接口的格式输出（`2026-11-12 13:00:40`）。过滤器拿到的仍是日期对象，要别的格式可以写 `{{ hireDate | date("dd/MM/yyyy") }}`。
 - 渲染后的 HTML 通过 OpenHTMLToPDF 转为 PDF。
 
 ### 接口

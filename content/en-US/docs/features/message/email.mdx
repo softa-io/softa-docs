@@ -127,6 +127,7 @@ Reusable content goes into templates. A tenant's templates are in `MailTemplate`
 </Lead>
 
 - The subject gets a simple `{{ variable }}` substitution, leaving a placeholder as it is when its variable is missing; the body is rendered with Pebble, so `{% for %}` loops can be used, and variables output in an HTML body are escaped automatically (use `| raw` where HTML really must be output).
+- Date and time variables print as the API writes them: a `LocalDateTime` as `2026-11-12 13:00:40`, a `LocalDate` as `2026-11-12`, in the server's local time with no zone. The caller passes the date object itself, not its `toString()`, which would be printed as the ISO text `2026-11-12T13:00:40.123456789`. The variables are stored with the send record as JSON, so the template receives that text; for another format, give the `date` filter the stored one: `{{ time | date("dd/MM/yyyy HH:mm", existingFormat="yyyy-MM-dd HH:mm:ss") }}`.
 - A lookup by code only finds active templates; given a `templateId`, that row is used whether or not it is active (for test sends from the editor).
 - A missing template or a rendering error fails the record with `TEMPLATE_NOT_RESOLVABLE`; the caller gets no exception. A code that lives in the other tier fails the same way, with a message naming the scope to send it with.
 - A tenant template may not take a code a platform template already has: every write path refuses it, the template pages, import and seed loading included. Platform templates are maintained on the platform's pages only; tenants can neither see nor change them.
