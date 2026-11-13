@@ -72,7 +72,7 @@ public enum CustomerTier {
 | `searchName` | String[] | `{}` | `searchName` | 搜索字段默认值 |
 | `defaultOrder` | String[] | `{}` | `defaultOrder` | 每个元素一条排序，`"field"` 或 `"field:dir"`，如主数据 `{"name"}`、`{"fullName", "code"}`；不写时分页读取最新的在前（`id DESC`），一对多子表和多对多标签按录入顺序，流水和普通明细行不用声明；约定见 [模型元数据](../../features/metadata/model) |
 | `softDelete` | boolean | `false` | `softDelete` | 要求类上有 `deleted` 字段；每次查询追加 `deleted = false`（可用 `FilterControl.bypassSoftDelete()` 绕过）——按 id 读取（`getById` / `getByIds`）不追加，已删除的行照样返回、带着删除标记，按 id 读到记录后据此行事的代码要自己看 `deleted`；起始值 `false` 由元数据层物化进 `sys_field.default_value`，因此列 DDL 带 `DEFAULT FALSE` |
-| `activeControl` | boolean | `false` | `activeControl` | 要求类上有 `active` 字段；每次读取追加 `active = true`——除非调用方自己的 filters 点名了 `active`（或设置了 `FilterControl.bypassActiveControl()`），因此禁用会让行从读取中退场但不删除——按 id 读取仍会返回它；起始值 `true` 由元数据层物化进 `sys_field.default_value`，因此列 DDL 带 `DEFAULT TRUE`。与 `timeline` 互斥（启动时拒绝） |
+| `activeControl` | boolean | `false` | `activeControl` | 要求类上有 `active` 字段；每次查询追加 `active = true`——除非调用方自己的 filters 点名了 `active`（或设置了 `FilterControl.bypassActiveControl()`），因此禁用会让行从读取中退场但不删除——按 id 读取仍会返回它；起始值 `true` 由元数据层物化进 `sys_field.default_value`，因此列 DDL 带 `DEFAULT TRUE`。与 `timeline` 互斥（启动时拒绝） |
 | `timeline` | boolean | `false` | `timeline` | 生效日期行（见 Timeline Model）；与 `activeControl` 互斥——期间状态建为版本化业务字段，终结走 `setEndDate` |
 | `idStrategy` | `IdStrategy` | `DB_AUTO_ID` | `idStrategy` | |
 | `storageType` | `StorageType` | `RDBMS` | `storageType` | |
