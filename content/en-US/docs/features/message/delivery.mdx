@@ -73,7 +73,7 @@ On a record's first delivery attempt, the processor turns the caller's request i
 | `CONTENT_INVALID` | The render comes out empty, the body is over the limit, or the Reply-To is malformed | Fix the template or the content the caller gave |
 | (no marker code) | A database or cache error during preparation | Classified by keywords in the error message; most come out as unknown errors and are retried automatically |
 
-Every failure with a marker code is logged at ERROR with the record id and tenant, so log-based alerting reaches a developer. Once the cause is fixed, press Retry on the record: a record that failed before it was prepared is prepared afresh.
+Every failure with a marker code is logged at ERROR with the record id and tenant, so log-based alerting reaches a developer. Once the cause is fixed, press Retry on the record: a record that failed before it was prepared is prepared afresh. What preparation works out is written back only when it completes: a record that could not be prepared has no rendered content and no chosen server or provider; the template code and variables stored at acceptance tell what the message was.
 
 ## Failures and retries
 
@@ -135,7 +135,7 @@ Runs on every instance at the start of every minute (`0 * * * * *`). It reads, a
 
 <Lead>
 
-Once the cause is fixed, press Retry on the send record to send it again. The record goes back to <Status>Retry</Status>, due at once, and the next poll claims it; one that failed before it was prepared is prepared afresh.
+Once the cause is fixed, press Retry on the send record to send it again. The record goes back to <Status>Retry</Status>, due at once, and the next poll claims it; one that failed before it was prepared is prepared afresh. The resend uses the variables stored on the record: a message that expires, such as a sign-in code, reaches its recipient as a code that no longer works.
 
 </Lead>
 

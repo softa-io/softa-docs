@@ -49,7 +49,7 @@ Email and SMS take the same path: acceptance only writes a record, and delivery 
 
 ### Send record statuses
 
-Mail and SMS send records share one set of statuses. Only the delivery loop, the processors, the stuck-send sweep, bounce handling when mail is received, and an operator's Retry change a status; the caller never does.
+Mail and SMS send records share one set of statuses. Only the delivery loop, the processors, the stuck-send sweep, bounce handling when mail is received, and an operator's Retry change a status; the caller never does. Records keep no change history: the delivery loop writes each one several times, its own fields are its history, and a change log would store another copy of the rendered content, sign-in codes and links included. So a send record's detail page has no Audit Log, and no flow can be triggered by a change to one.
 
 <MessageFigure name="recordStatesEn">
 
