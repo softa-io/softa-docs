@@ -66,6 +66,7 @@
 | <Status>Pending</Status> | 冻结。审批人批准、拒绝或退回；提交人在流程的 `withdrawPolicy` 范围内撤回；管理员终止 | 批准 → 下一步骤或 <Status>Approved</Status>；拒绝 → <Status>Rejected</Status>；退回或撤回 → 重新成为 <Status>Draft</Status>；终止 → <Status>Cancelled</Status> |
 | <Status>Approved</Status> <Status>Rejected</Status> <Status>Cancelled</Status> | 最终且冻结：不再编辑、提交或作废 | — |
 
+- **删掉的草稿**：草稿能不能删由模型自己的规则决定（审批锁只拦非草稿）。删掉后，它之前的审批照常保留，实例搜索的行标为 `recordDeleted`，按单据读取单据得到 `404`。软删除的模型（`@Model(softDelete = true)`）删掉后行还在、带着删除标记，按 id 读取仍能读到；对审批而言它同样已经删除：不能再提交、预览或作废，审批结束时也不写回。
 - **退回、撤回不是会停留的状态**：记录重新成为草稿，修改后再次提交，是它审批单里新的一次提交；审批单保留发生过的一切（见[审批单与审批步骤](#审批单与审批步骤)）。
 - **重新提交或作废草稿**，会把这张单据之前的审批标为 `superseded`：被退回的那次不再算等待修改（实例搜索的 `awaitingRevision`），作废的单据在实例搜索的行上标为 `recordCancelled`。
 - **管理员终止**审批（`POST /flow/monitor/instances/terminate`），记录变为 <Status>Cancelled</Status>。
