@@ -70,7 +70,7 @@ const { overlay, trace } = useInstanceOverlay(instanceId);
 Test run 只有审批流有（流程的触发器是 `Submit` 时工具栏才显示这个按钮）：推演提交一张申请在草稿下会怎样，从不真正运行——不启动、不保存、不发送任何东西。
 
 - **对话框**（`test-run/test-run-dialog.tsx`）：先选提交人（「Submitted by」，目录的 `PeoplePicker` 加 `everyone`，默认当前用户），再填申请，表单来自 `FlowDesignerProps.requestFormView(modelName)`——HCM 页面传入审批中心该单据的视图并去掉其中的块（`testRunRequestView`）；没有视图时只按员工提交。表单是无 schema 的创建模式 `DialogForm`：没有必填字段，只需填流程会读的字段；员工留空就是提交人本人。
-- **Preview**：先保存画布，再把表单的保存载荷发到 `POST /flow/designs/{id}/preview`；草稿编译不过时关闭对话框并列出诊断，和 Publish 一样。
+- **Preview**：先保存画布，再把表单的保存载荷发到 `POST /flow/designs/{id}/preview`——id、日期都是文本，表格是要新建的行，服务端按模型字段转换类型；草稿编译不过时关闭对话框并列出诊断，和 Publish 一样；其他 400（比如某个字段收不下填的值）按服务端的原话提示，对话框不关，诊断保持原样（`testRunRefusal`；请求层把 preview 的 400 留给对话框处理）。服务端算出的值不取表单里的：报销单试运行按填写的明细求和来走金额分支。
 - **结果**（`FlowDesignPreview`）：画布锁定只读并标出路线（`test-run/test-run-marks.ts`，经 `store/test-run-context.tsx`）。经过的节点带标记和外框——经过、等审批人、运行时才知道、在此停止；审批步骤在名称下写等谁审批或为何自动通过；不在路线上的节点和连线变淡。画布下方（原诊断栏的位置）用单据页「If submitted now」同一张 `ApprovalPreviewCard` 列出步骤（基于 `ApprovalSteps`，每一步按未到达的样式显示，见[审批面板](../views/form#审批面板)），提交人写名字而不是「you」；流程的提交条件不选中这张申请时先给出提示。画布上方的横条写明提交人，有 Change request（重新打开对话框，保留上次填的内容）和 Exit test run。
 
 运行状态 overlay 属于 `FlowViewer`，用于实例页面：节点按 `store/overlay-context.tsx` 绘制运行状态（Completed / WaitingApproval / WaitingAsync / Failed）。

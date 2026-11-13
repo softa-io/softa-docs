@@ -451,19 +451,20 @@ type FieldOnChangeProp =
 
 当前支持的作用域：
 
-- `ModelForm`
+- `ModelForm`，以及带 `editorRuntimeConfig` 的 `DialogForm`（审批弹窗、流程试运行）
 - `ModelTable` 的当前内联编辑行
 - `RelationTable` 的当前内联编辑行
 
+顶层的 `OneToMany` 表格也能作为触发源：编辑后行稳定下来（新增、修改或删除一行，最后一次改动后 400ms，所以在单元格里连续输入只请求一次）时请求一次，`value` 是表单当前持有的全部行。表单加载时带来的行不算编辑，打开记录不会请求（套用返回值会把表单标成已修改）。分页表格（`isPaged`）只持有一页行，不请求。报销单的明细就这样向服务端要单据总额（`onChange={{ update: ["totalAmount"] }}`）；总额由服务端维护，保存时表单不提交它（`ModelForm.omitOnSubmit`）。
+
 当前非目标：
 
-- 顶层独立 `OneToMany` / `ManyToMany` 容器交互不能作为触发源
-- 独立对话框表单目前不会自动提供这套运行时能力
+- `ManyToMany` 字段不能作为触发源
 
 自动触发规则：
 
 - `blur`：文本类和编辑器类字段，如 `String`、`MultiString`、数值输入、`JSON`、`Filters`、`Orders`、`Code`、`Markdown`、`RichText`、`TemplateEditor`
-- `change`：提交型字段，如 `Boolean`、`Date`、`DateTime`、`Time`、`Option`、`MultiOption`、`ManyToOne`、`OneToOne`、`File`、`MultiFile`
+- `change`：提交型字段，如 `Boolean`、`Date`、`DateTime`、`Time`、`Option`、`MultiOption`、`ManyToOne`、`OneToOne`、`File`、`MultiFile`；`OneToMany` 表格在行稳定下来时触发（见上）
 
 前端使用的后端契约：
 

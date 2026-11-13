@@ -453,19 +453,20 @@ Behavior:
 
 Current supported scopes:
 
-- `ModelForm`
+- `ModelForm`, and `DialogForm` with an `editorRuntimeConfig` (the approve dialog, a flow's test run)
 - `ModelTable` inline edit current row
 - `RelationTable` inline edit current row
 
+A top-level `OneToMany` table is a trigger too: it asks once its rows settle after an edit — a row added, changed or removed, 400ms after the last change, so typing in a cell asks once — with the rows the form holds as its `value`. The rows the form was loaded with are no edit, so opening a record asks nothing (applying the answer would mark the form changed). A paged table (`isPaged`) holds one page of its rows and does not ask. The expense claim's lines ask the server for the claim's total this way (`onChange={{ update: ["totalAmount"] }}`); the total is the server's, so the form leaves it out of the save (`ModelForm.omitOnSubmit`).
+
 Current non-goals:
 
-- standalone top-level `OneToMany` / `ManyToMany` container interactions are not source triggers
-- standalone dialog forms do not automatically provide this runtime yet
+- a `ManyToMany` field is not a source trigger
 
 Auto trigger rules:
 
 - `blur`: text-like and editor-like fields such as `String`, `MultiString`, numeric inputs, `JSON`, `Filters`, `Orders`, `Code`, `Markdown`, `RichText`, `TemplateEditor`
-- `change`: commit-style fields such as `Boolean`, `Date`, `DateTime`, `Time`, `Option`, `MultiOption`, `ManyToOne`, `OneToOne`, `File`, `MultiFile`
+- `change`: commit-style fields such as `Boolean`, `Date`, `DateTime`, `Time`, `Option`, `MultiOption`, `ManyToOne`, `OneToOne`, `File`, `MultiFile`; a `OneToMany` table once its rows settle (above)
 
 Backend contract used by frontend:
 

@@ -34,8 +34,8 @@ inboxNotificationService.markAllAsRead(userId);
 | Field | Description |
 |---|---|
 | `recipientId` | The recipient's user id; required |
-| `title` | The title; required, at most 200 characters |
-| `content` | The content; required |
+| `title` | The title; required. One longer than 200 characters is cut to fit, ending in "…", not refused |
+| `content` | The content; required, of any length |
 | `notificationType` | `System` (the default), `Workflow`, `Manual` |
 | `sourceModel`, `sourceId` | The object the notification is about (a model name of at most 50 characters); used to mark notifications read by object and to go from a notification to its object |
 | `expiredAt` | When it expires; optional |
