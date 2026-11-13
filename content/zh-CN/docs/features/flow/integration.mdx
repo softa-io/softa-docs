@@ -68,7 +68,7 @@
 
 ### 从业务代码调用
 
-业务代码经由 `FlowClient` 提交、撤回、作废记录，预览尚未保存的记录；审批历史和已保存记录的预览走 REST（`GET /flow/instances/by-record`、`GET /flow/instances/preview`）：
+业务代码经由 `FlowClient` 提交、撤回、作废记录，预览尚未保存的记录；单据的审批单和已保存记录的提交预览走 REST（`GET /flow/instances/by-record`、`GET /flow/instances/preview`）：
 
 | `FlowClient` | 会发生什么 |
 |---|---|
@@ -85,7 +85,7 @@
 4. **选流程**：流程从这张单据启用中的 Approval 流程里选：提交条件成立的必须恰好一个；一个都不成立时，交给没有条件的那个流程（单据的默认审批流）；也没有默认审批流，或有多个成立时，提交被拒绝并说明原因。
 5. **启动审批**：记录变为 `Pending`，记下提交人与时间，运行 `handler.afterSubmitted`，然后启动记录的审批。
 
-全部在调用方事务中完成。每次提交都从头启动一个新的审批——退回之后也是如此，运行当时生效的修订版——同时把该记录之前的审批标记为 `superseded`。
+全部在调用方事务中完成。每次提交都从头启动一个新的审批——退回之后也是如此，运行当时生效的修订版——同时把该记录之前的审批标记为 `superseded`。它们同属这张单据的一张审批单：能看审批单的人，看到的是其中每一次提交（见[审批单与审批步骤](./approval#审批单与审批步骤)）。
 
 ### 记录的审批
 
@@ -139,7 +139,7 @@ public class LeaveRequestApprovalHandler implements ModelApprovalHandler<LeaveRe
 4. **发布默认流程**：每个默认流程作为租户种子文件中的一行 `FlowDesign`（场景 `Approval`，`"enabled": true`，触发器 `{"type": "Submit", "modelName": "LeaveRequest"}` 写明单据；同一单据有多个时，各自用提交条件写明审批哪些记录，比如请假与销假按 `leaveRequestType` 区分），见下文[默认流程种子](#默认流程种子)。内置角色用角色编码指定；不要把没有持有人的角色设为默认审批人，否则该步骤会在所有租户解析不到人。
 5. **授权**：为 `submit`、`withdraw` 端点授权（作废草稿随 `submit`）；把监控台端点与 `FlowInstance` 上的数据范围授予管理员角色。
 
-前端的提交、撤回按钮、审批路径预览与审批记录面板见[表单视图](../../frontend_dev/views/form)。
+前端的提交、撤回按钮、提交预览与审批面板见[表单视图](../../frontend_dev/views/form#审批面板)。
 
 > [!WARNING]
 >
@@ -191,7 +191,7 @@ seed-starter 以 `SeedFileLoadedEvent` 公布某个文件写入的行，`SeedFlo
 - 把 `GET /flow/delegations/flows` 列入可以查看委托规则的权限（限定到单个流程或步骤的规则用它选流程和步骤，列表也用它显示规则限定的步骤）
 - 把通讯录的读取——人员用 `GET /flow/directory/people` 和 `/people/by-ids`，部门用 `/departments` 和 `/departments/by-ids`——列进用到选择框的页面的权限里（审批、管理自己的委托、设计器、监控台），`/people/all` 和 `/people/all/by-ids` 只列进设计器和监控台的权限，不要列入 `permission.authenticated-bypass-patterns`：列在那里会跳过端点闸门（见[通讯录](./api#通讯录)）
 - 把监控台的端点以及 `FlowInstance` 上的数据范围授予管理员的角色（部门数据范围按当事员工的部门收窄）
-- 把审批页的按实例读取——`GET /flow/instances/{instanceId}` 及其 `/summary`、`/design`、`/record`、`/overlay`、`/trace`、`/urge`、`/withdraw`——以及以单据为键的页面要用的 `GET /flow/instances/by-record/record`，列进能打开审批的权限里：没有任何权限列出的端点会被端点闸门拒绝，其余由访问守卫判断
+- 把审批页的按实例读取——`GET /flow/instances/{instanceId}` 及其 `/summary`、`/design`、`/record`、`/overlay`、`/trace`、`/urge`、`/withdraw`——以及以单据为键的读取——审批单 `GET /flow/instances/by-record`（单据页、审批页和实例页都读它）和 `GET /flow/instances/by-record/record`——列进能打开审批的权限里：没有任何权限列出的端点会被端点闸门拒绝，其余由访问守卫判断
 - 把 `POST /flow/approvalTasks/search` 列进读取用户自己待办的权限——它取代了 `GET /flow/approvalTasks/pending`、`/completed` 和 `/cc`——并随发版附带补齐已有任务行列表字段的 SQL（见[审批任务](./api#审批任务)）
 
 **通知**
