@@ -17,7 +17,7 @@ An approval flow (scenario `APPROVAL`) approves one business record: its submitt
 
 <Lead>
 
-A record in approval has two statuses: the record's own approval status, and the status of this approval's instance. First, who takes part and how one submission runs through.
+A record in approval has two statuses: the record's own approval status, and the status of this approval's instance; its submissions together make the record's one approval. First, who takes part and how one submission runs through.
 
 </Lead>
 
@@ -56,7 +56,7 @@ Every approval model shares one state machine, and only the framework writes `ap
 
 <FlowFigure name="recordStatesEn">
 
-Only a draft can be submitted or cancelled. A return, a withdrawal and a failed approval taken back all make the record a draft again; submitted again after its edits, it starts a new approval.
+Only a draft can be submitted or cancelled. A return, a withdrawal and a failed approval taken back all make the record a draft again; submitted again after its edits, it is a new submission of the same record's approval.
 
 </FlowFigure>
 
@@ -66,7 +66,8 @@ Only a draft can be submitted or cancelled. A return, a withdrawal and a failed 
 | <Status>Pending</Status> | Frozen. Approvers approve, reject or return it; its submitter withdraws it within the flow's `withdrawPolicy`; an administrator terminates it | Approved → the next step or <Status>Approved</Status>; rejected → <Status>Rejected</Status>; returned or withdrawn → <Status>Draft</Status> again; terminated → <Status>Cancelled</Status> |
 | <Status>Approved</Status> <Status>Rejected</Status> <Status>Cancelled</Status> | Final and frozen: never edited, submitted or cancelled | — |
 
-- **A return or a withdrawal is not a status a record stays in**: the record is a draft again, to edit and submit as a new approval, and its approval history keeps what happened.
+- **A deleted draft**: whether a draft may be deleted is the model's own rule (the approval lock refuses only records past their draft). Once deleted, its earlier approvals stay, the instance search marks them `recordDeleted`, and reading the record through its approvals gives `404`. A model that deletes softly (`@Model(softDelete = true)`) keeps the row, flagged, and a read by id still returns it; to its approvals it is deleted all the same: it is not submitted, previewed or cancelled, and an approval that ends writes nothing back to it.
+- **A return or a withdrawal is not a status a record stays in**: the record is a draft again, to edit and submit again as a new submission of its approval, which keeps what happened (see [A record's approval and its steps](#a-records-approval-and-its-steps)).
 - **Submitting the draft again or cancelling it** marks the record's earlier approvals `superseded`: a returned one no longer waits for the record to be edited (the instance search's `awaitingRevision`), and the instance search marks one whose record was cancelled `recordCancelled`.
 - **An administrator terminating** its approval (`POST /flow/monitor/instances/terminate`) makes the record <Status>Cancelled</Status>.
 - **What happens to a record after its approval** — paid, in effect, voided — is not an approval status and goes in the model's own status field; where a change takes effect later, the handler's `effectStatuses` tells the monitoring console how it stands.
@@ -113,6 +114,38 @@ With nothing left to wait for, the instance goes from `Running` straight to `Com
 `FlowStatusTransitions` checks every status change: any status may move to `Failed`, and a self-transition is legal (a parallel branch parking again is still `Waiting`); any other change outside the diagram fails with `Illegal flow status transition`. A rejection, return, withdrawal or termination closes the steps still waiting on every parallel branch.
 
 </Dev>
+
+### A record's approval and its steps
+
+A record has one **approval**, holding every submission of it. Each submission starts an approval instance, and the earlier instances are marked `superseded`. Only three things lead to a new submission: submitting again after a return, after a withdrawal, or after the submitter took back a failed approval; a rejection and a cancellation are final, and the record is never submitted again. Each instance keeps what its submission recorded (the employee, department, effective date, number and summary), the flow revision it ran, its progress diagram and its approval records.
+
+The record's page, the approval page and the approval instance page show the same record's approval: one group per submission, newest first, each its submission's approval steps.
+
+**Who sees a record's approval.** Three kinds of people see the whole of it — every submission with its steps, whichever one they took part in, however far the approval has gone and whether or not it has ended:
+
+| Through | Who |
+|---|---|
+| Reading the record | Whoever can read the record with their own permissions: their roles' menu and data scope reach it. A record someone created is read the same way: give the role the Created By Self scope (`CREATED_BY_SELF`) and its creator reads it |
+| Taking part | Whoever took part in any of its submissions: the submitter, approvers pending or done, CC recipients, transfer and delegation targets, and the approvers whose step closed without them |
+| Reading an instance | Whoever's roles read the instance (`FlowInstance` row) of any of its submissions, such as operations, by the instance's menu and data scope |
+
+- **A move between departments**: an instance records the department of the employee the record is about at submission. When the employee moves between two submissions, those granted by department in either department see the record's whole approval.
+- **Every submission opens**: whoever sees the record's approval opens each submission's detail, progress diagram and trace; whether they may approve, urge, withdraw or comment stays with each action's own rule.
+- **The record's content has rules of its own**: fewer people read the record through an approval. Its participants read it past their own row permissions, as the newest submission they took part in shows it to them; whoever can read the record reads it with their own permissions; someone who sees the instances by their roles alone sees the approval steps, not the record (see [Who can see an approval](#who-can-see-an-approval)).
+
+**Approval steps** are one submission's steps, in one list in the order the approval reached them, each in one of three states:
+
+| Step | Is |
+|---|---|
+| <Status>Done</Status> | A step the approval passed: approved, approved on its own, or the step where it was rejected or returned |
+| <Status>Current</Status> | A step the approval waits on now; every step parallel branches wait on at once is |
+| <Status>Upcoming</Status> | A step the approval has not reached yet: only on the submission in progress |
+
+Each step says its approval mode and how many approvals pass it, with one row per approver: their result, when they acted, and their comment. A result is approved, rejected or returned; transferred or delegated (naming whom to — that person has a row of their own); approved automatically (saying why: the submitter, or someone who approved an earlier step); pending; or not needed — others approved enough, or the approval was withdrawn or ended, so this approver no longer has to act. An administrator who acted in someone's place (a reassignment) is named. Under a step come its other actions: who was CC'd and whether they read it, who urged, the comments. Each submission ends with how it ended: approved, rejected, returned, withdrawn or terminated, with who, when and their comment; a failed one says the step it stopped at, why, and whether an administrator can run the steps after its approval again.
+
+**Expected approvers.** The steps not reached yet are worked out from the route as it stands, by the same walk as [Previewing a record's approval](#previewing-a-records-approval), but from the submission's own variables and approvals, never the record: their approvers are marked Expected, or the step says it will pass on its own, has nobody to ask, or is known only once the approval runs. Approvers are found when a step is reached, so the people asked may differ from those expected — the organisation or a delegation changed in between, or an approver edited the record and the route changed with it. Where the route is known only once the approval runs, the walk stops there and says so; where it finds the route would fail, it says at which step and why.
+
+The fields and how they are put together: [A record's approval](./api#a-records-approval).
 
 ## Configuring approval flows
 
@@ -308,7 +341,7 @@ Flow-level settings live in the designer's Flow settings panel (shown when no no
 
 <Dev title="The withdraw rule and old settings">
 
-- `WithdrawPolicyGuard` is the one rule (taking back a failed approval: `WithdrawPolicyGuard.takesBack`): the withdraw actions enforce it, and the preview, `GET /flow/instances/{instanceId}/withdraw` and the instance search's `withdrawable` report it.
+- `WithdrawPolicyGuard` is the one rule (taking back a failed approval: `WithdrawPolicyGuard.takesBack`): the withdraw actions enforce it, and `GET /flow/instances/{instanceId}/withdraw` and the instance search's `withdrawable` report it.
 - `returnEnabled` has no switch of its own on a step; one saved on a step before is ignored.
 - `urgeIntervalHours` replaced `urgeIntervalMinutes`: a design or revision still stored with the old key reads as unset until the deploying app's release script converts it, before the new jar starts.
 
@@ -397,7 +430,7 @@ An approver's action needs the instance waiting on approval, and the actor an ap
 | Take back a failed approval | Submitter only; instance <Status>Failed</Status>, the record still waiting on it; not limited by the withdraw policy; from the record's page, the approval page or My Requests | Record back to draft; the failed instance stays for troubleshooting |
 | Urge | Submitter only; instance waiting on approval; the flow's `urgeEnabled` not turned off | Reminds the current step's approvers who have not acted. Each step can be urged once per the flow's `urgeIntervalHours` (default 4 hours), an interval shared with administrators |
 | Comment | Participant; instance not ended | Written to the approval history |
-| Edit and submit again | The record is a draft after a return or withdrawal | A new instance, from the first step, with the flow picked afresh |
+| Edit and submit again | The record is a draft after a return or withdrawal | A new instance — a new submission of the same record's approval — from the first step, with the flow picked afresh |
 
 ### Administrator actions
 
@@ -428,14 +461,15 @@ Every delegation of the tenant is seen with a permission of its own, also whatev
 - **By default**: the instance's participants — the submitter, and everyone the instance gave a task to (approvers, whether or not they acted; CC recipients; transfer and delegation targets; the approvers whose step closed without them, such as the pending approvers a termination cleared, or the others of a step one approval carried). Participants comment while the instance runs; after a termination, its approvers still open it from the link in their task email.
 - **An administrator's actions make nobody a participant**: urging, terminating or reassigning (recorded as the approver's `TRANSFER`, the administrator as `operatorId`) gives the administrator no task; they see the approval as the next point says, like anyone else.
 - **Anyone else** through the standard roles and data scopes: they can read the `FlowInstance` row with their own permissions, or — for a record's approval — read the record itself.
-- **The record on the approval page**: the submitter and the task holders read it past their own row scope, without the sensitive fields they may see on no row. Over that, an approver whose step is waiting sees it through that step's field permissions — what it lists as `Readonly` / `Editable` / `Required` shows, sensitive or not, and what it marks `Hidden` does not; the submitter sees the default, untouched by any step; a CC recipient or an earlier approver sees the default without the fields any approval step of the flow marks `Hidden`. Anyone else who can read the record reads it with their own permissions; everyone else is refused.
+- **A record's approval as a whole**: whoever took part in any submission of the record, can read the record, or whose roles read the instance of any of its submissions opens every submission of it, see [A record's approval and its steps](#a-records-approval-and-its-steps). Comments stay with this submission's participants.
+- **The record on the approval page**: the submitter and the task holders read it past their own row scope, without the sensitive fields they may see on no row. Over that, an approver whose step is waiting sees it through that step's field permissions — what it lists as `Readonly` / `Editable` / `Required` shows, sensitive or not, and what it marks `Hidden` does not; the submitter sees the default, untouched by any step; a CC recipient or an earlier approver sees the default without the fields any approval step of the flow marks `Hidden` — and someone who took part only in an earlier submission, reading by the record, sees that of the submission they took part in. Anyone else who can read the record reads it with their own permissions; everyone else is refused, someone who sees the record's approval by their roles alone included: they see its steps, not the record.
 - Whether someone may act is decided by the action handlers from who they are, not by data permissions.
 
 <Dev title="How participants are determined, and reading the record through the instance">
 
 - The instance's state and approval history name most participants (`FlowParticipants`); the rest only their tasks remember — a task stays when it closes — so when the state and history name the caller nowhere, the access guard asks the instance's `FlowApprovalTask` rows: CC tasks count too, whatever their status, in one query however many instances it asks about (`FlowInstanceAccessGuard.isParticipant`).
 - The approval page reads the record through the instance (`GET /flow/instances/{instanceId}/record`). A one-to-many's rows likewise lose the sensitive fields the caller may not see, unless the step lists the one-to-many as visible, which brings its rows whole. The definitions of fields a step grants that the caller's metadata leaves out come with the record (`fields`). Details: [The record an approval runs on](./api#the-record-an-approval-runs-on).
-- A page keyed by the record reads it by the record (`GET /flow/instances/by-record/record`), whichever approval is current: the newest approval the caller took part in (a terminated one's cleared approvers took part by their tasks) lends it as through that instance — the approver it waits on reads it as their step shows it, someone who took part only in an earlier submission sees that approval's default; anyone else who can read the record reads it with their own permissions, a record never submitted too; everyone else is refused. The record's approval history (`GET /flow/instances/by-record`) admits the same people.
+- A page keyed by the record reads it by the record (`GET /flow/instances/by-record/record`), whichever submission is current: the newest submission the caller took part in (a terminated one's cleared approvers took part by their tasks) lends it as through that instance — the approver it waits on reads it as their step shows it, someone who took part only in an earlier submission sees that approval's default; anyone else who can read the record reads it with their own permissions, a record never submitted too; everyone else is refused. The record's approval (`GET /flow/instances/by-record`) admits more: also whoever's roles read one of its instances; one who cannot read the record is refused here all the same.
 - The approval page reads the instance's summary (`.../summary`) and diagram (`.../design`) through the instance too: whoever may view the instance reads them, with no permission on `FlowInstance` or `FlowBundle`.
 - For the API side, see [Instance APIs](./api#instance-apis) and [Monitor](./api#monitor).
 
@@ -507,7 +541,7 @@ Once an approval ends, the framework writes the outcome back to the record, then
 | `status` | Meaning |
 |---|---|
 | <Status>Ready</Status> | Exactly one flow applies; `steps` is the approval path it walks out |
-| <Status>InProgress</Status> | The approval is in progress: the step it waits on now, as it stands (`current`, with the approvers still asked), then the steps after it |
+| <Status>InProgress</Status> | The record's approval is in progress: only that submission's `instanceId`, with no steps walked — the steps it passed, waits on and has still ahead are the record's approval's (see [A record's approval and its steps](#a-records-approval-and-its-steps)) |
 | <Status>Refused</Status> | The submission would be refused |
 | <Status>NoFlow</Status> | The document has no enabled approval flow |
 | <Status>SeveralFlows</Status> | Several flows apply: `message` names them |
@@ -522,15 +556,15 @@ The walk assumes every approval step approved; `steps` lists the approval steps 
 | <Status>NoApproverFails</Status> | Resolves to nobody under strategy `Error` — or `AssignToRole`, its roles leaving nobody either: the submission would be refused there, with the message `failure` gives |
 | <Status>Undetermined</Status> | Who approves it, or whether it passes on its own, depends on data only known once the approval runs |
 
-`withdrawable` says whether the caller may withdraw the record now: its submitter, while the approval waits on its approvers and the flow's `withdrawPolicy` permits it (`WithdrawPolicyGuard`), or after its approval failed — so a Withdraw button needs no rule of its own.
+The preview does not say whether the record may be withdrawn: a Withdraw button asks `GET /flow/instances/{instanceId}/withdraw` of the record's newest submission, answered by the same `WithdrawPolicyGuard` — its submitter withdraws while the approval waits on its approvers and the flow's `withdrawPolicy` permits it, and takes the record back after its approval failed — so the button needs no rule of its own.
 
 **Nothing is guessed.** An approval flow holds people and routes only, so the variables a route reads are the submission's — but the instance id, unknown from the start, and anything a node on a revision published before that rule may write (the walk treats such a node as writing every variable). A route whose conditions read an unknown variable is listed in `undecided` and not followed; a step whose approvers are found by a rule, reached after such a node, is `Undetermined`; with approver dedup on, so is a step whose approver may or may not have approved an earlier step, one of several there who could pass it. An error the engine would fail on — a route matching no edge, a condition that cannot be evaluated — ends the walk in `failure`.
 
-**Nothing is written**: no instance, task, ledger row or notification, and no delegation's use is counted. The preview is allowed to whoever can read the record with their own permissions (`FlowInstanceAccessGuard.requireRecordReader`) and is never waived from row scope; taking part in the record's earlier approvals is not enough. Users are named as in the approval history.
+**Nothing is written**: no instance, task, ledger row or notification, and no delegation's use is counted. The preview is allowed to whoever can read the record with their own permissions (`FlowInstanceAccessGuard.requireRecordReader`) and is never waived from row scope; taking part in the record's approval is not enough, as it is for seeing the record's approval (see [A record's approval and its steps](#a-records-approval-and-its-steps)). Users are named as in the record's approval.
 
 <Dev title="How the walk reuses the engine, and transaction caveats">
 
-- For an approval in progress, the walk goes from the instance's own variables and approvals, on a copy of the instance — never the instance itself.
+- The steps still ahead of the submission in progress, in the record's approval, come from the same walk (`ApprovalPathPreviewer.previewRemaining`): from the instance's own variables and approvals, on a copy of the instance — never the instance itself.
 - `ApprovalPathPreviewer` walks from the start node the way the engine runs: routes are decided by `FlowGatewayRouter` over the variables the submission would start with, approvers by `PendingApprovalFactory` (auto-delegation included) and automatic approvals by `ApproverDedupService`, on a state that is never saved.
 - The preview runs in no transaction of its own, and the in-process `FlowClient.previewValues` should be called outside one: a refusal thrown through a transactional method marks the transaction it joins rollback-only.
 

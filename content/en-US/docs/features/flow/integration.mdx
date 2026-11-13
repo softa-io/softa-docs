@@ -68,7 +68,7 @@ An approval starts with every field of the record a route can compare, under the
 
 ### Calling from business code
 
-Business code submits, withdraws and cancels records, and previews a record not saved yet, through `FlowClient`; a record's approval history and a saved record's preview go over REST (`GET /flow/instances/by-record`, `GET /flow/instances/preview`):
+Business code submits, withdraws and cancels records, and previews a record not saved yet, through `FlowClient`; a record's approval and a saved record's submission preview go over REST (`GET /flow/instances/by-record`, `GET /flow/instances/preview`):
 
 | `FlowClient` | What happens |
 |---|---|
@@ -85,7 +85,7 @@ Business code submits, withdraws and cancels records, and previews a record not 
 4. **The flow is chosen** from the document's enabled Approval flows: exactly one whose submit condition holds, else, when none does, the flow without a condition (the document's default) takes it; with no default either, or with several holding, the submission is refused naming why.
 5. **The approval starts**: the record becomes `Pending`, with its submitter and the time, `handler.afterSubmitted` runs, and the record's approval starts.
 
-All in the caller's transaction. Every submission starts a new approval from the beginning — after a return too, on the revision effective now — and marks the record's earlier approvals `superseded`.
+All in the caller's transaction. Every submission starts a new approval from the beginning — after a return too, on the revision effective now — and marks the record's earlier approvals `superseded`. They all belong to the record's one approval: whoever may see it sees every submission of it (see [A record's approval and its steps](./approval#a-records-approval-and-its-steps)).
 
 ### A record's approval
 
@@ -139,7 +139,7 @@ public class LeaveRequestApprovalHandler implements ModelApprovalHandler<LeaveRe
 4. **Publish the default flows**: each default flow is one `FlowDesign` row in a tenant seed file (scenario `Approval`, `"enabled": true`, trigger `{"type": "Submit", "modelName": "LeaveRequest"}` naming its document; several of one document each say by their submit condition which records they take, as a leave and its cancellation do by `leaveRequestType`) — see [Default flows as seeds](#default-flows-as-seeds) below. Name built-in roles by role code, and never make a role nobody holds a default approver, or the step resolves no one in every tenant.
 5. **Grant access**: authorise the `submit` and `withdraw` endpoints (cancelling a draft comes with `submit`); grant the monitor endpoints and a data scope on `FlowInstance` to administrators' roles.
 
-For the frontend's submit and withdraw buttons, the approval path preview and the approval history panel, see [Form view](../../frontend_dev/views/form).
+For the frontend's submit and withdraw buttons, the submission preview and the approval panel, see [Form view](../../frontend_dev/views/form#approval-panel).
 
 > [!WARNING]
 >
@@ -191,7 +191,7 @@ Before enabling `flow-starter` in a real app, verify each item below, grouped as
 - list `GET /flow/delegations/flows` with the permission that reads delegation rules (the Flow and step dropdowns of a rule scoped to one flow or step, and the step a listed rule names)
 - list the directory reads — `GET /flow/directory/people` and `/people/by-ids` for people, `/departments` and `/departments/by-ids` for departments — in the permissions of the pages whose pickers use them (approving, managing one's delegations, the designer, the monitor), and `/people/all` and `/people/all/by-ids` in the designer's and the monitor's alone, not in `permission.authenticated-bypass-patterns`, where they would skip the endpoint gate (see [Directory](./api#directory))
 - grant the monitoring console's endpoints and a data scope on `FlowInstance` to the administrators' roles (a department scope narrows by the department of the employee the record is about)
-- list the per-instance reads the approval page makes — `GET /flow/instances/{instanceId}` and its `/summary`, `/design`, `/record`, `/overlay`, `/trace`, `/urge`, `/withdraw` — and, for a page keyed by the record, `GET /flow/instances/by-record/record`, in the permissions that open approvals: the endpoint gate refuses an endpoint no permission lists, and the access guard decides the rest
+- list the per-instance reads the approval page makes — `GET /flow/instances/{instanceId}` and its `/summary`, `/design`, `/record`, `/overlay`, `/trace`, `/urge`, `/withdraw` — and the reads keyed by the record — the record's approval, `GET /flow/instances/by-record` (the record's page, the approval page and the instance page all read it), and `GET /flow/instances/by-record/record` — in the permissions that open approvals: the endpoint gate refuses an endpoint no permission lists, and the access guard decides the rest
 - list `POST /flow/approvalTasks/search` in the permission that reads the user's own tasks — it replaced `GET /flow/approvalTasks/pending`, `/completed` and `/cc` — and ship the SQL that fills the task list fields of existing rows (see [Approval Tasks](./api#approval-tasks))
 
 **Notifications**
