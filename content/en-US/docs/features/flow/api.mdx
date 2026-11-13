@@ -245,7 +245,7 @@ The approval page (`/home/approvals/{instanceId}`, the link of every approval em
 
 - **The newest submission the caller took part in** — as its submitter or a person it gives or gave a task to, a terminated approval's cleared approver by their task — lends the record as `.../record` of that instance would: an approver it waits on sees the record as their step shows it; someone who took part only in an earlier submission sees what that approval shows a participant with no waiting step — the default, without what an approval step of its revision hides. The record's approval (`.../by-record`) also admits whoever's roles read one of its instances; one who cannot read the record is refused here all the same.
 - **Anyone else who can read the record with their own permissions** gets the model's ordinary read, with empty `fields` — the only way a record never submitted, a draft its owner opens, is read here.
-- **Everyone else** is refused (`403`). A model that does not exist is `404`, and so is a record deleted under someone who took part in its approvals; to anyone else a missing record is refused like one they cannot read, so the endpoint never tells them whether it exists.
+- **Everyone else** is refused (`403`). A model that does not exist is `404`, and so is a record deleted under someone who took part in its approvals; to anyone else a missing record is refused like one they cannot read, so the endpoint never tells them whether it exists. A record deleted softly — the row kept, flagged — is deleted here too: `404` to whoever is let in.
 
 <Dev title="How the approval that lends the record is found">
 
@@ -303,7 +303,7 @@ A row (`FlowInstanceSummaryView`) leaves out the heavy state columns and the tra
 - the flow, title, submitter, status and the steps the instance waits on now (`currentSteps`, each with the approvers still to act), every user named;
 - for a record's approval, what its submission recorded (see [Approving Business Records](./integration#approving-business-records)): `subject`, `subjectDept`, `effectiveDate`, `recordCode`, `summary`, and `awaitingRevision`;
 - `withdrawable` and `urge`: on the caller's own approvals that wait on their approvers, whether they may withdraw or urge them now; on their own records' approvals that failed, `withdrawable` whether they may take the record back; on the monitor search, `urge` says whether the caller may urge as an administrator — the flow's `urgeIntervalHours` decides, whatever its `urgeEnabled` says;
-- `recordDeleted`, marking an approval whose record is gone — a draft deleted after a return or a withdrawal — and `recordCancelled`, one whose record was cancelled after it ended;
+- `recordDeleted`, marking an approval whose record is gone — a draft deleted after a return or a withdrawal, softly too (the row kept, flagged) — and `recordCancelled`, one whose record was cancelled after it ended;
 - `effectStatus`: where an approved record's change stands, for a model whose approval takes effect later (`ModelApprovalHandler.effectStatuses`).
 
 ### Filtering and sorting a list
