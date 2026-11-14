@@ -100,6 +100,8 @@ If connecting to an existing ElasticSearch, Pulsar and OSS, modify the environme
       - OSS_ACCESS_KEY=minioadmin
       - OSS_SECRET_KEY=minioadmin
       - OSS_BUCKET_NAME=demo-app
+      # Signs file addresses; required outside the dev profile. Generate with: openssl rand -base64 48
+      - FILE_OPEN_KEY_SECRET=replace-with-a-random-string-of-at-least-32-characters
     depends_on:
       - redis
       - mysql

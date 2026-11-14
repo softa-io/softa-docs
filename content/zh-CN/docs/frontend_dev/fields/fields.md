@@ -748,6 +748,8 @@ companyId.cascadedField = "employeeId.department.companyId";
 重要运行时行为：
 
 - 预览和下载渲染使用 `FileInfo.url`
+- `FileInfo.url` 是同源的相对地址（`<context-path>/file/open/<钥匙>`），只对拿到它的账号有效，30–31 天内都能打开；公开页（`/openapi/**`）拿到的是 `<context-path>/openapi/file/<钥匙>`，1 小时有效。详见[文件地址与钥匙](../../features/file#文件地址与钥匙)
+- 打开 `FileInfo.url` 时默认在浏览器里显示文件；要下载时在地址后加 `?download=1`，服务端以附件形式返回，带上文件名
 - `File` 只读单元格会回退为文件名链接
 - `MultiFile` 只读单元格显示第一个文件名，并附带 `+N`
 

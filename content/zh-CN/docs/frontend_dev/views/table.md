@@ -147,6 +147,7 @@ type ModelTableRowData = { id: string };
 - `File` 期望 `FileInfo`
 - `MultiFile` 期望 `FileInfo[]`
 - 图片预览使用 `FileInfo.url`
+- `FileInfo.url` 是同源地址，30–31 天有效；下载时在地址后加 `?download=1`（见[文件地址与钥匙](../../features/file#文件地址与钥匙)）
 - 文件链接标签回退顺序：`fileName -> fileId -> "-"`
 
 只读模式行为：

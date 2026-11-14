@@ -39,13 +39,20 @@
 示例：
 ```json
 {
-  "avatar": { "fileId": 1001, "fileName": "a.png", "url": "..." },
+  "avatar": { "fileId": 1001, "fileName": "a.png", "url": "/file/open/1001.1797206400.G4CHYJkdKbgZABYFb9A1mw" },
   "attachments": [
-    { "fileId": 2001, "fileName": "doc.pdf", "url": "..." },
-    { "fileId": 2002, "fileName": "spec.docx", "url": "..." }
+    { "fileId": 2001, "fileName": "doc.pdf", "url": "/file/open/2001.1797206400.k3PqV9xZ0mLwT2bYc8RdNg" },
+    { "fileId": 2002, "fileName": "spec.docx", "url": "/file/open/2002.1797206400.Hs7uE1aJ5oQnW4fXy6GtVw" }
   ]
 }
 ```
+
+`url` 不是存储的预签名链接，而是一个带钥匙的同源相对地址，前缀是应用的 `server.servlet.context-path`：
+1. 有登录用户的请求：`<context-path>/file/open/<钥匙>`，只有签发给的那个账号能打开（要带着它的会话），30–31 天有效。
+2. 没有登录用户的请求（`/openapi/**` 下的公开页、定时任务、没人触发的流程）：`<context-path>/openapi/file/<钥匙>`，不绑人，1 小时有效。
+3. 打开时 302 跳到现签的存储短链接，默认在浏览器里显示；地址后加 `?download=1` 则下载。
+
+`url` 只给收到这次响应的前端用，后端代码不读它：读文件内容用 `fileService.downloadStream(fileId)`，发邮件附件按 fileId 传。缓存、数据库、流程变量、邮件里只存 fileId。详见[文件地址与钥匙](../../features/file#文件地址与钥匙)。
 
 ### ManyToOne / OneToOne
 默认 API 返回（`ModelReference`，无 SubQuery）：

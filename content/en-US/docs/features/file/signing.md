@@ -91,7 +91,7 @@ Response DTO:
     "fileId": 701,
     "fileName": "contract_signed_20260324.pdf",
     "fileType": "PDF",
-    "url": "https://...",
+    "url": "/file/open/701.1797206400.Xb2LmQ9wT4kZp0sVr7NcEw?download=1",
     "size": 256,
     "checksum": "..."
   },
@@ -99,7 +99,7 @@ Response DTO:
     "fileId": 700,
     "fileName": "signature.png",
     "fileType": "PNG",
-    "url": "https://...",
+    "url": "/file/open/700.1797206400.Ra5JfK8uY3hDq1oWm6ZtBg",
     "size": 12,
     "checksum": "..."
   },
