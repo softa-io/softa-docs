@@ -187,6 +187,27 @@ There is no task node that calls a Spring bean: what a flow does to the business
 
 There is no send-SMS node: SMS belongs to the platform, and a flow does not send it. The former `SendSms` node is gone. A stored design that still holds one cannot be read after the upgrade, so delete the node from the flow and publish again before upgrading.
 
+### Generated files and email attachments
+
+The result of a Generate File node (`GenerateFile`) is `fileId`, `fileName`, `fileType` and `size`, with no file address. To send the generated file, put its fileId in the `attachments` of a Send Email node (`SendEmail`): a list of fileIds, each of which may be a `{{ }}` template. With the Generate File node's Output variable (`outputVariable`) set to `generated`, say:
+
+```json
+{
+  "to": ["{{ applicantEmail }}"],
+  "subject": "Order {{ orderId }} confirmed",
+  "htmlBody": "<p>Your order confirmation is attached.</p>",
+  "attachments": ["{{ generated.fileId }}"]
+}
+```
+
+Each attachment is read from storage by its fileId when the mail is sent.
+
+- An item may also resolve to several fileIds (such as `[101, 102]` or `101,102`); they are attached in order, each once.
+- A literal value must be a number: a link entered here fails publishing. When an expression resolves to something that is not a fileId, or to a fileId with no file, the node fails — the mail never goes out without its attachment.
+- It applies when sending with a template (`templateCode` set) too: `attachments`, when given, replace the template's own attachments.
+
+The Generate File node's result used to carry a `url`: a storage link valid for 5 minutes, so a recipient could no longer open it 5 minutes after it went into a mail's body. Flow variables and mails now hold fileIds only, and the file goes out as an attachment (see [File addresses and keys](../file#file-addresses-and-keys)). A stored design that refers to a generated file's `url` (such as `{{ generated.url }}` in a body) renders it as an empty string after the upgrade: switch it to an attachment.
+
 ## Trigger And Messaging Integration
 
 <Lead>

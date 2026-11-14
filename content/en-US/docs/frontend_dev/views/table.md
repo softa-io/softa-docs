@@ -147,6 +147,7 @@ Table-side file rendering is driven by API values, not by form widget state:
 - `File` expects `FileInfo`
 - `MultiFile` expects `FileInfo[]`
 - image preview uses `FileInfo.url`
+- `FileInfo.url` is a same-origin address, valid for 30–31 days; add `?download=1` to it to download (see [File addresses and keys](../../features/file#file-addresses-and-keys))
 - file link label falls back as `fileName -> fileId -> "-"`
 
 Read-mode behavior:

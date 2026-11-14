@@ -55,7 +55,7 @@ List<Long> ids = messageService.sendMailBatch(List.of(
 | `subject`、`htmlBody`、`textBody` | 直接给的内容。给了主题就不再渲染主题；给了任一种正文，两种正文都不再由模板渲染 |
 | `bodyMode` | 正文形态，见[正文模式](#正文模式)；不给时按给了哪些正文推断 |
 | `templateCode` / `templateId`、`templateVariables` | 模板和变量；`templateId` 指定确切的那一行，优先于 `templateCode`。两者都在发送范围那一层找 |
-| `attachments` | 附件，先经 file-starter 上传，再传入得到的 `FileInfo` |
+| `attachments` | 附件，先经 file-starter 上传，再传入得到的 `FileInfo`；只按其中的 `fileId` 取内容，见[附件](#附件) |
 | `serverConfigId` | 指定发件服务器，在发送范围那一层的表里找，见[发件服务器](#发件服务器) |
 | `replyTo`、`readReceiptRequested`、`priority` | 回复地址、是否请求已读回执、优先级。不给时：回复地址依次取模板、服务器上的设置，优先级取模板的，已读回执取服务器的设置 |
 | `scope` | `TENANT`（默认）或 `PLATFORM`：决定用哪一层的模板和发件服务器；记录记在调用时所在的租户名下，不看范围，见[租户层与平台层](./index#租户层与平台层) |
@@ -66,6 +66,12 @@ List<Long> ids = messageService.sendMailBatch(List.of(
 
 - `to`、`cc`、`bcc` 的每一项必须恰好是一个邮箱地址，可以带显示名（`Alice <alice@x.com>`）；一项里写多个地址会被拒绝。
 - `replyTo` 是一个字符串，可以写一个或多个地址，用逗号、分号或换行分隔，受理时统一成逗号分隔。只用逗号分隔的输入不会被改写，带引号、含逗号的显示名（`"Smith, John" <j@x.com>`）得以保留。
+
+### 附件
+
+附件按 fileId 发出：发送时按每项的 `fileId` 从存储读出内容，不用 `FileInfo.url`。正文里也不要放文件地址：`FileInfo.url` 要么只对拿到它的那个账号有效，要么 1 小时后就失效（见[文件地址与钥匙](../file#文件地址与钥匙)）。要让收件人以后再看，作为附件发出，或者放记录页面的链接，收件人登录后读记录。
+
+流程里用发送邮件节点的 `attachments`：一个 fileId 列表，每一项都可以写 `{{ }}`，比如取生成文件节点的结果 `{{ generated.fileId }}`（`generated` 是那个节点的 Output variable），见[生成文件与邮件附件](../flow/automation#生成文件与邮件附件)。
 
 ## 发件服务器
 

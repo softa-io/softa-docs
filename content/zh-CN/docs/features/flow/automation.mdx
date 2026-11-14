@@ -187,6 +187,27 @@ stateDiagram-v2
 
 没有发短信节点：短信全部归平台，流程不发短信。原来的 `SendSms` 节点已经去掉。存量设计里如果还留着它，升级后会读不出来，所以升级前要先把它从流程里删掉、重新发布。
 
+### 生成文件与邮件附件
+
+生成文件节点（`GenerateFile`）的结果是 `fileId`、`fileName`、`fileType`、`size`，不含文件地址。要把生成的文件发出去，在发送邮件节点（`SendEmail`）的 `attachments` 里填它的 fileId：`attachments` 是 fileId 列表，每一项都可以写 `{{ }}`。比如生成文件节点的 Output variable（`outputVariable`）是 `generated`：
+
+```json
+{
+  "to": ["{{ applicantEmail }}"],
+  "subject": "Order {{ orderId }} confirmed",
+  "htmlBody": "<p>Your order confirmation is attached.</p>",
+  "attachments": ["{{ generated.fileId }}"]
+}
+```
+
+发送时按 fileId 从存储读出每个附件。
+
+- 一项也可以解析成一组 fileId（比如 `[101, 102]`、`101,102`），按顺序去重后一起附上。
+- 写死的值必须是数字：在这里填了链接，发布时就报错。表达式解析出来的值不是 fileId、或者 fileId 找不到文件时，节点执行失败，邮件不会不带附件就发出去。
+- 用模板发送（填了 `templateCode`）时同样生效：填了 `attachments`，就代替模板自带的附件。
+
+以前生成文件节点的结果里有 `url`：一条 5 分钟有效的存储链接，写进邮件正文后，收件人 5 分钟后就打不开。现在流程变量和邮件里只放 fileId，文件作为附件发出（见[文件地址与钥匙](../file#文件地址与钥匙)）。存量设计里引用了生成文件 `url` 的（比如正文里的 `{{ generated.url }}`），升级后渲染成空字符串，要改用附件。
+
 ## 触发与消息集成
 
 <Lead>

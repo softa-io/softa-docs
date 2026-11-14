@@ -55,7 +55,7 @@ List<Long> ids = messageService.sendMailBatch(List.of(
 | `subject`, `htmlBody`, `textBody` | Content given directly. With a subject given, the subject is not rendered; with either body given, neither body is rendered from the template |
 | `bodyMode` | The shape of the body, see [Body modes](#body-modes); when not given, inferred from which bodies are given |
 | `templateCode` / `templateId`, `templateVariables` | The template and its variables; `templateId` names the exact row and takes precedence over `templateCode`. Both are looked up in the send scope's tier |
-| `attachments` | Attachments: upload them through file-starter first, then pass in the resulting `FileInfo` |
+| `attachments` | Attachments: upload them through file-starter first, then pass in the resulting `FileInfo`; only its `fileId` is used to read the content, see [Attachments](#attachments) |
 | `serverConfigId` | Names the send server, looked up in the send scope's table, see [Send servers](#send-servers) |
 | `replyTo`, `readReceiptRequested`, `priority` | Reply-to address, whether to request a read receipt, priority. When not given, the reply-to address comes from the template's setting, then the server's; the priority from the template's; the read receipt from the server's setting |
 | `scope` | `TENANT` (default) or `PLATFORM`: decides which tier's template and send server are used; the record is filed under the tenant the call is made in, whatever the scope, see [Tenant tier and platform tier](./index#tenant-tier-and-platform-tier) |
@@ -66,6 +66,12 @@ Addresses are checked at acceptance. A wrong address is an error straight away, 
 
 - Each entry of `to`, `cc` and `bcc` must be exactly one mailbox address, which may carry a display name (`Alice <alice@x.com>`); an entry holding several addresses is refused.
 - `replyTo` is one string holding one or more addresses, separated by commas, semicolons or newlines, and normalized to a comma-separated list at acceptance. Input separated by commas only is never rewritten, so quoted display names containing commas (`"Smith, John" <j@x.com>`) stay intact.
+
+### Attachments
+
+Attachments go out by fileId: each one's content is read from storage by its `fileId` when the mail is sent, and `FileInfo.url` is not used. Do not put file addresses in the body either: a `FileInfo.url` either opens only for the account it was given to or expires after an hour (see [File addresses and keys](../file#file-addresses-and-keys)). For the recipient to see a file later, send it as an attachment, or link to the record's page, where the recipient signs in and reads the record.
+
+In a flow, use the Send Email node's `attachments`: a list of fileIds, each of which may be a `{{ }}` template, such as a Generate File node's result `{{ generated.fileId }}` (`generated` being that node's Output variable); see [Generated files and email attachments](../flow/automation#generated-files-and-email-attachments).
 
 ## Send servers
 

@@ -39,13 +39,20 @@ Typical `FileInfo` fields include:
 Example:
 ```json
 {
-  "avatar": { "fileId": 1001, "fileName": "a.png", "url": "..." },
+  "avatar": { "fileId": 1001, "fileName": "a.png", "url": "/file/open/1001.1797206400.G4CHYJkdKbgZABYFb9A1mw" },
   "attachments": [
-    { "fileId": 2001, "fileName": "doc.pdf", "url": "..." },
-    { "fileId": 2002, "fileName": "spec.docx", "url": "..." }
+    { "fileId": 2001, "fileName": "doc.pdf", "url": "/file/open/2001.1797206400.k3PqV9xZ0mLwT2bYc8RdNg" },
+    { "fileId": 2002, "fileName": "spec.docx", "url": "/file/open/2002.1797206400.Hs7uE1aJ5oQnW4fXy6GtVw" }
   ]
 }
 ```
+
+`url` is not a pre-signed storage link but a same-origin relative address carrying a key, prefixed with the application's `server.servlet.context-path`:
+1. For a request with a logged-in user: `<context-path>/file/open/<key>`. Only the account it was issued to can open it (with that account's session), for 30–31 days.
+2. For a request without one (a public page under `/openapi/**`, a scheduled job, a flow nobody triggered): `<context-path>/openapi/file/<key>`, bound to no one, for 1 hour.
+3. Opening it answers 302 to a storage link signed at that moment; the file is displayed inline by default, and downloaded with `?download=1` added to the address.
+
+`url` is only for the front end receiving the response, and backend code never reads it: it reads the content with `fileService.downloadStream(fileId)` and sends a mail attachment by its fileId. Caches, the database, flow variables and emails hold fileIds only. See [File addresses and keys](../../features/file#file-addresses-and-keys).
 
 ### ManyToOne / OneToOne
 Default API return (`ModelReference`, no SubQuery):

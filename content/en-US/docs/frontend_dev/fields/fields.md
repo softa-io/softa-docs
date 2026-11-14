@@ -752,6 +752,8 @@ Notes:
 Important runtime behavior:
 
 - preview and download rendering use `FileInfo.url`
+- `FileInfo.url` is a same-origin relative address (`<context-path>/file/open/<key>`) that opens only for the account it was given to, for 30–31 days; a public page (`/openapi/**`) gets `<context-path>/openapi/file/<key>`, valid for 1 hour. See [File addresses and keys](../../features/file#file-addresses-and-keys)
+- `FileInfo.url` opens the file inline by default; to download it, add `?download=1` to the address, and the server answers with an attachment under the file's name
 - `File` read cells fall back to filename links
 - `MultiFile` read cells show the first filename plus `+N`
 

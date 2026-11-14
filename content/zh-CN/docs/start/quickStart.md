@@ -97,6 +97,8 @@ docker-compose -f deploy/minio/docker-compose.yml up -d
       - OSS_ACCESS_KEY=minioadmin
       - OSS_SECRET_KEY=minioadmin
       - OSS_BUCKET_NAME=demo-app
+      # 文件地址的签名密钥，dev 以外的 profile 必填；用 openssl rand -base64 48 生成
+      - FILE_OPEN_KEY_SECRET=replace-with-a-random-string-of-at-least-32-characters
     depends_on:
       - redis
       - mysql
