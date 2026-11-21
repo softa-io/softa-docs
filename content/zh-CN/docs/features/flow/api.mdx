@@ -130,7 +130,7 @@
 | `GET` | `/flow/instances/{instanceId}/overlay` | 画布绘制的每节点运行状态 |
 | `GET` | `/flow/instances/{instanceId}/trace?sinceSequence=` | 用于轮询的增量 trace 行 |
 | `GET` | `/flow/instances/{instanceId}/nodes/{nodeId}/formPermissions` | 获取字段级表单权限 |
-| `POST` | `/flow/instances/search` | 调用方自己提交的记录审批的分页摘要，最新在前——提交人过滤始终为已认证用户，其写入触发的自动化运行不在其中。过滤条件与每行内容见[实例搜索](#实例搜索) |
+| `POST` | `/flow/instances/search` | 调用方自己的记录审批的分页摘要，最新在前：本人提交的，以及别人替本人提交的（当事员工是本人）。其写入触发的自动化运行不在其中。过滤条件与每行内容见[实例搜索](#实例搜索) |
 
 **审批动作**
 
@@ -293,11 +293,11 @@
 
 ### 实例搜索
 
-`POST /flow/instances/search`（调用方自己的审批）和 `POST /flow/monitor/instances/search`（跨提交人，见[监控](#监控)）接受同一个 `FlowInstanceSearchRequest` 并返回同样的行，最新在前，按 `pageNumber`（默认 1）和 `pageSize`（默认 50）分页。调用方自己的搜索总是固定为其本人提交的单据审批；其余条件以 AND 组合在上面，只能收窄、不能放宽：
+`POST /flow/instances/search`（调用方自己的审批）和 `POST /flow/monitor/instances/search`（跨提交人，见[监控](#监控)）接受同一个 `FlowInstanceSearchRequest` 并返回同样的行，最新在前，按 `pageNumber`（默认 1）和 `pageSize`（默认 50）分页。调用方自己的搜索总是固定为其本人的单据审批：本人提交的，加上调用方是员工时、以本人为当事员工（`subjectId`）的——别人替他提交的申请。替他提交的那些他能看到、能跟进，但撤回、催办仍只归提交人。其余条件以 AND 组合在上面，只能收窄、不能放宽：
 
 | 过滤条件 | 匹配 |
 |---|---|
-| `awaitingRevision` | 已退回给提交人、之后既没有被该记录的新提交取代、也没有因记录作废而关闭（未标 `superseded`）的审批——仍在等待修改并重新提交的记录 |
+| `awaitingRevision` | 已退回给提交人、之后既没有被该记录的新提交取代、也没有因记录作废而关闭（未标 `superseded`）的审批——仍在等待修改并重新提交的记录。只算本人提交的：别人替他提交、被退回的单由提交人修改 |
 | `filters` / `orders` | 针对 `FlowInstance` 存储字段的条件与排序，形式与元数据驱动的表格发出的一致——按流程、状态、提交人、当事员工、部门、生效日期、单据编号、启动时间筛选都写在这里；`orders` 取代“最新在前”。见[筛选与排序列表](#筛选与排序列表) |
 
 每一行（`FlowInstanceSummaryView`）不含笨重的状态列和 trace——需要时请获取实例或其 overlay。它包含：

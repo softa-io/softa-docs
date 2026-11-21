@@ -130,7 +130,7 @@ Base path: `/flow/instances` — launch, reads and approval actions on runtime i
 | `GET` | `/flow/instances/{instanceId}/overlay` | Per-node run state for canvas painting |
 | `GET` | `/flow/instances/{instanceId}/trace?sinceSequence=` | Incremental trace rows for polling |
 | `GET` | `/flow/instances/{instanceId}/nodes/{nodeId}/formPermissions` | Get field-level form permissions |
-| `POST` | `/flow/instances/search` | Paged summaries of the caller's own record approvals, newest first — the submitter filter is always the authenticated user, and automation runs their writes triggered are left out. See [Instance search](#instance-search) for the filters and what each row carries |
+| `POST` | `/flow/instances/search` | Paged summaries of the caller's own record approvals, newest first: what they submitted, and what someone submitted on their behalf (they are its employee). Automation runs their writes triggered are left out. See [Instance search](#instance-search) for the filters and what each row carries |
 
 **Approval actions**
 
@@ -293,11 +293,11 @@ The approval page (`/home/approvals/{instanceId}`, the link of every approval em
 
 ### Instance search
 
-`POST /flow/instances/search` (the caller's own approvals) and `POST /flow/monitor/instances/search` (across submitters, see [Monitor](#monitor)) take the same `FlowInstanceSearchRequest` and return the same rows, newest first, paged by `pageNumber` (default 1) and `pageSize` (default 50). The caller's own search is always pinned to the record approvals they submitted; the rest combine with AND on top, narrowing it, never widening it:
+`POST /flow/instances/search` (the caller's own approvals) and `POST /flow/monitor/instances/search` (across submitters, see [Monitor](#monitor)) take the same `FlowInstanceSearchRequest` and return the same rows, newest first, paged by `pageNumber` (default 1) and `pageSize` (default 50). The caller's own search is always pinned to their record approvals: the ones they submitted and, when the caller is an employee, the ones naming them as their employee (`subjectId`) — requests someone filed on their behalf. Those they see and follow, but withdrawing and urging stay with whoever submitted them. The rest combine with AND on top, narrowing it, never widening it:
 
 | Filter | Matches |
 |---|---|
-| `awaitingRevision` | Approvals returned to their submitter that neither a later submission of the record replaced nor the record's cancellation closed (`superseded` unset) — records still waiting to be edited and submitted again |
+| `awaitingRevision` | Approvals returned to their submitter that neither a later submission of the record replaced nor the record's cancellation closed (`superseded` unset) — records still waiting to be edited and submitted again. Only what the caller submitted: a returned request someone filed on their behalf is that person's to edit |
 | `filters` / `orders` | Conditions and a sort on the stored fields of `FlowInstance`, as a metadata-driven table sends them — by flow, status, submitter, employee, department, effective date, record number or start time, all go here; `orders` replaces newest first. See [Filtering and sorting a list](#filtering-and-sorting-a-list) |
 
 A row (`FlowInstanceSummaryView`) leaves out the heavy state columns and the trace — fetch the instance or its overlay for those. It carries:
