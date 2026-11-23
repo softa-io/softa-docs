@@ -143,7 +143,7 @@ The chosen provider, external template id and signature are written to the recor
 
 <Dev title="Built-in providers and implementation">
 
-Built-in adapters: Twilio, Infobip, Bird, CM, Sinch, ClickSend, BytePlus, Aliyun Mainland, Aliyun Global, Tencent Cloud (`SmsProvider`). [libphonenumber](https://github.com/google/libphonenumber) parses the country from the E.164 number by the longest prefix, so `+886…` is TW and is not mistaken for CN because of `+86`. `SmsProviderDispatcher` gives the candidates, and `SmsRoutingPlanner` intersects them with the template's bindings. `SmsProviderConfig`, `SmsProviderRegion`, `SmsTemplate` and `SmsTemplateProviderBinding` are none of them multi-tenant models and have no `tenant_id` column. Provider configs are cached in Redis for 5 minutes, and every write, a save in the admin UI included, evicts the entry when it commits, so a change takes effect at once. A provider's `apiKey` and `apiSecret` are stored encrypted and masked when read through the API; leave them out of an update to keep the stored values. message-starter requires `reference-data-starter` on the classpath; country routing cannot work without it.
+Built-in adapters: Twilio, Infobip, Bird, CM, Sinch, ClickSend, BytePlus, Aliyun Mainland, Aliyun Global, Tencent Cloud, OneWaySMS (`SmsProvider`). [libphonenumber](https://github.com/google/libphonenumber) parses the country from the E.164 number by the longest prefix, so `+886…` is TW and is not mistaken for CN because of `+86`. `SmsProviderDispatcher` gives the candidates, and `SmsRoutingPlanner` intersects them with the template's bindings. `SmsProviderConfig`, `SmsProviderRegion`, `SmsTemplate` and `SmsTemplateProviderBinding` are none of them multi-tenant models and have no `tenant_id` column. Provider configs are cached in Redis for 5 minutes, and every write, a save in the admin UI included, evicts the entry when it commits, so a change takes effect at once. A provider's `apiKey` and `apiSecret` are stored encrypted and masked when read through the API; leave them out of an update to keep the stored values. message-starter requires `reference-data-starter` on the classpath; country routing cannot work without it.
 
 </Dev>
 
@@ -186,6 +186,25 @@ Global sends the record's [message category](#message-category) as `Type`: OTP �
 Route Chinese mainland numbers to a Mainland provider. Saving a route does not stop CN being routed to Global; such a record fails with Aliyun's `isv.DOMESTIC_NUMBER_NOT_SUPPORTED` and is not retried. Aliyun Global bills a message once it accepts it, even when the carrier later reports it undelivered.
 
 Aliyun may refuse under HTTP 200 as well as 4xx/5xx; the record's error code is Aliyun's `ResponseCode` or `Code` (`isv.AMOUNT_NOT_ENOUGH`, say) with its description as the message, and `HTTP_` followed by the status when the answer carries no code. Which codes are retried is in [Failures and retries](./delivery#failures-and-retries).
+
+### Configuring a OneWaySMS account
+
+OneWaySMS (code `OneWaySMS`) sends the rendered text through its HTTP API, `GET {apiEndpoint}/api.aspx`. It needs no template binding and sends no [message category](#message-category).
+
+| Field | What to fill in |
+|---|---|
+| `apiKey`, `apiSecret` | The API username and API password from the account's API page; they are not the web login |
+| `apiEndpoint` | The scheme and host of the MT URL on the account's API page, without `/api.aspx`; empty means `https://gatewayv5.onewaysms.sg` |
+| `senderId` or `senderNumber` | Sent as `senderid`, up to 11 letters and digits; `senderNumber` first when both are set, none sent when neither is |
+| `accountId`, `extConfig` | Not used; leave them empty |
+
+In Singapore OneWaySMS is run by EC Web Pte Ltd, an SSIR participating aggregator: when registering a Sender ID with SGNIC, choose EC Web Pte Ltd as the aggregator.
+
+Text of printable ASCII characters and line breaks only goes as plain text (160 characters a part); any other character (Chinese, `£`, curly quotes and so on) sends it as Unicode (70 a part), each character written as four hex digits. The gateway joins a long message; OneWaySMS recommends 3 parts at most, that is 459 characters of plain text or 201 of Unicode. The recipient's number is sent without its leading `+`.
+
+This API takes the username, the password and the text in the query of the URL. When the call fails to connect, times out or runs out of retries, the adapter cuts the query from the error message it records and logs, leaving `{apiEndpoint}/api.aspx`.
+
+The gateway answers with a number: a positive one is the MT ID, recorded as the provider message id; a negative one is a refusal, recorded with the error code `ONEWAYSMS_` followed by the number: `-100` wrong username or password, `-200` invalid senderid, `-300` invalid number, `-400` invalid languagetype, `-500` invalid characters in the text, `-600` insufficient credit. An answer that is not a number (the gateway's error page, say) has no error code and quotes the start of the answer; an HTTP error is recorded as `HTTP_` followed by the status. Whether each code is retried is in [Failures and retries](./delivery#failures-and-retries). Leave the DN URL (delivery notification) of the OneWaySMS account empty: the framework takes no receipts, see below.
 
 ## Delivery receipts
 
