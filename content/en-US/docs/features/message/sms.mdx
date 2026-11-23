@@ -43,6 +43,7 @@ List<Long> ids = messageService.sendSmsBatch(List.of(
 | `templateCode`, `templateVariables` | The template and its variables |
 | `providerConfigId` | Names the provider, skipping routing by country |
 | `externalTemplateId`, `signName` | The provider-side template id and signature; when the template's binding sets them, the binding wins |
+| `category` | The message category, overriding the template's; the only way to give one to direct content, see [Message category](#message-category) |
 | `scope` | `TENANT` (default) or `PLATFORM`: has no effect for SMS and is only recorded on the send. Templates and provider routing exist once, on the platform; the record is filed under, and draws on the quotas of, the tenant the call is made in, see [Tenant tier and platform tier](./index#tenant-tier-and-platform-tier) |
 
 The batch method takes 1 to 500 independent messages, each with one number and one record; it checks them all before writing any, and returns the ids in input order.
@@ -67,11 +68,16 @@ POST /SmsTemplate/createOne
   "code": "VERIFY_CODE",
   "name": "Verification Code",
   "content": "Your verification code is {{ code }}. Valid for {{ minutes }} minutes.",
+  "category": "OTP",
   "active": true
 }
 ```
 
-Some providers (Aliyun and Tencent Cloud, for example) require sending with a template and signature they have approved. For these, give the template **provider bindings** (`SmsTemplateProviderBinding`): one row per provider, stating the external template id and signature, optionally limited to a country, and with its own priority. Such a provider is sent the template variables rather than the rendered text: Aliyun fills them by name, Tencent Cloud by position, `{1}`, `{2}`… taking the variables in the order the softa SMS template's content names them (fixed on the first attempt, the same on every retry). A missing template or a rendering error fails the record with `TEMPLATE_NOT_RESOLVABLE`, and empty rendered content with `CONTENT_INVALID`.
+### Message category
+
+`category` says what a message is for, in the terms carriers and regulators sort traffic by: `OTP` (a verification code), `Transactional` (sent because of the recipient's own business: approvals, payslips, account changes), `Marketing` (promotion). The template carries a default, and a sender may override it with `SendSmsDTO.category`; the first attempt fixes it on the record and retries keep it. A provider that routes or prices by it is told in its own words by its adapter, so far only Aliyun Global (`Type`); the others do not read it. It may be left empty anywhere, and then none is sent.
+
+Some providers (Aliyun Mainland and Tencent Cloud, for example) require sending with a template and signature they have approved. For these, give the template **provider bindings** (`SmsTemplateProviderBinding`): one row per provider, stating the external template id and signature, optionally limited to a country, and with its own priority. Such a provider is sent the template variables rather than the rendered text: Aliyun fills them by name, Tencent Cloud by position, `{1}`, `{2}`… taking the variables in the order the softa SMS template's content names them (fixed on the first attempt, the same on every retry). Every other provider, Aliyun Global included, is sent the rendered text and needs no binding. A missing template or a rendering error fails the record with `TEMPLATE_NOT_RESOLVABLE`, and empty rendered content with `CONTENT_INVALID`.
 
 ## Provider routing
 
@@ -137,7 +143,7 @@ The chosen provider, external template id and signature are written to the recor
 
 <Dev title="Built-in providers and implementation">
 
-Built-in adapters: Twilio, Infobip, Bird, CM, Sinch, ClickSend, BytePlus, Aliyun, Tencent Cloud (`SmsProvider`). [libphonenumber](https://github.com/google/libphonenumber) parses the country from the E.164 number by the longest prefix, so `+886…` is TW and is not mistaken for CN because of `+86`. `SmsProviderDispatcher` gives the candidates, and `SmsRoutingPlanner` intersects them with the template's bindings. `SmsProviderConfig`, `SmsProviderRegion`, `SmsTemplate` and `SmsTemplateProviderBinding` are none of them multi-tenant models and have no `tenant_id` column. Provider configs are cached in Redis for 5 minutes, and every write, a save in the admin UI included, evicts the entry when it commits, so a change takes effect at once. A provider's `apiKey` and `apiSecret` are stored encrypted and masked when read through the API; leave them out of an update to keep the stored values. message-starter requires `reference-data-starter` on the classpath; country routing cannot work without it.
+Built-in adapters: Twilio, Infobip, Bird, CM, Sinch, ClickSend, BytePlus, Aliyun Mainland, Aliyun Global, Tencent Cloud (`SmsProvider`). [libphonenumber](https://github.com/google/libphonenumber) parses the country from the E.164 number by the longest prefix, so `+886…` is TW and is not mistaken for CN because of `+86`. `SmsProviderDispatcher` gives the candidates, and `SmsRoutingPlanner` intersects them with the template's bindings. `SmsProviderConfig`, `SmsProviderRegion`, `SmsTemplate` and `SmsTemplateProviderBinding` are none of them multi-tenant models and have no `tenant_id` column. Provider configs are cached in Redis for 5 minutes, and every write, a save in the admin UI included, evicts the entry when it commits, so a change takes effect at once. A provider's `apiKey` and `apiSecret` are stored encrypted and masked when read through the API; leave them out of an update to keep the stored values. message-starter requires `reference-data-starter` on the classpath; country routing cannot work without it.
 
 </Dev>
 
@@ -156,6 +162,30 @@ Infobip goes through its v3 API, `POST {apiEndpoint}/sms/3/messages`, and sends 
 With neither set, the request carries no `sender` and Infobip decides which sender to use. A config has one sender, so when countries need different senders, create one config per sender; they can share an API key. For example, a Singapore config with only `senderId`, and a New Zealand config with the short code in `senderNumber`, each with its own country's routing row.
 
 The recipient number and a numeric sender are sent without the leading `+`. When the Infobip API answers with an HTTP error, the record's error code is `HTTP_` followed by the status (`HTTP_401`, say) and its message carries the response's `errorCode`, `description` and first `violations` entry; an SMS refused at submission has Infobip's status name as the code (`REJECTED_SOURCE`, say). Which codes are retried is in [Failures and retries](./delivery#failures-and-retries).
+
+### Configuring an Aliyun account
+
+Aliyun comes as two provider types that send to different numbers; configure each on its own:
+
+| Type | Operation | Sends to | What is sent |
+|---|---|---|---|
+| Aliyun Mainland (code `Aliyun`) | `SendSms` (2017-05-25) | The Chinese mainland | A template Aliyun has approved: the template needs a provider binding with the external template id (starting `SMS_`) and the signature |
+| Aliyun Global (code `AliyunGlobal`) | `SendMessageToGlobe` (2018-05-01) | Hong Kong, Macao, Taiwan and countries outside the Chinese mainland; **not the Chinese mainland** | The rendered text; no template binding |
+
+| Field | What to fill in |
+|---|---|
+| `apiKey`, `apiSecret` | The Aliyun AccessKey ID and AccessKey Secret. Prefer a RAM user granted only the send operation (`dysms:SendSms` or `dysms:SendMessageToGlobe`) |
+| `apiEndpoint` | The endpoint of the account's region. Mainland defaults to `https://dysmsapi.aliyuncs.com`; Global defaults to Singapore, `https://dysmsapi.ap-southeast-1.aliyuncs.com`, with Frankfurt `dysmsapi.eu-central-1.aliyuncs.com` and Jakarta `dysmsapi.ap-southeast-5.aliyuncs.com` besides. The endpoint alone decides the region |
+| `senderId` or `senderNumber` | Global only, sent as `From`, optional. Letters and digits: up to 11 characters with letters, up to 15 digits; a number loses its leading `+`. Singapore needs a sender ID registered with SSIR |
+| `accountId`, `extConfig` | Not used; leave empty. The `regionId` Mainland once read from `extConfig` is no longer read and may stay |
+
+Both sign with Alibaba Cloud's V3 algorithm (`ACS3-HMAC-SHA256`) and send every parameter in the query, with an empty body.
+
+Global sends the record's [message category](#message-category) as `Type`: OTP → `OTP`, Transactional → `NOTIFY`, Marketing → `MKT`; with no category none is sent and Aliyun treats the message as `NOTIFY`.
+
+Route Chinese mainland numbers to a Mainland provider. Saving a route does not stop CN being routed to Global; such a record fails with Aliyun's `isv.DOMESTIC_NUMBER_NOT_SUPPORTED` and is not retried. Aliyun Global bills a message once it accepts it, even when the carrier later reports it undelivered.
+
+Aliyun may refuse under HTTP 200 as well as 4xx/5xx; the record's error code is Aliyun's `ResponseCode` or `Code` (`isv.AMOUNT_NOT_ENOUGH`, say) with its description as the message, and `HTTP_` followed by the status when the answer carries no code. Which codes are retried is in [Failures and retries](./delivery#failures-and-retries).
 
 ## Delivery receipts
 

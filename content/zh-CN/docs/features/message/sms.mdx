@@ -43,6 +43,7 @@ List<Long> ids = messageService.sendSmsBatch(List.of(
 | `templateCode`、`templateVariables` | 模板和变量 |
 | `providerConfigId` | 指定提供商，跳过按国家的路由 |
 | `externalTemplateId`、`signName` | 提供商侧的模板 id 和签名；模板绑定上有设置时以绑定为准 |
+| `category` | 短信分类，覆盖模板上的分类；直接给内容时只能从这里给，见[短信分类](#短信分类) |
 | `scope` | `TENANT`（默认）或 `PLATFORM`：对短信没有作用，只记在记录上。模板和提供商路由都只有平台一份；记录记在调用时所在的租户名下、扣它的额度，见[租户层与平台层](./index#租户层与平台层) |
 
 批量方法接受 1 到 500 条独立消息，一条一个号码、一条记录，先全部检查再写，按输入顺序返回 id。
@@ -67,11 +68,16 @@ POST /SmsTemplate/createOne
   "code": "VERIFY_CODE",
   "name": "Verification Code",
   "content": "Your verification code is {{ code }}. Valid for {{ minutes }} minutes.",
+  "category": "OTP",
   "active": true
 }
 ```
 
-有的提供商要求用它那边审核过的模板和签名发送（如阿里云、腾讯云）。这时给模板加**提供商绑定** `SmsTemplateProviderBinding`：每家提供商一行，写明外部模板 id、签名，可以限定国家，并有自己的优先级。这类提供商收到的是模板变量而不是渲染好的正文：阿里云按变量名填，腾讯云按位置填，`{1}`、`{2}`… 依次对应 softa 短信模板内容里变量出现的先后（首次投递时定下，重试不变）。模板缺失或渲染出错，记录以 `TEMPLATE_NOT_RESOLVABLE` 失败；渲染出空内容，以 `CONTENT_INVALID` 失败。
+### 短信分类
+
+`category` 说明短信是做什么的，按运营商和监管通行的分法：`OTP`（验证码）、`Transactional`（因收件人自己的业务而发：审批、工资条、账号变更）、`Marketing`（推广）。模板上写默认值，调用方可以用 `SendSmsDTO.category` 覆盖；首次投递时定在记录上，重试沿用。按分类走通道或计价的提供商，由适配器换成它自己的写法，目前只有阿里云国际（`Type`）；其他提供商不读。哪里都可以不填，不填就不传。
+
+有的提供商要求用它那边审核过的模板和签名发送（如阿里云国内、腾讯云）。这时给模板加**提供商绑定** `SmsTemplateProviderBinding`：每家提供商一行，写明外部模板 id、签名，可以限定国家，并有自己的优先级。这类提供商收到的是模板变量而不是渲染好的正文：阿里云按变量名填，腾讯云按位置填，`{1}`、`{2}`… 依次对应 softa 短信模板内容里变量出现的先后（首次投递时定下，重试不变）。其他提供商（包括阿里云国际）收到的是渲染好的正文，不需要绑定。模板缺失或渲染出错，记录以 `TEMPLATE_NOT_RESOLVABLE` 失败；渲染出空内容，以 `CONTENT_INVALID` 失败。
 
 ## 提供商路由
 
@@ -137,7 +143,7 @@ flowchart LR
 
 <Dev title="内置的提供商与实现">
 
-内置适配器：Twilio、Infobip、Bird、CM、Sinch、ClickSend、BytePlus、阿里云、腾讯云（`SmsProvider`）。国家由 [libphonenumber](https://github.com/google/libphonenumber) 从 E.164 号码按最长前缀解析，所以 `+886…` 是 TW，不会被 `+86` 误认为 CN。候选由 `SmsProviderDispatcher` 给出，与模板绑定求交由 `SmsRoutingPlanner` 完成。`SmsProviderConfig`、`SmsProviderRegion`、`SmsTemplate`、`SmsTemplateProviderBinding` 都不是多租户模型，没有 `tenant_id` 列。提供商配置在 Redis 里缓存 5 分钟，任何写入（管理界面的保存也一样）提交后都会清掉它的缓存，修改立即生效。提供商的 `apiKey`、`apiSecret` 加密存储，接口读取时打码；修改时不传这两个字段就保留原值。message-starter 要求 classpath 上有 `reference-data-starter`，国家路由离不开它。
+内置适配器：Twilio、Infobip、Bird、CM、Sinch、ClickSend、BytePlus、阿里云国内（Aliyun Mainland）、阿里云国际（Aliyun Global）、腾讯云（`SmsProvider`）。国家由 [libphonenumber](https://github.com/google/libphonenumber) 从 E.164 号码按最长前缀解析，所以 `+886…` 是 TW，不会被 `+86` 误认为 CN。候选由 `SmsProviderDispatcher` 给出，与模板绑定求交由 `SmsRoutingPlanner` 完成。`SmsProviderConfig`、`SmsProviderRegion`、`SmsTemplate`、`SmsTemplateProviderBinding` 都不是多租户模型，没有 `tenant_id` 列。提供商配置在 Redis 里缓存 5 分钟，任何写入（管理界面的保存也一样）提交后都会清掉它的缓存，修改立即生效。提供商的 `apiKey`、`apiSecret` 加密存储，接口读取时打码；修改时不传这两个字段就保留原值。message-starter 要求 classpath 上有 `reference-data-starter`，国家路由离不开它。
 
 </Dev>
 
@@ -156,6 +162,30 @@ Infobip 走 v3 接口 `POST {apiEndpoint}/sms/3/messages`，直接发送渲染�
 两个都不填时请求不带 `sender`，用哪个发送方由 Infobip 决定。一行配置只有一个发送方，各国要的发送方不同时就建几行配置，可以共用一个 API key：比如新加坡一行只填 `senderId`，新西兰一行在 `senderNumber` 填短码，各自配本国的路由行。
 
 收件人号码和号码型发送方去掉开头的 `+` 再发。Infobip 接口回 HTTP 错误时，记录的错误码是 `HTTP_` 加状态码（如 `HTTP_401`），错误信息里是回包的 `errorCode`、`description` 和第一条 `violations`；受理时被拒绝的，错误码是 Infobip 的状态名（如 `REJECTED_SOURCE`）。各错误码重试与否见[失败与重试](./delivery#失败与重试)。
+
+### 配置阿里云账户
+
+阿里云有两种类型，发的号码范围不同，各配各的：
+
+| 类型 | 接口 | 发到 | 发送内容 |
+|---|---|---|---|
+| Aliyun Mainland（阿里云国内，编码 `Aliyun`） | `SendSms`（2017-05-25） | 中国内地 | 阿里云审核过的模板：模板要有提供商绑定，写明外部模板 id（`SMS_` 开头）和签名 |
+| Aliyun Global（阿里云国际，编码 `AliyunGlobal`） | `SendMessageToGlobe`（2018-05-01） | 港澳台和中国内地以外的国家，**不能发中国内地** | 渲染好的正文，不需要模板绑定 |
+
+| 字段 | 填什么 |
+|---|---|
+| `apiKey`、`apiSecret` | 阿里云的 AccessKey ID 和 AccessKey Secret。建议用只授权了短信发送接口（`dysms:SendSms` 或 `dysms:SendMessageToGlobe`）的 RAM 用户 |
+| `apiEndpoint` | 账号所在区域的接入地址。国内默认 `https://dysmsapi.aliyuncs.com`；国际默认新加坡 `https://dysmsapi.ap-southeast-1.aliyuncs.com`，另有法兰克福 `dysmsapi.eu-central-1.aliyuncs.com`、雅加达 `dysmsapi.ap-southeast-5.aliyuncs.com`。区域只由地址决定 |
+| `senderId` 或 `senderNumber` | 只有国际用，对应 `From`，可以不填。字母和数字组成，含字母的最长 11 位，纯数字最长 15 位；号码前的 `+` 会去掉。新加坡要用在 SSIR 注册过的 Sender ID |
+| `accountId`、`extConfig` | 不用，留空。国内以前在 `extConfig` 里填的 `regionId` 现在不读，留着也没关系 |
+
+两种都用阿里云的 V3 签名（`ACS3-HMAC-SHA256`），参数全部放在查询串里，请求体为空。
+
+国际会把记录的[短信分类](#短信分类)作为 `Type` 发出：OTP → `OTP`，Transactional → `NOTIFY`，Marketing → `MKT`；没有分类就不传，阿里云按 `NOTIFY` 处理。
+
+中国内地号码要路由到国内类型。保存路由时不会拦，误把 CN 路由给国际时，记录以阿里云的 `isv.DOMESTIC_NUMBER_NOT_SUPPORTED` 失败，不重试。阿里云国际按提交成功计费，运营商回执是失败也照样收费。
+
+阿里云在 HTTP 200 或 4xx/5xx 里都可能拒绝，记录的错误码是阿里云的 `ResponseCode` 或 `Code`（如 `isv.AMOUNT_NOT_ENOUGH`），错误信息是对应的说明；回包读不出错误码时记 `HTTP_` 加状态码。各错误码重试与否见[失败与重试](./delivery#失败与重试)。
 
 ## 投递回执
 
