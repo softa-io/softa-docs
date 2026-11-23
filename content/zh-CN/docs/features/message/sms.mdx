@@ -143,7 +143,7 @@ flowchart LR
 
 <Dev title="内置的提供商与实现">
 
-内置适配器：Twilio、Infobip、Bird、CM、Sinch、ClickSend、BytePlus、阿里云国内（Aliyun Mainland）、阿里云国际（Aliyun Global）、腾讯云（`SmsProvider`）。国家由 [libphonenumber](https://github.com/google/libphonenumber) 从 E.164 号码按最长前缀解析，所以 `+886…` 是 TW，不会被 `+86` 误认为 CN。候选由 `SmsProviderDispatcher` 给出，与模板绑定求交由 `SmsRoutingPlanner` 完成。`SmsProviderConfig`、`SmsProviderRegion`、`SmsTemplate`、`SmsTemplateProviderBinding` 都不是多租户模型，没有 `tenant_id` 列。提供商配置在 Redis 里缓存 5 分钟，任何写入（管理界面的保存也一样）提交后都会清掉它的缓存，修改立即生效。提供商的 `apiKey`、`apiSecret` 加密存储，接口读取时打码；修改时不传这两个字段就保留原值。message-starter 要求 classpath 上有 `reference-data-starter`，国家路由离不开它。
+内置适配器：Twilio、Infobip、Bird、CM、Sinch、ClickSend、BytePlus、阿里云国内（Aliyun Mainland）、阿里云国际（Aliyun Global）、腾讯云、OneWaySMS（`SmsProvider`）。国家由 [libphonenumber](https://github.com/google/libphonenumber) 从 E.164 号码按最长前缀解析，所以 `+886…` 是 TW，不会被 `+86` 误认为 CN。候选由 `SmsProviderDispatcher` 给出，与模板绑定求交由 `SmsRoutingPlanner` 完成。`SmsProviderConfig`、`SmsProviderRegion`、`SmsTemplate`、`SmsTemplateProviderBinding` 都不是多租户模型，没有 `tenant_id` 列。提供商配置在 Redis 里缓存 5 分钟，任何写入（管理界面的保存也一样）提交后都会清掉它的缓存，修改立即生效。提供商的 `apiKey`、`apiSecret` 加密存储，接口读取时打码；修改时不传这两个字段就保留原值。message-starter 要求 classpath 上有 `reference-data-starter`，国家路由离不开它。
 
 </Dev>
 
@@ -186,6 +186,25 @@ Infobip 走 v3 接口 `POST {apiEndpoint}/sms/3/messages`，直接发送渲染�
 中国内地号码要路由到国内类型。保存路由时不会拦，误把 CN 路由给国际时，记录以阿里云的 `isv.DOMESTIC_NUMBER_NOT_SUPPORTED` 失败，不重试。阿里云国际按提交成功计费，运营商回执是失败也照样收费。
 
 阿里云在 HTTP 200 或 4xx/5xx 里都可能拒绝，记录的错误码是阿里云的 `ResponseCode` 或 `Code`（如 `isv.AMOUNT_NOT_ENOUGH`），错误信息是对应的说明；回包读不出错误码时记 `HTTP_` 加状态码。各错误码重试与否见[失败与重试](./delivery#失败与重试)。
+
+### 配置 OneWaySMS 账户
+
+OneWaySMS（编码 `OneWaySMS`）用 HTTP API `GET {apiEndpoint}/api.aspx` 直接发送渲染好的正文，不需要模板绑定，也不发[短信分类](#短信分类)。
+
+| 字段 | 填什么 |
+|---|---|
+| `apiKey`、`apiSecret` | 账户 API 页面上的 API username 和 API password，和网页登录用的账号密码不是同一套 |
+| `apiEndpoint` | 账户 API 页面上 MT URL 的协议和主机部分，不带 `/api.aspx`；不填时用 `https://gatewayv5.onewaysms.sg` |
+| `senderId` 或 `senderNumber` | 对应 `senderid`，最多 11 位字母数字，两个都填时先用 `senderNumber`；都不填就不传 |
+| `accountId`、`extConfig` | 不用，留空 |
+
+OneWaySMS 新加坡由 EC Web Pte Ltd 运营，它是 SSIR 的参与聚合商：在 SGNIC 注册 Sender ID 时，聚合商选 EC Web Pte Ltd。
+
+正文全部是可打印 ASCII 字符和换行时按普通文本发（每条 160 字符）；含其他字符（中文、`£`、弯引号等）时按 Unicode 发（每条 70 字符），每个字符转成 4 位十六进制。长短信由网关拼接，OneWaySMS 建议最多 3 条，即普通文本 459 字符、Unicode 201 字符。收件人号码去掉开头的 `+` 再发。
+
+这套接口把用户名、密码和正文都放在 URL 的查询串里。连接失败、超时或重试用尽时，适配器记下的错误信息和日志会去掉查询串，只留 `{apiEndpoint}/api.aspx`。
+
+网关回一个数字：正数是 MT ID，记为提供商消息 id；负数是拒绝，记录的错误码是 `ONEWAYSMS_` 加这个数：`-100` 用户名或密码错误，`-200` senderid 无效，`-300` 号码无效，`-400` languagetype 无效，`-500` 正文有无效字符，`-600` 余额不足。回的不是数字（比如网关的错误页）时错误码为空，错误信息带上回包的开头；HTTP 错误记 `HTTP_` 加状态码。各错误码重试与否见[失败与重试](./delivery#失败与重试)。OneWaySMS 账户里的 DN URL（送达回执）留空，框架不接收回执，见下文。
 
 ## 投递回执
 
