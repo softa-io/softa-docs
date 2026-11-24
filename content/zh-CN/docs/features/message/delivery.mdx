@@ -36,7 +36,7 @@ sequenceDiagram
 - **到期**：<Status>Pending</Status>，或 <Status>Retry</Status> 且 `next_retry_at` 已到。
 - **认领**：按记录的版本号把它改为 <Status>Sending</Status>。两个线程或两个实例同时认领同一条，只有一个成功，输的换下一条，所以多实例部署不会重复发送。每次扫描给每个线程多读几条，按随机顺序尝试，线程之间不会都去抢最老的那一条。
 - **吞吐**：积压在每个实例上按「并发数 ÷ 单条耗时」消化。要更快就调大 `softa.message.mail.send-concurrency` / `softa.message.sms.send-concurrency`；邮件不要超过服务器对单个账号允许的并发连接数，每个邮件线程占一个连接。
-- **停机**：实例关闭时不再认领，正在发的最多等 30 秒；没发完的留在 <Status>Sending</Status>，由[卡住清理](#卡住的发送)放回重试。
+- **停机**：实例关闭时不再认领，正在发的最多等 30 秒；没发完的留在 <Status>Sending</Status>，由[卡住清理](#卡住的发送)处理：邮件放回重试，短信记为 <Status>Failed</Status>。
 - 投递不经消息队列，也不用 Spring `@Async`。
 
 <Dev title="扫描怎样读，为什么是两条查询">
@@ -79,23 +79,28 @@ sequenceDiagram
 
 <Lead>
 
-发送失败时先把错误归类，再按类别处理：临时性的错误退避后重试，最多 5 次；重试也不会好的直接 <Status>Failed</Status>；5 次重试都失败的进 <Status>DeadLetter</Status>。
+发送失败时先把错误归类，再按类别处理：临时性的错误退避后重试，最多 5 次；重试也不会好的直接 <Status>Failed</Status>；5 次重试都失败的进 <Status>DeadLetter</Status>。短信再发一次可能让人收到两条，所以只重试肯定没发出去的失败：提供商可能已经发出的（结果不明）直接 <Status>Failed</Status>，验证码短信失败了一律不重试。
 
 </Lead>
 
 | 类别 | 怎样归到这一类 | 处理 |
 |---|---|---|
-| `TRANSIENT` 临时 | SMTP 回复码 4xx（`SMTP_421`、`SMTP_451` 等），没有回复码的 `SMTP_MailSendException`（连不上服务器之类），或错误码以 421、450–452 开头；错误信息含 timeout、connection reset、unavailable、try again（额度计数的并发冲突属于这一类）；短信的 `HTTP_408`、`HTTP_5xx`，Infobip 的 `REJECTED_SYSTEM_ERROR`、`UNDELIVERABLE_REJECTED_PLATFORM`，以及阿里云的 `isp.SYSTEM_ERROR`、`isp.GATEWAY_ERROR`、`InvalidTimeStamp.Expired`、`SignatureNonceUsed`（重试时重新签名） | 重试 |
-| `QUOTA` 限流 | 错误码含 LIMIT、QUOTA、THROTTL（本地限流窗口满时为 `QUOTA_EXCEEDED`）；错误信息含 rate limit、too many requests、quota、throttle；短信的 `HTTP_429`，阿里云的 `isv.BUSINESS_LIMIT_CONTROL`（同一号码的发送频率）、`isv.DAY_LIMIT_CONTROL`、`Throttling.User` | 重试，至少等 5 分钟 |
-| `UNKNOWN` 未知 | 认不出的错误 | 重试 |
+| `TRANSIENT` 临时 | SMTP 回复码 4xx（`SMTP_421`、`SMTP_451` 等），没有回复码的 `SMTP_MailSendException`（连不上服务器之类），或错误码以 421、450–452 开头；错误信息含 timeout、connection reset、unavailable、try again（额度计数的并发冲突属于这一类）；短信的 `CONNECT_FAILED`（连不上提供商：域名解析不了、连接被拒、连接超时）、`HTTP_408`、`HTTP_503`，Infobip 的 `REJECTED_SYSTEM_ERROR`、`UNDELIVERABLE_REJECTED_PLATFORM`，以及阿里云的 `isp.SYSTEM_ERROR`、`isp.GATEWAY_ERROR`、`InvalidTimeStamp.Expired`、`SignatureNonceUsed`（重试时重新签名） | 重试 |
+| `QUOTA` 限流 | 错误码含 LIMIT、QUOTA、THROTTL；错误信息含 rate limit、too many requests、quota、throttle；短信的 `HTTP_429`，阿里云的 `isv.BUSINESS_LIMIT_CONTROL`（同一号码的发送频率）、`Throttling.User`（每秒调用次数）。本地每分钟窗口满（`SEND_LIMIT_MINUTE_EXCEEDED`）不走这里，见[速率限制](#速率限制) | 重试，至少等 5 分钟 |
+| `OUTCOME_UNKNOWN` 结果不明 | 只有短信：标记码 `OUTCOME_UNKNOWN`（连上了却没等到回复：读取超时、连接中途断开、回复读不出来、提供商回了文档以外的内容、适配器没预料到的异常；卡住清理处理的短信）；短信的 `HTTP_500`、`HTTP_502`、`HTTP_504` 等其他 5xx | <Status>Failed</Status>：提供商可能已经发出，先到提供商控制台查，没发出再手动重试 |
+| `UNKNOWN` 未知 | 认不出的错误（短信里是提供商回了话、但错误码认不出，说明它拒收了，重发不会重复） | 重试 |
 | `PERMANENT` 永久 | SMTP 回复码 5xx（`SMTP_550`、`SMTP_554` 等，下面两类除外），或错误码以 550、551、553 开头；错误信息含 no such user、user unknown、does not exist；Infobip 的收件人或发送方被拦：`REJECTED_DND`、`REJECTED_DESTINATION_BLOCKLISTED`、`REJECTED_SENDER`、`REJECTED_FLOODING_FILTER`、`SIGNALS_BLOCKED`；阿里云的 `isv.CUSTOMER_REFUSED`（收件人已退订推广短信） | <Status>Failed</Status> |
 | `INVALID_INPUT` 输入错误 | `SMTP_552`（邮件过大）、`SMTP_AddressException`，错误码以 552 开头，或是 `CONTENT_INVALID`；错误信息含 invalid address、malformed、bad recipient、no recipient；短信的 `HTTP_400`、`HTTP_404`、`HTTP_413`、`HTTP_422`，以及 Infobip 的号码或内容错误：`REJECTED_PREFIX_MISSING`、`REJECTED_DESTINATION`、`MISSING_TO`、`REJECTED_MESSAGE_TOO_LONG`、`REJECTED_INVALID_UDH`；阿里云的号码、内容或参数错误，如 `isv.MOBILE_NUMBER_ILLEGAL`、`InvalidParameter.To`、`isv.SMS_CONTENT_ILLEGAL`、`isv.BLACK_KEY_CONTROL_LIMIT`（含违禁词）、`isv.PARAM_LENGTH_LIMIT`；OneWaySMS 的 `ONEWAYSMS_-300`（号码无效）、`ONEWAYSMS_-400`、`ONEWAYSMS_-500`（正文有无效字符） | <Status>Failed</Status> |
 | `AUTH` 认证 | `SMTP_530`、`SMTP_534`、`SMTP_535`、`SMTP_538`、`SMTP_MailAuthenticationException`，或错误码以 530、535 开头；错误信息含 unauthorized、forbidden、invalid credentials、authentication failed；短信的 `HTTP_401`、`HTTP_403`；阿里云的 `SignatureDoesNotMatch`、`InvalidAccessKeyId.NotFound`、`isp.RAM_PERMISSION_DENY`、`Forbidden.Operation` 等；OneWaySMS 的 `ONEWAYSMS_-100`（用户名或密码错误） | <Status>Failed</Status> |
-| `CONFIG` 配置 | 标记码 `CONFIG_NOT_RESOLVABLE`、`TEMPLATE_NOT_RESOLVABLE`、`DAILY_QUOTA_EXCEEDED`、`MONTHLY_QUOTA_EXCEEDED`；Infobip 的账户问题：`REJECTED_SOURCE`（发送方没注册）、`REJECTED_NOT_ENOUGH_CREDITS`、`REJECTED_PREPAID_PACKAGE_EXPIRED`、`REJECTED_ROUTE_NOT_AVAILABLE`、`REJECTED_NETWORK`、`REJECTED_DESTINATION_NOT_REGISTERED`；阿里云的账户、余额、开通、国家和发送方问题，如 `isv.AMOUNT_NOT_ENOUGH`、`isv.OUT_OF_SERVICE`、`isv.NOT_SUPPORTED_COUNTRY`、`isv.DOMESTIC_NUMBER_NOT_SUPPORTED`、`InvalidParameter.SenderId`，以及国内的签名、模板错误，如 `isv.SMS_TEMPLATE_ILLEGAL`；OneWaySMS 的 `ONEWAYSMS_-200`（senderid 无效）、`ONEWAYSMS_-600`（余额不足） | <Status>Failed</Status> |
+| `CONFIG` 配置 | 标记码 `CONFIG_NOT_RESOLVABLE`、`TEMPLATE_NOT_RESOLVABLE`、`DAILY_QUOTA_EXCEEDED`、`MONTHLY_QUOTA_EXCEEDED`、`SEND_LIMIT_DAILY_EXCEEDED`（发件服务器或短信提供商自己的每日上限）；阿里云的每日限额 `isv.DAY_LIMIT_CONTROL`、`DayLimitControl`；Infobip 的账户问题：`REJECTED_SOURCE`（发送方没注册）、`REJECTED_NOT_ENOUGH_CREDITS`、`REJECTED_PREPAID_PACKAGE_EXPIRED`、`REJECTED_ROUTE_NOT_AVAILABLE`、`REJECTED_NETWORK`、`REJECTED_DESTINATION_NOT_REGISTERED`；阿里云的账户、余额、开通、国家和发送方问题，如 `isv.AMOUNT_NOT_ENOUGH`、`isv.OUT_OF_SERVICE`、`isv.NOT_SUPPORTED_COUNTRY`、`isv.DOMESTIC_NUMBER_NOT_SUPPORTED`、`InvalidParameter.SenderId`，以及国内的签名、模板错误，如 `isv.SMS_TEMPLATE_ILLEGAL`；OneWaySMS 的 `ONEWAYSMS_-200`（senderid 无效）、`ONEWAYSMS_-600`（余额不足） | <Status>Failed</Status> |
 
 先看错误码，错误码认不出时才看错误信息。邮件经 Spring 发送，SMTP 的失败会被包装成 `MailSendException` 或 `MailAuthenticationException`；`SmtpMailTransport` 从被拒的邮件和异常链里取出服务器的回复码，错误码记成 `SMTP_` 加回复码（如收件人不存在为 `SMTP_550`），取不到回复码时记成 `SMTP_` 加异常类名。所以收件人被拒收、认证失败会直接 <Status>Failed</Status>，临时拒收（4xx）照常重试。
 
 短信的错误码由适配器给出。提供商回 HTTP 错误、适配器又读不出它自己的错误码时，记成 `HTTP_` 加状态码，按状态码归类；Infobip 适配器总是记 `HTTP_` 加状态码，把 Infobip 的 `errorCode`、`description` 和第一条 `violations` 写进错误信息。Infobip 受理时拒绝的短信，错误码是它的状态名（如 `REJECTED_SOURCE`），按上表归类。阿里云的错误码（`ResponseCode` 或 `Code`）按一张只收发送相关码的表归类，上表列出的是其中一部分；表外的仍按关键词。OneWaySMS 回的负数记成 `ONEWAYSMS_` 加这个数，文档里的 6 个按上表归类，文档以外的算 `UNKNOWN`。其他提供商的错误码仍按 LIMIT、AUTH、INVALID 这类词归类，认不出的算 `UNKNOWN`，照常重试。
+
+没等到提供商回复的短信，由适配器按「会不会已经发出」记错误码：连不上提供商的记 `CONNECT_FAILED`，按临时错误重试；其他情况（读取超时、连接中途断开、回复读不出来）记 `OUTCOME_UNKNOWN`，不重试。OneWaySMS 用 GET 发短信，读取超时时网关可能已经发出，正是要避免的情况。
+
+**验证码短信不重试。** 分类为 `OTP` 的短信记录，任何失败都直接 <Status>Failed</Status>：验证码 5 分钟就过期，退避后的重试送到时多半已经失效；用户中途点了重发的话，新码已经替换了旧码，晚到的旧码一输就提示错误。验证码的重试就是用户自己点重发。
 
 日志按结果打，不按每次尝试打：适配器把每次失败记成 WARN（只有它没预料到的异常记 ERROR，带堆栈）；重试记 WARN；记录最终 <Status>Failed</Status> 或 <Status>DeadLetter</Status> 时记一条 ERROR，不分类别，退订、空号也一样。接了 sentry-starter 时，这条 ERROR 就是 Sentry 里的事件，每条发不出去的记录一个；记这条日志时，通道、提供商、类别和错误码放在 `tag.*` MDC 里，事件因此带 `message_channel`、`message_provider`、`error_category`、`error_code` 四个标签，可以按它们筛选、设告警。
 
@@ -110,11 +115,13 @@ sequenceDiagram
 | 5 | 8 分钟 |
 | 第 5 次仍失败 | 进死信，约在首次失败后一刻钟 |
 
-每次等待随机浮动 ±50%，限流类至少等 5 分钟。每次失败的错误码和原因写在记录的 `error_code`、`error_message` 上，已重试次数在 `retry_count` 上；重试打 WARN 日志，<Status>Failed</Status> 和 <Status>DeadLetter</Status> 打 ERROR 日志。
+每次等待随机浮动 ±50%，限流类至少等 5 分钟。这张表只对会重试的失败生效：短信里结果不明的失败和验证码短信不重试。每次失败的错误码和原因写在记录的 `error_code`、`error_message` 上，已重试次数在 `retry_count` 上；重试打 WARN 日志，<Status>Failed</Status> 和 <Status>DeadLetter</Status> 打 ERROR 日志。
 
 <Dev title="分类与重试的实现">
 
-`ErrorClassifier` 先看错误码：标记码、`SMTP_<异常类名>`（`AuthenticationFailedException` → AUTH，`SendFailedException` → PERMANENT，`MessagingException` / `MailSendException` / `MailException` → TRANSIENT，其他 → UNKNOWN）、以 SMTP 回复码开头的错误码、提供商错误码里的 LIMIT / QUOTA / THROTTL；错误码没有认出类别时，再看错误信息里的关键词（timeout、try again → TRANSIENT，rate limit、quota → QUOTA，unauthorized → AUTH 等）；都认不出为 UNKNOWN。`ExponentialBackoffPolicy` 按类别和已重试次数给出 `RetryDecision`（`Retry` / `Fail` / `DeadLetter`，密封类型，处理处的 `switch` 是穷尽的）。`SendFailureHandler` 执行转换：重试写 `next_retry_at`、`retry_count + 1`；死信同时归档进 `dead_letter_message`。转换按版本号进行，版本已被别的更新抢先时什么都不做，也不重复记指标和日志。
+`ErrorClassifier` 先看错误码：标记码、`SMTP_<异常类名>`（`AuthenticationFailedException` → AUTH，`SendFailedException` → PERMANENT，`MessagingException` / `MailSendException` / `MailException` → TRANSIENT，其他 → UNKNOWN）、以 SMTP 回复码开头的错误码、提供商错误码里的 LIMIT / QUOTA / THROTTL；错误码没有认出类别时，再看错误信息里的关键词（timeout、try again → TRANSIENT，rate limit、quota → QUOTA，unauthorized → AUTH 等）；都认不出为 UNKNOWN。`ExponentialBackoffPolicy` 按类别、已重试次数和这条记录能不能重试（短信的 `OTP` 不能）给出 `RetryDecision`（`Retry` / `Fail` / `DeadLetter`，密封类型，处理处的 `switch` 是穷尽的）。`SendFailureHandler` 执行转换：重试写 `next_retry_at`、`retry_count + 1`；死信同时归档进 `dead_letter_message`。转换按版本号进行，版本已被别的更新抢先时什么都不做，也不重复记指标和日志。
+
+记录之下，短信共用的 `smsRestClient` 还有一层 HTTP 重试：Resilience4j 实例 `sms-provider`（`SmsRestClientConfig`）只在连不上时隔 500 毫秒再试一次，读取超时、5xx 都不在这一层重试。应用里配了 `resilience4j.retry.instances.sms-provider` 时以应用的为准；两者都没有的话，Resilience4j 的默认值会把任何异常重试 3 次。
 
 </Dev>
 
@@ -122,16 +129,17 @@ sequenceDiagram
 
 <Lead>
 
-认领之后实例宕机或重启，记录会停在 <Status>Sending</Status>。每个实例每分钟检查一次：卡住超过 5 分钟的，放回 <Status>Retry</Status> 并立即到期；重试次数已经用完的，直接进 <Status>DeadLetter</Status>。
+认领之后实例宕机或重启，记录会停在 <Status>Sending</Status>。每个实例每分钟检查一次卡住超过 5 分钟的记录：邮件放回 <Status>Retry</Status> 并立即到期，重试次数已经用完的直接进 <Status>DeadLetter</Status>；短信一律记为 <Status>Failed</Status>，不再发。
 
 </Lead>
 
 - 5 分钟远长于任何一次发送：连接超时默认 5 秒，读取超时默认 30 秒。一个渠道的连接超时加读取超时超过 2 分 30 秒（窗口的一半），或有一个设为 0（不限时），应用就不启动：否则一次只是慢的发送会在发送中被当成卡住，再发一次。
-- **至少一次。** 服务器已经接收，记录却没来得及改成 <Status>Sent</Status>（写库失败或实例宕机），5 分钟后会再发一次。写 <Status>Sent</Status> 失败不算发送失败：不走重试，只打 ERROR 日志，留给卡住清理。
+- **邮件至少一次。** 服务器已经接收，记录却没来得及改成 <Status>Sent</Status>（写库失败或实例宕机），5 分钟后会再发一次。写 <Status>Sent</Status> 失败不算发送失败：不走重试，只打 ERROR 日志，留给卡住清理。
+- **短信至多一次。** 卡住的短信可能已经到了用户手机上（提供商已经接收，只是记录没改成 <Status>Sent</Status>；或调用中途断开），再发一次就是两条，第二个验证码还会让第一个失效。所以卡住清理把它记为 <Status>Failed</Status>，错误码 `OUTCOME_UNKNOWN`，打 ERROR 日志；到提供商控制台确认没发出后，再手动重试。
 
 <Dev title="ZombieRecordSweeper">
 
-每分钟整点（`0 * * * * *`）在每个实例上运行，跨租户读 `status = Sending AND updated_time < 当前时间 - 5 分钟` 的记录（按 `updated_time`，每次最多 200 条），在记录自己的租户里转换：放回重试的错误码为 `ZOMBIE_RECOVERED`；`retry_count` 已达 5 的转为死信，错误码 `ZOMBIE_EXHAUSTED`，同样归档进死信表。几个实例同时读到同一条时，按版本号只有一个转换成功。
+每分钟整点（`0 * * * * *`）在每个实例上运行，跨租户读 `status = Sending AND updated_time < 当前时间 - 5 分钟` 的记录（按 `updated_time`，每次最多 200 条），在记录自己的租户里转换：邮件放回重试的错误码为 `ZOMBIE_RECOVERED`，`retry_count` 已达 5 的转为死信，错误码 `ZOMBIE_EXHAUSTED`，同样归档进死信表；短信交给 `SendFailureHandler`，以 `OUTCOME_UNKNOWN` 记为失败。几个实例同时读到同一条时，按版本号只有一个转换成功。
 
 </Dev>
 
@@ -161,7 +169,7 @@ sequenceDiagram
 
 | 来源 `source` | 什么时候 | 行里有什么 |
 |---|---|---|
-| `SendExhausted` | 邮件、短信的重试用完，或卡住清理时重试已用完 | 记录 id（`event_id`），渠道、提供商、错误码和原因、尝试次数（`payload`） |
+| `SendExhausted` | 邮件、短信的重试用完，或邮件卡住清理时重试已用完 | 记录 id（`event_id`），渠道、提供商、错误码和原因、尝试次数（`payload`） |
 | `BrokerPoison` | Pulsar 消费者在 broker 重投 `softa.message.dlq.max-redeliver` 次后仍处理不了 | 原始消息 |
 
 - 死信行的处理状态：`Pending` → `Resolved` 或 `Discarded`。把死信行标为已处理不会重发消息；重发用发送记录的 Retry。
@@ -195,14 +203,27 @@ sequenceDiagram
 
 <Lead>
 
-每台发件服务器、每个短信提供商可以设两个窗口：每日发送上限和每分钟发送上限。窗口满了，这次发送按限流失败，至少 5 分钟后再试。
+每台发件服务器、每个短信提供商可以设两个窗口：每日发送上限和每分钟发送上限。每分钟窗口满了不算失败，记录推迟到下一分钟再发，不占重试次数；每日窗口满了，记录直接 <Status>Failed</Status>，第二天才会恢复。
 
 </Lead>
 
+一条发送可能被六种限制挡下，按「什么时候恢复」分别处理：
+
+| 限制 | 谁设的 | 错误码 | 处理 |
+|---|---|---|---|
+| 租户的每日上限 | 平台给每个租户设，见[发送额度](#发送额度) | `DAILY_QUOTA_EXCEEDED` | <Status>Failed</Status>，第二天恢复 |
+| 租户的每月额度 | 同上 | `MONTHLY_QUOTA_EXCEEDED` | <Status>Failed</Status>，下个月恢复 |
+| 发件服务器、短信提供商的每日上限 | 配置上的 `daily_send_limit` | `SEND_LIMIT_DAILY_EXCEEDED` | <Status>Failed</Status>，第二天恢复 |
+| 发件服务器、短信提供商的每分钟上限 | 配置上的 `rate_limit_per_minute` | `SEND_LIMIT_MINUTE_EXCEEDED` | 推迟：记录回到 <Status>Retry</Status>，下一分钟开始后 10 秒内到期，`retry_count` 不变 |
+| 提供商自己的限流 | 提供商：`HTTP_429`、阿里云 `Throttling.User`（每秒）、`isv.BUSINESS_LIMIT_CONTROL`（单个号码） | 提供商返回的码 | 重试，至少等 5 分钟 |
+| 提供商自己的每日限额 | 提供商：阿里云 `isv.DAY_LIMIT_CONTROL`、`DayLimitControl` | 提供商返回的码 | <Status>Failed</Status>，第二天恢复 |
+
+- 每分钟窗口一分钟内就会重新打开，所以不当失败：一次发出的量超过每分钟上限时，多出来的记录在之后几分钟里陆续发出，不会每被挡一次就用掉一次重试、挡满 5 次进死信。验证码也一样推迟，一分钟在它 5 分钟的有效期之内。
+- 每日的限制当天不会恢复，在重试的一刻钟里再试也不会成功，所以直接失败并写明原因；第二天或调高上限后点 Retry。
 - 字段是发件服务器（租户的 `MailSendServerConfig`、平台的 `PlatformMailSendServer`）和 `SmsProviderConfig` 上的 `daily_send_limit` 和 `rate_limit_per_minute`；为空或为 0 表示不限这个窗口。
-- 计数在 Redis 里，按配置计（`rl:{channel}:{daily|min}:{configId}:{window}`），多个实例共用，不分租户：平台的发件服务器和短信提供商被多个租户共用时，上限限的是经它发出的总量。每个租户能发多少由[发送额度](#发送额度)管。
-- 检查发生在准备之后、发送之前：被限流的记录已经准备好，再试时直接发送。
-- 它保护的是外部服务的配额。每个租户能占多少，由[发送额度](#发送额度)里的每日上限管。
+- 计数在 Redis 里，按配置计（`rl:{channel}:{daily|min}:{configId}:{window}`，窗口是自然日或整分钟），多个实例共用，不分租户：平台的发件服务器和短信提供商被多个租户共用时，上限限的是经它发出的总量。每个租户能发多少由[发送额度](#发送额度)管。
+- 检查发生在准备之后、发送之前：被推迟的记录已经准备好，到期后直接发送。
+- 认不出的提供商错误码里含 LIMIT、QUOTA、THROTTL 的，仍按提供商限流重试。
 
 ## 监控与排查
 
@@ -225,7 +246,7 @@ classpath 上有 Micrometer 时，`MessageMetrics` 发出两类计数器：
 
 1. 找到那条记录：租户在自己的邮件发送记录（`TenantMailSendRecord`）里找；平台在 Mail Send Record（或 SMS Send Record）里找，短信记录只在平台这边。邮件按收件人或主题搜，短信按号码筛选。
 2. 看状态：
-   - <Status>Pending</Status> 或 <Status>Sending</Status> 停了很久：确认投递循环在运行、工作线程没有被慢的服务器占满；<Status>Sending</Status> 超过 5 分钟会被自动放回重试。
+   - <Status>Pending</Status> 或 <Status>Sending</Status> 停了很久：确认投递循环在运行、工作线程没有被慢的服务器占满；<Status>Sending</Status> 超过 5 分钟的，邮件会被自动放回重试，短信会被记为 <Status>Failed</Status>（错误码 `OUTCOME_UNKNOWN`）。
    - <Status>Retry</Status>：看错误码和原因，`next_retry_at` 到了会再试。
    - <Status>Sent</Status>：服务器已经接收，问题在之后的环节。邮件看记录上的退信标记（收到退信时状态会变为 <Status>Failed</Status>），再让用户查垃圾箱。退信要有同一所有者的收信服务器才对得上：经租户自己的服务器发出的邮件，租户没配收信服务器就看不到退信；平台代发的，退信邮件在平台的收信记录里。短信看提供商的回执。
    - <Status>Failed</Status> 或 <Status>DeadLetter</Status>：按错误码修好原因，见[首次投递：准备记录](#首次投递准备记录)和[失败与重试](#失败与重试)。
