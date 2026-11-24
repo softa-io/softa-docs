@@ -191,7 +191,7 @@ Design cases as combinations of status × role × configuration; each point belo
 - An account that cannot sign in (none, not activated, invitation not accepted, frozen, left) counts as nobody; the three strategies when nobody is found: error, auto-approve, assign to role.
 - A step that only names its people stops with an error when none of them can act.
 - Assign to role: any role member decides; a submitter or employee among them is an approver like any other (the submitter's own step goes as "when the submitter is an approver" has it).
-- While a delegation rule is in force, new tasks go to the delegate; not when the delegate's account cannot act; tasks already waiting are untouched.
+- While a delegation rule is in force, new tasks go to the delegate; not when the delegate's account cannot act or they are not allowed to approve; tasks already waiting are untouched.
 
 ### Votes and automatic approval
 
@@ -207,7 +207,7 @@ Design cases as combinations of status × role × configuration; each point belo
 - Approving with field edits: only editable and required fields are saved; an empty required field is refused; hidden fields are not shown; a refusal by `afterApproverEdit` refuses the whole action.
 - A step with required fields shows Submit, is recorded as an approval, and cannot be batch-processed.
 - Reject and return need a comment; a comment over 256 characters is refused; without returns on the flow, there is no Return button and the API refuses it.
-- Transfer and CC (several people at once; those already on the step are skipped) and marking read; an unusable target is refused with the reason; the approver's menu has no add-approver and no delegate.
+- Transfer and CC (several people at once; those already on the step are skipped) and marking read; an unusable target is refused with the reason; a transfer target not allowed to approve is refused (`Ann Lee is not allowed to approve`), a CC recipient need not be; the approver's menu has no add-approver and no delegate.
 - Acting on a step someone else already handled asks to refresh.
 - Comments only from participants, none after the approval ends; administrators cannot comment.
 
@@ -266,7 +266,8 @@ Design cases as combinations of status × role × configuration; each point belo
 ### Visibility and pickers
 
 - A sensitive field a step lists as read-only is shown to its approver; hidden fields stay hidden from CC recipients and earlier approvers too; a one-to-many listed as visible comes with complete lines.
-- People pickers list only accounts that sign in, within the role's scope on the directory model; calling `/flow/directory/people` without the matching page permission is refused.
+- People pickers list only accounts that sign in, within the role's scope on the directory model; the transfer and delegation pickers list only those allowed to approve; calling `/flow/directory/people` without the matching page permission is refused.
+- With a step's attachments editable, its approver can upload a file before approving, without change scope of their own on the record; once they have approved, or the step no longer waits on them, the upload is refused.
 - Someone neither a participant nor able to read the instance or the record cannot open the approval; an administrator who can read only the instance sees the approval but not the record.
 - Opening an approval link after the session expired → sign in → back on that page; external addresses are not followed.
 

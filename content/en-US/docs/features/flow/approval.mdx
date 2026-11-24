@@ -29,7 +29,7 @@ A record in approval has two statuses: the record's own approval status, and the
 | Employee | The employee the record is about — the one on leave, the one whose salary changes — the record's `employeeId` by default | Not necessarily the submitter: on a submission on their behalf, the submitter files it for them. Organisation-based approvers are resolved from them |
 | Approver | The login account a step resolved | Approve, reject, return, transfer, CC, comment; batch approve / return / reject |
 | CC recipient | Someone an approver CC'd by hand, or the flow settings' CC rules CC'd | View, mark read, comment |
-| Delegate | The stand-in a delegation rule names | While the delegation is active, tasks arriving for the delegator go to them (those already waiting stay); while their account cannot act, the delegation does not apply and the task stays with the delegator |
+| Delegate | The stand-in a delegation rule names | While the delegation is active, tasks arriving for the delegator go to them (those already waiting stay); while their account cannot act, or they are not allowed to approve, the delegation does not apply and the task stays with the delegator |
 | Administrator | A user granted the monitor: instances within their `FlowInstance` data scope, delegations whatever their data scope | Monitor instances; terminate, run the steps after an approval again, reassign, urge as an administrator; see every delegation of the tenant, delegate on someone's behalf, cancel any delegation |
 
 The submitter and everyone the instance gives or gave a task to — approvers, whether or not they acted, CC recipients, transfer / delegation targets, and the approvers whose step closed without them — are the instance's **participants**: they view it without any configured permission, and comment on it while it runs. An administrator's urge, termination or reassignment makes them no participant. See [Who can see an approval](#who-can-see-an-approval).
@@ -250,6 +250,16 @@ An approver needs an account that signs in. An employee without an account count
 
 A role holder is an account and approves even without an employee profile, provided it signs in. Tasks already assigned to someone who has since left stay theirs until an administrator reassigns them.
 
+#### People not allowed to approve
+
+An action that hands a task to someone else to decide also requires them to be **allowed to approve**: their own permissions let them call the approve endpoint (`POST /flow/instances/approve` — under permission-starter, holding a permission that lists it, judged by the same rules the endpoint gate applies to a request). Otherwise the task moves to them, the gate refuses their approval, and it is stuck with them.
+
+- **Refused** (`400`), naming them — `Ann Lee is not allowed to approve`: a transfer, an administrator's reassignment (and its preview), a delegation rule (one's own or on someone's behalf). An account that cannot act is reported first, as in the section above.
+- **An automatic delegation does not apply**: when the task arrives and the delegate is not allowed to approve, it stays with the delegator, as for a delegate whose account cannot act, and the trace says why.
+- **Not asked of a CC recipient**: they only read and comment; signing in is enough.
+- The people pickers of a transfer and of a delegation list only those allowed to approve (`approvers=true` on the [directory](./api#directory)).
+- An application with no `EndpointAccessChecker` (no permission-starter) checks nothing: everyone who signs in may approve.
+
 #### Approver dedup
 
 `approverDedup` defaults to **`Global`**: a user who already approved an earlier node is auto-passed on later nodes (recorded as `AUTO_APPROVE`). Residual risk: a mid-flow form edit is still auto-endorsed by that earlier approval; set the policy to `Contiguous` or `None` on flows where a re-look matters.
@@ -388,6 +398,8 @@ An approval step can let its approver change fields of the record as they approv
 >
 > An approver's writes set aside **every** permission check, sensitive-field write checks included: an approver whose roles hold no sensitive field set covering a field can still write it if the node's form exposes it as editable. Flow designers must not make a sensitive field (pay, bank details, identity numbers, …) editable on an approval form unless every approver that node can resolve to is meant to edit it; show it read-only, or leave it off the form.
 
+**An approver uploading a file.** For an editable or required file field (attachments), the file is uploaded on its own ahead of the approval (`POST /file/uploadFileToField`, with the record's `rowId` and the field name) and written back with `formData` when they approve. The upload is let through on the step's field permissions too: the current user is an approver whom a step of the record's running approval still waits on, and that step marks the field `EDITABLE` or `REQUIRED` — no change scope of their own on the record is needed. Once they have approved, or the step no longer waits on them, their own permissions on the model decide, as before. flow-starter grants this to the file upload as a `RecordFieldEditGrant`.
+
 <Dev title="Why permissions are set aside">
 
 Once the actor is validated as the node's approver, the approval's form edits and every node it resumes run with the actor's own row scope set aside. Approving is the grant: an approver rarely holds update on the record they approve, and with row scope granted per action (permission-starter) that would refuse the approval itself. Host endpoints that apply an approval outside the engine do the same, after an entry check that the approver can see the request (`@RequirePermission`). A record's write rules (`ModelWriteValidator`) therefore see these writes as the system's: the approval lock (`ApprovalLockValidator`), which freezes a record while it is in approval, still lets through the fields a node marks editable.
@@ -427,7 +439,7 @@ An approver's action needs the instance waiting on approval, and the actor an ap
 | Approve | Comment optional; may carry field values (only editable / required fields are written) | Writes the fields and recomputes the routing variables; under a counting mode records a vote, and at the threshold — or under "anyone" — moves to the next step. Approving twice returns the instance unchanged | The next step's approvers get tasks; the submitter when it ends |
 | Reject | Comment required | One rejection is enough (see [Approval threshold](#approval-threshold)): instance <Status>Rejected</Status>, every branch ends, record <Status>Rejected</Status> | Submitter |
 | Return | The flow allows it (`returnEnabled`); comment required | Instance <Status>Returned</Status>, record back to draft. Always returns to the submitter, never to an earlier step | Submitter |
-| Transfer | Not yet voted; the target is neither the actor nor already on the step, and their account can act | The target takes the actor's seat, votes needed unchanged. It is the one way an approver hands a task on: the manual "delegate" did the same under another name and is gone; past `DELEGATE` entries still show | New approver |
+| Transfer | Not yet voted; the target is neither the actor nor already on the step, their account can act, and they are allowed to approve (see [People not allowed to approve](#people-not-allowed-to-approve)) | The target takes the actor's seat, votes needed unchanged. It is the one way an approver hands a task on: the manual "delegate" did the same under another name and is gone; past `DELEGATE` entries still show | New approver |
 | CC | Not yet voted; one person or several at once. Whoever already sees the approval from the step — its approvers, the actor among them, and anyone already CC'd on it — is skipped; refused when nobody is left, and as a whole when anyone chosen cannot act, naming them | The targets become participants who can view and comment | CC recipients (inbox only) |
 | Comment | Any participant; instance not ended | Writes one entry, changes no status | Nobody |
 
@@ -448,7 +460,7 @@ In the [monitor](./api#monitor), within the caller's own `FlowInstance` permissi
 | Action | Conditions | Result |
 |---|---|---|
 | Terminate | Instance running, waiting or failed; reason required; up to 100 at a time | Closes the pending approvals, instance <Status>Cancelled</Status>, record cancelled; a `TERMINATE` entry; submitter notified. The approvers whose tasks it closed still open the approval through those tasks |
-| Reassign | From-approver, to-approver (not the same) and a reason; the new approver's account can act (the preview refuses them too); affected tasks can be previewed first | Moves the from-approver's current pending tasks to the new approver, recorded as the from-approver's `TRANSFER` with the administrator as `operatorId`; merges the two seats when the new approver is already on the step, and a step the merge leaves with every approval it needs passes there and then, the approval going on; steps not yet reached are untouched |
+| Reassign | From-approver, to-approver (not the same) and a reason; the new approver's account can act and they are allowed to approve (the preview refuses them too); affected tasks can be previewed first | Moves the from-approver's current pending tasks to the new approver, recorded as the from-approver's `TRANSFER` with the administrator as `operatorId`; merges the two seats when the new approver is already on the step, and a step the merge leaves with every approval it needs passes there and then, the approval going on; steps not yet reached are untouched |
 | Run the steps after the approval again | The instance failed after an approval, the record still waiting on it; on the same grant as terminating | See [When a step after an approval fails](#when-a-step-after-an-approval-fails) |
 | Delegate on behalf | A permission of its own, not limited by data scope, which also cancels any delegation of the tenant; checked as the approver's own rule is | Creates a delegation rule for an approver, who sees it among their own delegations and can cancel it; it routes only the tasks that arrive from then on — the ones already waiting are reassigned |
 | Urge as administrator | Can read the instance; not bound by the flow's `urgeEnabled` | As the submitter's urge, sharing its interval; each row of the monitoring list says whether an administrator may urge it now |
