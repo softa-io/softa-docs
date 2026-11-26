@@ -20,10 +20,20 @@ The table gives the terms the Flow pages use and their names in the code; the su
 |---|---|---|
 | Flow (draft) | `FlowDesign` | The copy the designer edits; its id is the `flowId` everything refers to |
 | Revision | `FlowBundle` | One per publish, immutable; an instance keeps the revision it started on, whatever is published later |
-| Instance | `FlowInstance` | One run; every submission of a record is a new instance |
+| Record | a row of the business model (`modelName` + `rowId`) | What is approved, such as one leave request; carries the framework-kept `approvalStatus`, `submitterId`, `submittedTime` |
+| Record's approval | `GET /flow/instances/by-record` (`FlowRecordApprovalsView`) | The whole approval history of a record, every submission of it; one per record, assembled by the endpoint rather than stored |
+| Approval instance | `FlowInstance` | One run; every submission of a record is a new instance, so a record's approval may hold several |
 | Scenario | `FlowScenario` | Approval flow (`Approval`) or automation flow (`Automation`), chosen when the flow is created and fixed from then on |
 | Trigger | `trigger` | The flow's one way to start, configured on its start node |
-| Step | an approval node; `PendingApproval` at run time | One stay of an approval node in an instance |
+| Approval step | an approval node; `PendingApproval` at run time | One stay of an approval node in an instance |
+| Task | `FlowApprovalTask` | One piece of work given to one person: an **approval task** or a **CC task**; a step with three approvers has three approval tasks |
+| Approval action record | `FlowApprovalRecord` | Who did what and when — submit, approve, return, transfer, CC, urge, comment…; not to be confused with a record's approval |
+| Business record page | the business module's own list and detail pages | Reads the record with the caller's own permissions (the model's endpoints); an approval model's form shows the record's approval below it |
+| Request page | front end `/home/approvals/record/{model}/{id}` | Keyed by the record: the record with its approval — submitting, withdrawing and the approvers' actions happen here; no menu leads to it, it is reached from Create Request, My Requests, My Tasks, the bell and emails. See [Pages and entry points](./approval#pages-and-entry-points) |
+| Approval instance page | front end `/home/approvals/{instanceId}` | The address emails and inbox notices link to: a record's approval goes on to its request page, any other instance shows its diagram here |
+| Instance detail | the monitoring console | Administrators view instances within their `FlowInstance` data scope and terminate, run again or reassign there |
+| Follow-up record | the page parameter `?from=` | A record raised against another (a leave cancellation), which reads its original when opened |
+| Directory | `softa.flow.org.directory-model` | The model the people pickers search — transfer, CC, delegate, filter by submitter — within the caller's own data scope |
 | Submitter | the record's `submitterId`, the instance's `initiatorId` | The account that pressed Submit — possibly HR submitting on an employee's behalf. Only they withdraw, urge, or take back a failed approval |
 | Employee | the handler's `subject()` (default `employeeId`), the instance's `subjectId` | The employee the record is about; approvers are found from them — their supervisor, their department. Not "applicant": on documents HR raises (a salary adjustment, a transfer) the employee applied for nothing |
 | Approver | a login account id | Someone the current step found; they need an account that signs in |
