@@ -37,7 +37,7 @@ flowchart LR
 - compile-time validation and transformation into runtime bundles
 - published bundle revisions by `flowId`
 - runtime execution for approval and automation flows
-- persistent projections for instances, approval tasks, approval records, delegations, and trigger events
+- persistent projections for instances, approval tasks, approval action records, delegations, and trigger events
 - optional Pulsar-based trigger and async-task integration
 
 <Dev title="The main types of each layer">
@@ -58,7 +58,7 @@ A flow's id is its identity everywhere and its name is unique within a tenant; a
 
 </Lead>
 
-- `FlowDesign` is the draft working copy. Its `id` (a distributed string id) is the flow's identity everywhere: bundles, instances, tasks, approval records, events and delegations reference it as `flowId`, and lists show the flow's name through that reference.
+- `FlowDesign` is the draft working copy. Its `id` (a distributed string id) is the flow's identity everywhere: bundles, instances, tasks, approval action records, events and delegations reference it as `flowId`, and lists show the flow's name through that reference.
 - `flowName` is unique within a tenant; there is no separate flow code.
 - `FlowBundle` is the compiled published snapshot; published revisions are keyed by `flowId`.
 - `FlowBundle.designJson` keeps the design snapshot used at publish time so the editor can restore a historical canvas.

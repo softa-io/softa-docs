@@ -23,7 +23,7 @@ A business module submits, withdraws and cancels records, and previews a record 
 | [Automation APIs](#automation-apis) | `/flow/automation` | Trigger firing |
 | [Event Logs](#event-logs) | `/FlowEvent/searchPage`, … | The trigger event log, read through the generic model API |
 | [Approval Tasks](#approval-tasks) | `/flow/approvalTasks` | The current user's task boxes and top-bar counts |
-| [Approval Records](#approval-records) | `/flow/approvalRecords` | Approval history by runtime instance |
+| [Approval Action Records](#approval-action-records) | `/flow/approvalRecords` | Approval history by runtime instance |
 | [Delegation](#delegation) | `/flow/delegations` | Delegation rules |
 | [Directory](#directory) | `/flow/directory` | What the people and department pickers list |
 | [Monitor](#monitor) | `/flow/monitor` | The administrators' console |
@@ -191,7 +191,7 @@ Base path: `/flow/instances` — launch, reads and approval actions on runtime i
 A record has one approval, holding every submission of it: each submission starts an approval instance, and the earlier ones are marked `superseded` (see [A record's approval and its steps](./approval#a-records-approval-and-its-steps)). `GET /flow/instances/by-record` returns the whole of it (`FlowRecordApprovalsView`); a record never submitted has no submission, and `instances` is empty.
 
 - **Who sees it**: whoever can read the record with their own permissions; whoever took part in any of its submissions (participants as [Who may view an instance](#who-may-view-an-instance) names them); whoever's roles read the `FlowInstance` row of any of them, such as the monitor's administrators (a department scope judges each submission by the department it recorded, see [Monitor](#monitor)). Everyone else is refused (`403`).
-- **They see it whole**: every submission, each with its steps, whichever one the caller took part in, however far the approval has gone and whether or not it has ended. The same people open each submission: its detail, `/summary`, `/design`, `/overlay`, `/trace`, `/nodes/{nodeId}/formPermissions`, `GET .../urge`, `GET .../withdraw`, and its tasks (`/flow/approvalTasks/instance/{instanceId}`) and approval records (`/flow/approvalRecords/instance/{instanceId}`). Whether they may urge or withdraw stays with each action's own rule.
+- **They see it whole**: every submission, each with its steps, whichever one the caller took part in, however far the approval has gone and whether or not it has ended. The same people open each submission: its detail, `/summary`, `/design`, `/overlay`, `/trace`, `/nodes/{nodeId}/formPermissions`, `GET .../urge`, `GET .../withdraw`, and its tasks (`/flow/approvalTasks/instance/{instanceId}`) and approval action records (`/flow/approvalRecords/instance/{instanceId}`). Whether they may urge or withdraw stays with each action's own rule.
 - **The record's content has rules of its own**: fewer people read the record through an approval — its participants, and whoever can read the record; someone who sees the record's approval by their roles alone sees its steps, not the record (see [The record an approval runs on](#the-record-an-approval-runs-on)).
 
 Each submission (`instances[]`, newest first):
@@ -237,7 +237,7 @@ An approver's `result`:
 
 ### The record an approval runs on
 
-The approval page (`/home/approvals/{instanceId}`, the link of every approval email) is opened by approvers who may hold neither the menu of the record's model nor any permission on the flow models, so it reads everything through the instance: `GET /flow/instances/{instanceId}` and `.../summary` for the instance, `.../design` for its diagram, `.../record` for the record. Only a record's approval lends its record (`FlowInstanceAccessGuard.requireRecordAccess`):
+The approval instance page (`/home/approvals/{instanceId}`, the link of every approval email) and the monitoring console's instance detail are opened by approvers who may hold neither the menu of the record's model nor any permission on the flow models, so it reads everything through the instance: `GET /flow/instances/{instanceId}` and `.../summary` for the instance, `.../design` for its diagram, `.../record` for the record. Only a record's approval lends its record (`FlowInstanceAccessGuard.requireRecordAccess`):
 
 - **Its participants — its submitter and the people it gives or gave a task to** read it past their own row permissions. They see every field, dynamic ones included, but the sensitive ones they may see on no row (`PermissionService.getHiddenSensitiveFields`); the field permissions (`formPermissions`) of the waiting steps they approve are laid over that — what a step lists as `Readonly` / `Editable` / `Required` shows, sensitive or not, what it marks `Hidden` does not, and with several steps a field any of them shows is shown. The submitter sees the default; anyone else with no waiting step — a CC recipient, an earlier approver, an approver a termination cleared — also misses what any approval step hides.
 - **A one-to-many's rows follow the same rule on their own model**: each row loses the sensitive fields of its model the caller may see on no row, unless a waiting step of the caller lists the one-to-many itself as `Readonly`, `Editable` or `Required` — that grants its rows whole. A step marking the one-to-many `Hidden` leaves it out. The submitter and everyone else get the rows without the fields their own roles withhold. So a step that shows a salary adjustment's amounts to approvers who hold no salary set lists its lines: `"formPermissions": {"salaryAdjustmentDetailIds": "Readonly"}`; without it, they see the lines without them.
@@ -378,7 +378,7 @@ The sync copies the list fields from the instance's row when it writes a task, a
 
 </Dev>
 
-### Approval Records
+### Approval Action Records
 
 Base path: `/flow/approvalRecords`
 
