@@ -1,6 +1,6 @@
 # Form view schema
 
-A form view as data: sections, fields, widgets, relation tables and conditions in plain JSON, rendered into the same components a hand-written page uses. The first user is the Home module's approval pages, whose views live in `src/app/home/record-views/`: one view per model, shown read-only to whoever follows or approves a request, and — for a self-service type its employee files there — rendered inside `ModelForm` to create and edit it, through the type's own applicant view where it names one and the blocks it registers, the conditions judged in create or update mode alike.
+A form view as data: sections, fields, widgets, relation tables and conditions in plain JSON, rendered into the same components a hand-written page uses. The first user is the Home module's request pages, whose views live in `src/app/home/record-views/`: one view per model, shown read-only to whoever follows or approves a request, and — for a self-service type its employee files there — rendered inside `ModelForm` to create and edit it, through the type's own applicant view where it names one and the blocks it registers, the conditions judged in create or update mode alike.
 
 ## Related Docs
 
