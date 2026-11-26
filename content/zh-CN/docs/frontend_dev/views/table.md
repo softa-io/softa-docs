@@ -305,7 +305,7 @@ import { PinnedFilter } from "@/components/views/table/pinned-filter";
 
 <ModelTable modelName="FlowApprovalTask" dataSource={source}>
   <PinnedFilter fieldName="flowId" label="Type" control={FlowTypeSelect} defaultValue={null} />
-  <PinnedFilter fieldName="initiatorId" label="Submitter" control={SubmitterPicker} defaultValue={null} />
+  <PinnedFilter fieldName="submitterId" label="Submitter" control={SubmitterPicker} defaultValue={null} />
   <Field fieldName="instanceTitle" label="Request" />
 </ModelTable>
 
@@ -324,7 +324,7 @@ import { PinnedFilter } from "@/components/views/table/pinned-filter";
 - 依赖某个固定筛选的单元格用 `usePinnedFilterValue(id)` 读它的值：名册报表的离职日期，在工具栏上选的期间到达之前保持空白。
 - 工具栏这一行是一个 `ListToolbar`，所以每个表格放不下时都换行而不是挤压，任何东西都不会重叠：搜索框和药丸保持自身宽度；按钮 —— 表格自己的和页面的（Create、`<Action placement="toolbar">`、选中行时的批量操作）—— 放不进同一行时整组换到下一行并靠右；一行连两组按钮都放不下时，两组再各占一行。有固定筛选的表格还会在工具栏宽度小于 64rem 时（工具栏上的 container query，`collapseLabels`）让表格自己的按钮（Filter、Sort、Group、Columns、More）只显示图标，无障碍名称和悬停提示仍在，More 保留选中数；页面的按钮始终保留文字。所以药丸和按钮都多时，会是一行筛选、下面一行按钮；在较窄的屏幕上选中行，按钮也可能换到第二行（My Tasks 在 1440px 下出现批量操作时）。没有固定筛选的表格按钮保留文字，放不下时更早换到第二行。
 
-在用的控件：`FlowTypeSelect` 与 `SubmitterPicker`（`src/app/flow/approval-inbox/components/approval-list-filters.tsx`），`FlowDesignPicker`、`FlowStatusSelect`、`EmployeePicker` 与 `DepartmentFilter`（`src/app/flow/flow-instance/components/monitor-filters.tsx`），`DaysWithinFilter`、`DocumentTypeFilter` 与 `PeriodPicker`（`src/app/corehr/report/components/`），以及共用的 `DateRangeFilter`（PCP 报表、Flow Instances）。
+在用的控件：`FlowTypeSelect` 与 `SubmitterPicker`（`src/app/flow/approval-center/components/approval-list-filters.tsx`），`FlowDesignPicker`、`FlowStatusSelect`、`EmployeePicker` 与 `DepartmentFilter`（`src/app/flow/flow-instance/components/monitor-filters.tsx`），`DaysWithinFilter`、`DocumentTypeFilter` 与 `PeriodPicker`（`src/app/corehr/report/components/`），以及共用的 `DateRangeFilter`（PCP 报表、Flow Instances）。
 
 ## 列头筛选
 
@@ -407,7 +407,7 @@ const hrefOf = useApprovalRequestHref(); // 每行的链接：其申请页，或
   renderRowActions={(task) => <TaskActions task={task} />}
 >
   <Field fieldName="nodeLabel" label="Task" />
-  <Field fieldName="initiatorId" label="Submitter" renderCell={(row) => actorLabel(row.initiator)} />
+  <Field fieldName="submitterId" label="Submitter" renderCell={(row) => actorLabel(row.submitter)} />
   <Field fieldName="startTime" label="Received" />
 </ModelTable>
 ```
@@ -416,7 +416,7 @@ const hrefOf = useApprovalRequestHref(); // 每行的链接：其申请页，或
 
 其余一切仍来自模型元数据，与 searchPage 列表相同：列、列标签与字段类型、基于模型 `searchName` 的搜索框（`["searchName", "CONTAINS", term]`）、列头筛选、排序、分页、Columns 对话框、记住的查询状态与列排布。它们像对 searchPage 一样合并为 `filters` / `orders` —— 包括 `filters` prop 与 workspace 筛选 —— 只有这些与页码到达数据源：字段列表、子查询、分组与聚合属于 searchPage，从不发送。没有 `orders` prop 时，用户选择排序之前不发送排序，数据源自己的默认顺序生效；一旦发送排序就会替换它。
 
-筛选与排序只针对模型的存储字段：`dynamic` 字段（包括级联字段）两者都不提供，指向其他记录的路径和一对一关联也不提供（否则 Filter 对话框会展开其子字段）。`queryFields` 进一步收窄为数据源支持的字段 —— 列头只在这些字段上筛选和排序，Filter 与 Sort 对话框也只列出这些 —— 页面借此把原始 id（单元格显示名称的 `initiatorId` 列）或读者读不到其选择器的关联排除在筛选之外。在模型命名字段（其 `searchName`、主键）上的筛选值改为手输而非选择，因为选择器通过模型的通用 `searchName` 列出行（`filters/FilterValueInput.tsx` 的 `FilterOwnModelRowsContext`）。
+筛选与排序只针对模型的存储字段：`dynamic` 字段（包括级联字段）两者都不提供，指向其他记录的路径和一对一关联也不提供（否则 Filter 对话框会展开其子字段）。`queryFields` 进一步收窄为数据源支持的字段 —— 列头只在这些字段上筛选和排序，Filter 与 Sort 对话框也只列出这些 —— 页面借此把原始 id（单元格显示名称的 `submitterId` 列）或读者读不到其选择器的关联排除在筛选之外。在模型命名字段（其 `searchName`、主键）上的筛选值改为手输而非选择，因为选择器通过模型的通用 `searchName` 列出行（`filters/FilterValueInput.tsx` 的 `FilterOwnModelRowsContext`）。
 
 凡依赖模型通用端点的功能一律关闭，不论页面或调用方的授权如何：Create、Import、Export、Bulk edit、批量 Delete、行内编辑、Group 控件、pivot 列、侧栏（`SideTree` / `SideCard` / `SideList`）、sidecar，以及逐行访问检查（`getRecordAccess`）。页面自己的动作 —— `<Action>`、`renderRowActions`、`renderBulkActions` —— 照常运行，调用它们各自的端点。
 

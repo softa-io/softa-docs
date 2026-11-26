@@ -308,7 +308,7 @@ import { PinnedFilter } from "@/components/views/table/pinned-filter";
 
 <ModelTable modelName="FlowApprovalTask" dataSource={source}>
   <PinnedFilter fieldName="flowId" label="Type" control={FlowTypeSelect} defaultValue={null} />
-  <PinnedFilter fieldName="initiatorId" label="Submitter" control={SubmitterPicker} defaultValue={null} />
+  <PinnedFilter fieldName="submitterId" label="Submitter" control={SubmitterPicker} defaultValue={null} />
   <Field fieldName="instanceTitle" label="Request" />
 </ModelTable>
 
@@ -327,7 +327,7 @@ import { PinnedFilter } from "@/components/views/table/pinned-filter";
 - A cell that depends on a pinned filter reads its value with `usePinnedFilterValue(id)`: the roster reports' resignation date, blank until the period picked on the toolbar reaches it.
 - The toolbar row is a `ListToolbar`, so it wraps rather than squeezes, on every table: the search box and the pills keep their own width, and the buttons — the toolbar's own and the page's (Create, `<Action placement="toolbar">`, a selection's bulk actions) — go to a line of their own, right-aligned, when they do not fit beside them; the two sets part as well if even one line cannot hold both. On a table with pinned filters the toolbar's own buttons (Filter, Sort, Group, Columns, More) also keep only their icons while the toolbar is narrower than 64rem — a container query on the toolbar (`collapseLabels`) — each still named for assistive technology and on hover, and More keeps its count; the page's buttons always keep their labels. So a page with many pills and many buttons reads as a line of filters over a line of buttons, and selecting rows on a narrower screen can move the buttons to that second line (My Tasks at 1440px, once its batch actions show). A table without pinned filters keeps its labels: its buttons go to the second line sooner instead.
 
-Controls in use: `FlowTypeSelect` and `SubmitterPicker` (`src/app/flow/approval-inbox/components/approval-list-filters.tsx`), `FlowDesignPicker`, `FlowStatusSelect`, `EmployeePicker` and `DepartmentFilter` (`src/app/flow/flow-instance/components/monitor-filters.tsx`), `DaysWithinFilter`, `DocumentTypeFilter` and `PeriodPicker` (`src/app/corehr/report/components/`), and the shared `DateRangeFilter` (the PCP report, Flow Instances).
+Controls in use: `FlowTypeSelect` and `SubmitterPicker` (`src/app/flow/approval-center/components/approval-list-filters.tsx`), `FlowDesignPicker`, `FlowStatusSelect`, `EmployeePicker` and `DepartmentFilter` (`src/app/flow/flow-instance/components/monitor-filters.tsx`), `DaysWithinFilter`, `DocumentTypeFilter` and `PeriodPicker` (`src/app/corehr/report/components/`), and the shared `DateRangeFilter` (the PCP report, Flow Instances).
 
 ## Column Header Filter
 
@@ -410,7 +410,7 @@ const hrefOf = useApprovalRequestHref(); // each row's link: its request page, o
   renderRowActions={(task) => <TaskActions task={task} />}
 >
   <Field fieldName="nodeLabel" label="Task" />
-  <Field fieldName="initiatorId" label="Submitter" renderCell={(row) => actorLabel(row.initiator)} />
+  <Field fieldName="submitterId" label="Submitter" renderCell={(row) => actorLabel(row.submitter)} />
   <Field fieldName="startTime" label="Received" />
 </ModelTable>
 ```
@@ -419,7 +419,7 @@ It is `{ key, fetch, queryFields?, refetchOnWindowFocus? }` (`ModelTableDataSour
 
 Everything else still comes from the model's metadata, as for a searchPage list: the columns, their labels and field types, the search box over the model's `searchName` (`["searchName", "CONTAINS", term]`), the column-header filters, sorting, paging, the Columns dialog, the remembered query state and the column arrangement. They are folded into `filters` / `orders` as they would be for searchPage — the `filters` prop and the workspace filter included — and only those and the page reach the source: field lists, sub-queries, grouping and aggregates are searchPage's and are never sent. Without an `orders` prop no sort is sent until the user picks one, so the source's own default order holds; one sent replaces it.
 
-Filters and sorts name the model's stored fields only: a `dynamic` field offers neither, cascaded ones included, and neither does a path into another record or a one-to-one link, whose children the Filter dialog would open. `queryFields` narrows that to the fields the source answers for — column headers filter and sort on those only, and the Filter and Sort dialogs list those only — which is how a page keeps out of its filters a raw id (an `initiatorId` column whose cell shows a name) or a relation whose picker its readers cannot read. A filter value on a field the model is named by (its `searchName`, its primary key) is typed rather than picked, since the picker lists rows through the model's generic `searchName` (`FilterOwnModelRowsContext` in `filters/FilterValueInput.tsx`).
+Filters and sorts name the model's stored fields only: a `dynamic` field offers neither, cascaded ones included, and neither does a path into another record or a one-to-one link, whose children the Filter dialog would open. `queryFields` narrows that to the fields the source answers for — column headers filter and sort on those only, and the Filter and Sort dialogs list those only — which is how a page keeps out of its filters a raw id (an `submitterId` column whose cell shows a name) or a relation whose picker its readers cannot read. A filter value on a field the model is named by (its `searchName`, its primary key) is typed rather than picked, since the picker lists rows through the model's generic `searchName` (`FilterOwnModelRowsContext` in `filters/FilterValueInput.tsx`).
 
 Whatever runs on the model's generic endpoints is off, whatever the page or the caller's grants say: Create, Import, Export, Bulk edit, bulk Delete, inline edit, the Group control, pivot columns, side panels (`SideTree` / `SideCard` / `SideList`), sidecars and the per-row access check (`getRecordAccess`). The page's own actions — `<Action>`, `renderRowActions`, `renderBulkActions` — still run, against whatever endpoints they call.
 
