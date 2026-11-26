@@ -99,7 +99,6 @@ While the instance is running or waiting, the record stays `Pending`; once the i
 
 <Dev title="All FlowExecutionStatus values and transitions">
 
-- `Pending`
 - `Running`
 - `Waiting` — parked on one or more waits (a pending approval and/or an async callback). The specific reasons live in the instance's pending-approval list and wait-token list, so a single status covers parallel branches suspended for different reasons at once.
 - `Rejected`
@@ -141,7 +140,7 @@ The business record page, the request page and the approval instance page show t
 | <Status>Current</Status> | A step the approval waits on now; every step parallel branches wait on at once is |
 | <Status>Upcoming</Status> | A step the approval has not reached yet: only on the submission in progress |
 
-Each step says its approval mode and how many approvals pass it, with one row per approver: their result, when they acted, and their comment. A result is approved, rejected or returned; transferred or delegated (naming whom to — that person has a row of their own); approved automatically (saying why: the submitter, or someone who approved an earlier step); pending; or not needed — others approved enough, or the approval was withdrawn or ended, so this approver no longer has to act. An administrator who acted in someone's place (a reassignment) is named. Under a step come its other actions: who was CC'd and whether they read it, who urged, the comments. Each submission ends with how it ended: approved, rejected, returned, withdrawn or terminated, with who, when and their comment; a failed one says the step it stopped at, why, and whether an administrator can run the steps after its approval again.
+Each step says its vote threshold and how many approvals pass it, with one row per approver: their result, when they acted, and their comment. A result is approved, rejected or returned; transferred or delegated (naming whom to — that person has a row of their own); approved automatically (saying why: the submitter, or someone who approved an earlier step); pending; or not needed — others approved enough, or the approval was withdrawn or ended, so this approver no longer has to act. An administrator who acted in someone's place (a reassignment) is named. Under a step come its other actions: who was CC'd and whether they read it, who urged, the comments. Each submission ends with how it ended: approved, rejected, returned, withdrawn or terminated, with who, when and their comment; a failed one says the step it stopped at, why, and whether an administrator can run the steps after its approval again.
 
 **Expected approvers.** The steps not reached yet are worked out from the route as it stands, by the same walk as [Previewing a record's approval](#previewing-a-records-approval), but from the submission's own variables and approvals, never the record: their approvers are marked Expected, or the step says it will pass on its own, has nobody to ask, or is known only once the approval runs. Approvers are found when a step is reached, so the people asked may differ from those expected — the organisation or a delegation changed in between, or an approver edited the record and the route changed with it. Where the route is known only once the approval runs, the walk stops there and says so; where it finds the route would fail, it says at which step and why.
 
@@ -154,7 +153,7 @@ The same record's approval appears on three kinds of page, which read the record
 | Page | Who uses it | How it is reached | How it reads the record |
 |---|---|---|---|
 | Business record page | Those who manage records through their roles: HR, managers, finance… | The business module's menu | The model's own endpoints, with the caller's own menu permissions and data scope; an approval model's form shows the record's approval below it (front end `FormApprovalPanel`) |
-| Request page | Participants: the submitter, approvers, CC recipients. A self-service request (leave, overtime, an expense claim…) is also created, edited as a draft and submitted here; a record HR files for an employee (a salary adjustment, a transfer…) is created, edited and submitted on its business record page, and shows here once submitted | No menu: Create Request, My Requests, My Tasks, the bell, emails, a follow-up record and links on business pages | `GET /flow/instances/by-record/record`: participants read past their own row scope, as their step lets them, and the response carries the fields the step grants (`fields`); anyone else who may read the record reads it with their own permissions, and so does the submitter of a draft never submitted |
+| Request page | Participants: the submitter, approvers, CC recipients. A self-service request (leave, overtime, an expense claim…) is also created, edited as a draft and submitted here; a record HR files for an employee (a salary adjustment, a transfer…) is created, edited and submitted on its business record page, and shows here once submitted | No menu: Create Request, My Requests, My Tasks, the bell, emails, a follow-up record and links on business pages | `GET /flow/instances/byRecord/record`: participants read past their own row scope, as their step lets them, and the response carries the fields the step grants (`fields`); anyone else who may read the record reads it with their own permissions, and so does the submitter of a draft never submitted |
 | Approval instance page | Whoever opens an email's or inbox notice's link | The link | A record's approval goes on to the request page; an instance approving no record shows its diagram here, reading the record through the instance (`GET /flow/instances/{instanceId}/record`) |
 
 The request page does not call the model's `getById`: most approvers hold no data scope on the record (a supervisor in another department, finance, approvers outside HR), CC recipients and transfer targets even less; and which fields each step hides or opens is known to the approval alone.
@@ -220,7 +219,7 @@ A step's `config.approverSources` is one or more groups of sources, each told by
 | Position `Position` | The holders of the positions | `positionIds` |
 | Department members `Department` | A department's members | `deptIds` |
 
-**A step's groups make one pool.** Its approvers are everyone its groups find, each once, in the groups' order, and its approval mode counts over that pool: "the manager or HR" is one step of two groups under `AnyOne`, "the manager and HR" the same under `Unanimous` — no parallel branches drawn. A group that finds nobody leaves the others to decide; [the empty-approver strategy](#if-nobody-is-found) applies only when no group finds anyone, and the reason a refusal gives says why for each group ("Ann Lee has no manager who can approve; nobody who can approve holds its roles"). Parties that must each decide — in an order, on fields of their own (field permissions are a step's), or stopping the approval when one of them is missing — are still steps of their own, in sequence or on parallel branches.
+**A step's groups make one pool.** Its approvers are everyone its groups find, each once, in the groups' order, and its vote threshold counts over that pool: "the manager or HR" is one step of two groups under `AnyOne`, "the manager and HR" the same under `Unanimous` — no parallel branches drawn. A group that finds nobody leaves the others to decide; [the empty-approver strategy](#if-nobody-is-found) applies only when no group finds anyone, and the reason a refusal gives says why for each group ("Ann Lee has no manager who can approve; nobody who can approve holds its roles"). Parties that must each decide — in an order, on fields of their own (field permissions are a step's), or stopping the approval when one of them is missing — are still steps of their own, in sequence or on parallel branches.
 
 **A step names who approves it**: at least one group, each a source with a type, and for specific people at least one; validation and publishing refuse a step that names nobody.
 
@@ -280,7 +279,7 @@ A role holder is an account and approves even without an employee profile, provi
 
 #### Auto-approval
 
-The submitter is approved for by default ("When the submitter is an approver"): when a step's approvers include the user who submitted the record, they are counted as having approved — submitting it was agreeing to it — recorded as `AUTO_APPROVE` ("Auto-approved (submitter)") in the approval history, and the step's approval mode decides the rest: an any-one step passes, an all-approve step still waits for the others. The flow setting `selfApproval` decides it: `AutoApprove` (the default) or `RequireApproval`, which asks the submitter like any other approver. A general manager filing their own request on a step that names the general manager passes it by default, say, as does a manager filing a salary adjustment for a report whose first step is themselves.
+The submitter is approved for by default ("When the submitter is an approver"): when a step's approvers include the user who submitted the record, they are counted as having approved — submitting it was agreeing to it — recorded as `AUTO_APPROVE` ("Auto-approved (submitter)") in the approval history, and the step's vote threshold decides the rest: an any-one step passes, an all-approve step still waits for the others. The flow setting `selfApproval` decides it: `AutoApprove` (the default) or `RequireApproval`, which asks the submitter like any other approver. A general manager filing their own request on a step that names the general manager passes it by default, say, as does a manager filing a salary adjustment for a report whose first step is themselves.
 
 The employee the record is about gets no such pass when someone else submitted it — HR filing a department head's salary adjustment, say, whose own department-leader step resolves to them: approving it in their name would decide their own matter, so they are asked like any other approver. An employee filing their own record is its submitter, and the setting covers them. Where the employee should not handle their own record at all (an HR-initiated salary change or demotion), find the approvers with the supervisor source from the employee (the default): it walks up from the employee and never reaches them.
 
@@ -329,18 +328,18 @@ The deploying application's release rewrites the stored flows that still use one
 
 </Dev>
 
-### Approval threshold
+### Vote threshold
 
-The approval mode (`config.approvalMode`) decides how many approvals pass the step, counted over the pool the step's groups of approvers make (someone two groups find counts once):
+The vote threshold (`config.voteThreshold`) decides how many approvals pass the step, counted over the pool the step's groups of approvers make (someone two groups find counts once):
 
-| Approval mode | Approvals that pass the step |
+| Vote threshold | Approvals that pass the step |
 |---|---|
 | `AnyOne` (default) | Any one |
 | `Unanimous` | All |
 | `MinCount` | The configured number (`minCount`) |
 | `Percentage` | Approvers × percentage ÷ 100, rounded up |
 
-- **It applies only to a step that may have several approvers**: several groups, or one that names several people or is a role, a position or department members. A step whose one group names one person, or is a supervisor, a department leader or a department HRBP or a person on the record (one person each), passes on that one's approval whatever mode it holds — the outcome any mode would give — so the designer does not show the setting and validation does not judge it.
+- **It applies only to a step that may have several approvers**: several groups, or one that names several people or is a role, a position or department members. A step whose one group names one person, or is a supervisor, a department leader or a department HRBP or a person on the record (one person each), passes on that one's approval whatever threshold it holds — the outcome any threshold would give — so the designer does not show the setting and validation does not judge it.
 - **A rejection has no threshold: one approver's rejection rejects the approval**, however many approvals the step counts — an all-approve step (会签) and an any-one step (或签) alike, as mainstream approval products have it. An approver who already approved the step cannot then reject it.
 - One actor casts one effective vote per step.
 - **Vote counts are fixed when a step starts**, and capped by the approvers the step has: no more approvals than approvers. A transfer leaves the count as it is; an administrator reassignment that merges two seats caps it by the same rule — and a step the merge leaves with every approval it needs passes there and then (an all-approve step of three whose other two approved, the third's seat merged into one of theirs).
@@ -349,7 +348,7 @@ The approval mode (`config.approvalMode`) decides how many approvals pass the st
 <Dev title="Storage and validation">
 
 - A config holds these by their JSON values, as above; the enum constant names (`ANY_ONE`) are not read.
-- Compile-time validators reject an impossible approval threshold (`INVALID_MIN_COUNT`, `INVALID_PERCENTAGE`).
+- Compile-time validators reject an impossible vote threshold (`INVALID_MIN_COUNT`, `INVALID_PERCENTAGE`).
 - A step has no reject mode; a `rejectMode`, `rejectMinCount` or `rejectPercentage` saved on a step before is ignored.
 
 </Dev>
@@ -374,7 +373,7 @@ Flow-level settings live in the designer's Flow settings panel (shown when no no
 
 <Dev title="The withdraw rule and old settings">
 
-- `WithdrawPolicyGuard` is the one rule (taking back a failed approval: `WithdrawPolicyGuard.takesBack`): the withdraw actions enforce it, and `GET /flow/instances/{instanceId}/withdraw` and the instance search's `withdrawable` report it.
+- `WithdrawPolicyGuard` is the one rule (taking back a failed approval: `WithdrawPolicyGuard.takesBack`): the withdraw actions enforce it, and `GET /flow/instances/{instanceId}/withdrawable` and the instance search's `withdrawable` report it.
 - `returnEnabled` has no switch of its own on a step; one saved on a step before is ignored.
 - `urgeIntervalHours` replaced `urgeIntervalMinutes`: a design or revision still stored with the old key reads as unset until the deploying app's release script converts it, before the new jar starts.
 
@@ -449,7 +448,7 @@ An approver's action needs the instance waiting on approval, and the actor an ap
 | Action | Extra conditions / required | Effect | Notified |
 |---|---|---|---|
 | Approve | Comment optional; may carry field values (only editable / required fields are written) | Writes the fields and recomputes the routing variables; under a counting mode records a vote, and at the threshold — or under "anyone" — moves to the next step. Approving twice returns the instance unchanged | The next step's approvers get tasks; the submitter when it ends |
-| Reject | Comment required | One rejection is enough (see [Approval threshold](#approval-threshold)): instance <Status>Rejected</Status>, every branch ends, record <Status>Rejected</Status> | Submitter |
+| Reject | Comment required | One rejection is enough (see [Vote threshold](#vote-threshold)): instance <Status>Rejected</Status>, every branch ends, record <Status>Rejected</Status> | Submitter |
 | Return | The flow allows it (`returnEnabled`); comment required | Instance <Status>Returned</Status>, record back to draft. Always returns to the submitter, never to an earlier step | Submitter |
 | Transfer | Not yet voted; the target is neither the actor nor already on the step, and their account can act | The target takes the actor's seat, votes needed unchanged. It is the one way an approver hands a task on: the manual "delegate" did the same under another name and is gone; past `DELEGATE` entries still show | New approver |
 | CC | Not yet voted; one person or several at once. Whoever already sees the approval from the step — its approvers, the actor among them, and anyone already CC'd on it — is skipped; refused when nobody is left, and as a whole when anyone chosen cannot act, naming them | The targets become participants who can view and comment | CC recipients (inbox only) |
@@ -502,7 +501,7 @@ Every delegation of the tenant is seen with a permission of its own, also whatev
 
 - The instance's state and approval history name most participants (`FlowParticipants`); the rest only their tasks remember — a task stays when it closes — so when the state and history name the caller nowhere, the access guard asks the instance's `FlowApprovalTask` rows: CC tasks count too, whatever their status, in one query however many instances it asks about (`FlowInstanceAccessGuard.isParticipant`).
 - The approval instance page and the console's instance detail read the record through the instance (`GET /flow/instances/{instanceId}/record`). A one-to-many's rows likewise lose the sensitive fields the caller may not see, unless the step lists the one-to-many as visible, which brings its rows whole. The definitions of fields a step grants that the caller's metadata leaves out come with the record (`fields`). Details: [The record an approval runs on](./api#the-record-an-approval-runs-on).
-- The request page, keyed by the record, reads it by the record (`GET /flow/instances/by-record/record`), whichever submission is current: the newest submission the caller took part in (a terminated one's cleared approvers took part by their tasks) lends it as through that instance — the approver it waits on reads it as their step shows it, someone who took part only in an earlier submission sees that approval's default; anyone else who can read the record reads it with their own permissions, a record never submitted too; everyone else is refused. The record's approval (`GET /flow/instances/by-record`) admits more: also whoever's roles read one of its instances; one who cannot read the record is refused here all the same.
+- The request page, keyed by the record, reads it by the record (`GET /flow/instances/byRecord/record`), whichever submission is current: the newest submission the caller took part in (a terminated one's cleared approvers took part by their tasks) lends it as through that instance — the approver it waits on reads it as their step shows it, someone who took part only in an earlier submission sees that approval's default; anyone else who can read the record reads it with their own permissions, a record never submitted too; everyone else is refused. The record's approval (`GET /flow/instances/byRecord`) admits more: also whoever's roles read one of its instances; one who cannot read the record is refused here all the same.
 - The request page and the approval instance page read the instance's summary (`.../summary`) and diagram (`.../design`) through the instance too: whoever may view the instance reads them, with no permission on `FlowInstance` or `FlowBundle`.
 - For the API side, see [Instance APIs](./api#instance-apis) and [Monitor](./api#monitor).
 
@@ -589,7 +588,7 @@ The walk assumes every approval step approved; `steps` lists the approval steps 
 | <Status>NoApproverFails</Status> | Resolves to nobody under strategy `Error` — or `AssignToRole`, its roles leaving nobody either: the submission would be refused there, with the message `failure` gives |
 | <Status>Undetermined</Status> | Who approves it, or whether it passes on its own, depends on data only known once the approval runs |
 
-The preview does not say whether the record may be withdrawn: a Withdraw button asks `GET /flow/instances/{instanceId}/withdraw` of the record's newest submission, answered by the same `WithdrawPolicyGuard` — its submitter withdraws while the approval waits on its approvers and the flow's `withdrawPolicy` permits it, and takes the record back after its approval failed — so the button needs no rule of its own.
+The preview does not say whether the record may be withdrawn: a Withdraw button asks `GET /flow/instances/{instanceId}/withdrawable` of the record's newest submission, answered by the same `WithdrawPolicyGuard` — its submitter withdraws while the approval waits on its approvers and the flow's `withdrawPolicy` permits it, and takes the record back after its approval failed — so the button needs no rule of its own.
 
 **Nothing is guessed.** An approval flow holds people and routes only, so the variables a route reads are the submission's — but the instance id, unknown from the start, and anything a node on a revision published before that rule may write (the walk treats such a node as writing every variable). A route whose conditions read an unknown variable is listed in `undecided` and not followed; a step whose approvers are found by a rule, reached after such a node, is `Undetermined`; with approver dedup on, so is a step whose approver may or may not have approved an earlier step, one of several there who could pass it. An error the engine would fail on — a route matching no edge, a condition that cannot be evaluated — ends the walk in `failure`.
 
@@ -605,7 +604,7 @@ The preview does not say whether the record may be withdrawn: a Withdraw button 
 
 ### Testing a draft
 
-The designer's Test run of an approval flow is the same preview on the flow's **saved draft**: `POST /flow/designs/{id}/preview` with `{submitterId, values}` (`FlowLaunchService.previewDraft`) answers what submitting a request with those field values as that user would do under the draft. The request is filled in on the spot and never saved; without `submitterId` the submitter is the current user. The draft is compiled, never registered (a draft that does not compile returns its diagnostics, `400`); a flow that is not an approval flow is refused.
+The designer's Test run of an approval flow is the same preview on the flow's **saved draft**: `POST /flow/designs/{id}/preview` with `{submitterId, values}` (`FlowStartService.previewDraft`) answers what submitting a request with those field values as that user would do under the draft. The request is filled in on the spot and never saved; without `submitterId` the submitter is the current user. The draft is compiled, never registered (a draft that does not compile returns its diagnostics, `400`); a flow that is not an approval flow is refused.
 
 - A request that names no employee is the submitter's own.
 - The request's handler works out its `submission` (title, routing variables) but **not its `validate`**: a test run tries the flow, not whether this request may be submitted now — a pay run not calculated yet still shows who would approve it.
@@ -633,7 +632,7 @@ When something goes wrong, check "When things go wrong" first. A configuration e
 | Two users act on one instance at the same time | Optimistic locking: the later save fails, saying the data was changed | Refresh and try again |
 | The same user approves / rejects twice | Returns the current state, no error and no second entry | — |
 | One record submitted twice concurrently | The unique index stops the second | — |
-| A dynamic source resolves fewer approvers than the threshold | Capped by the approvers it has, never left waiting (see [Approval threshold](#approval-threshold)) | — |
+| A dynamic source resolves fewer approvers than the threshold | Capped by the approvers it has, never left waiting (see [Vote threshold](#vote-threshold)) | — |
 | A notification cannot be sent | Logged only, the action stands; nothing is sent when the action rolls back | Check the log |
 
 <Dev title="Common error messages">

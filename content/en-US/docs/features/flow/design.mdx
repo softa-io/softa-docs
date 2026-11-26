@@ -21,23 +21,23 @@ The table gives the terms the Flow pages use and their names in the code; the su
 | Flow (draft) | `FlowDesign` | The copy the designer edits; its id is the `flowId` everything refers to |
 | Revision | `FlowBundle` | One per publish, immutable; an instance keeps the revision it started on, whatever is published later |
 | Record | a row of the business model (`modelName` + `rowId`) | What is approved, such as one leave request; carries the framework-kept `approvalStatus`, `submitterId`, `submittedTime` |
-| Record's approval | `GET /flow/instances/by-record` (`FlowRecordApprovalsView`) | The whole approval history of a record, every submission of it; one per record, assembled by the endpoint rather than stored |
+| Record's approval | `GET /flow/instances/byRecord` (`FlowRecordApprovalsView`) | The whole approval history of a record, every submission of it; one per record, assembled by the endpoint rather than stored |
 | Approval instance | `FlowInstance` | One run; every submission of a record is a new instance, so a record's approval may hold several |
 | Scenario | `FlowScenario` | Approval flow (`Approval`) or automation flow (`Automation`), chosen when the flow is created and fixed from then on |
 | Trigger | `trigger` | The flow's one way to start, configured on its start node |
 | Approval step | an approval node; `PendingApproval` at run time | One stay of an approval node in an instance |
-| Task | `FlowApprovalTask` | One piece of work given to one person: an **approval task** or a **CC task**; a step with three approvers has three approval tasks |
-| Approval action record | `FlowApprovalRecord` | Who did what and when — submit, approve, return, transfer, CC, urge, comment…; not to be confused with a record's approval |
+| Task | `FlowApprovalTask` | One piece of work given to one person (`assigneeId`): an **approval task** or a **CC task**; a step with three approvers has three approval tasks |
+| Approval action record | `FlowApprovalAction` | Who did what and when — submit, approve, return, transfer, CC, urge, comment…; not to be confused with a record's approval |
 | Business record page | the business module's own list and detail pages | Reads the record with the caller's own permissions (the model's endpoints); an approval model's form shows the record's approval below it |
 | Request page | front end `/home/approvals/record/{model}/{id}` | The one page of a request: it is created, edited as a draft, submitted, approved and viewed here. A request is the record submitted for approval, not something a person asked for: a salary adjustment HR files is a request HR submitted, and HR is its submitter. Keyed by the record: the record with its approval — submitting, withdrawing and the approvers' actions happen here; no menu leads to it, it is reached from Create Request, My Requests, My Tasks, the bell and emails. See [Pages and entry points](./approval#pages-and-entry-points) |
 | Approval instance page | front end `/home/approvals/{instanceId}` | The address emails and inbox notices link to: a record's approval goes on to its request page, any other instance shows its diagram here |
 | Instance detail | the monitoring console | Administrators view instances within their `FlowInstance` data scope and terminate, run again or reassign there |
 | Follow-up record | the page parameter `?from=` | A record raised against another (a leave cancellation), which reads its original when opened |
 | Directory | `softa.flow.org.directory-model` | The model the people pickers search — transfer, CC, delegate, filter by submitter — within the caller's own data scope |
-| Submitter | the record's `submitterId`, the instance's `initiatorId` | The account that pressed Submit — possibly HR submitting on an employee's behalf. Only they withdraw, urge, or take back a failed approval |
+| Submitter | the record's and the task's `submitterId`, the instance's `initiatorId` | The account that pressed Submit — possibly HR submitting on an employee's behalf. Only they withdraw, urge, or take back a failed approval |
 | Employee | the handler's `subject()` (default `employeeId`), the instance's `subjectId` | The employee the record is about; approvers are found from them — their supervisor, their department. Not "applicant": on documents HR raises (a salary adjustment, a transfer) the employee applied for nothing |
 | Approver | a login account id | Someone the current step found; they need an account that signs in |
-| CC recipient | a CC task (`Cc`) | Someone an approver copied, or a CC rule did |
+| CC recipient | a CC task (`taskType` `Cc`) | Someone an approver copied, or a CC rule did |
 | Participant | `FlowParticipants` | The submitter and everyone the instance gave a task: they see the instance without any grant and comment while it runs. An administrator's actions make nobody a participant |
 | Delegation rule, delegate | `FlowDelegation` | Within its period, routes the tasks arriving for an approver to the delegate; tasks already waiting stay where they are |
 | Default approval flow | a `Submit` trigger without a condition | The document's approval flow with no submit condition; it takes a record when none of the conditioned flows does. At most one enabled per document |
@@ -134,7 +134,7 @@ Left to right is what the step does, in order. Two cases need nobody to wait for
 
 1. **Find approvers**: the people each group names or finds make one pool, each once; accounts that cannot sign in are dropped silently, and a supervisor or department head who cannot approve passes the step up. See [Approver Resolution](./approval#approver-resolution).
 2. **Nobody found**: the step's strategy decides — `Error` (the default), `AutoApprove` (recorded as `Auto-approved (no approver)`), or `AssignToRole` (those who can act in the roles, any one deciding; a submitter or employee among them is an approver like any other; votes are counted on). A step that only names its people stops with an error whatever it holds.
-3. **Count votes**: the approval mode gives how many must approve, capped by the approvers the step has. See [Approval Threshold](./approval#approval-threshold).
+3. **Count votes**: the vote threshold gives how many must approve, capped by the approvers the step has. See [Vote threshold](./approval#vote-threshold).
 4. **Apply delegation**: an approver with a delegation rule in force has the task go to the delegate, the votes unchanged; not when the delegate cannot act or is already on the step.
 5. **Submitter and dedup**: a submitter among the approvers is counted as approved under the flow's "when the submitter is an approver" setting (the employee is not, when someone else submitted); someone who approved an earlier step is, under approver dedup. See [Auto-approval](./approval#auto-approval).
 6. **Create tasks**: the approvers yet to act get tasks and notices, and the instance waits.

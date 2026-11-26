@@ -23,7 +23,7 @@
 | [自动化 API](#自动化-api) | `/flow/automation` | 触发事件 |
 | [事件日志](#事件日志) | `/FlowEvent/searchPage` 等 | 触发事件日志，经通用模型 API 读取 |
 | [审批待办](#审批待办) | `/flow/approvalTasks` | 当前用户的任务箱与顶栏计数 |
-| [审批动作记录](#审批动作记录) | `/flow/approvalRecords` | 按运行时实例的审批历史 |
+| [审批动作记录](#审批动作记录) | `/flow/approvalActions` | 按运行时实例的审批历史 |
 | [委托](#委托) | `/flow/delegations` | 委托规则 |
 | [通讯录](#通讯录) | `/flow/directory` | 人员和部门选择框列出的内容 |
 | [监控](#监控) | `/flow/monitor` | 管理员的监控台 |
@@ -151,9 +151,9 @@
 | Method | Path | 说明 |
 |---|---|---|
 | `POST` | `/flow/instances/withdraw` | 撤回 Approval 实例：由其提交人撤回，且实例正在等待审批人、流程的 `withdrawPolicy` 允许（`WithdrawPolicyGuard`）。对失败的单据审批，其提交人不受撤回策略限制，在单据仍在等这次审批时取回单据——和 `withdrawRecord` 一样：单据回到草稿，失败的实例保留 |
-| `GET` | `/flow/instances/{instanceId}/withdraw` | 调用方现在能否撤回该实例——恰在撤回会被接受时为 `true`，判断同样出自 `WithdrawPolicyGuard`。可查看该实例的人均可调用 |
+| `GET` | `/flow/instances/{instanceId}/withdrawable` | 调用方现在能否撤回该实例——恰在撤回会被接受时为 `true`，判断同样出自 `WithdrawPolicyGuard`。可查看该实例的人均可调用 |
 | `POST` | `/flow/instances/urge` | 提醒审批所等待的审批人——仅限提交人，且流程的 `urgeEnabled` 没有关闭。附言放在 `comment`（最多 256 字），空时用默认文案。每个等待中的步骤在流程的 `urgeIntervalHours`（默认 4 小时）内最多被催办一次，无论由提交人还是管理员催办；每个被催办的步骤各记一条 `URGE` 历史，若所有步骤都仍在间隔内则拒绝催办。返回 `FlowUrgeStatus`，而非实例 |
-| `GET` | `/flow/instances/{instanceId}/urge` | 调用方现在能否催办该审批，若不能则何时可以（`FlowUrgeStatus`）；流程关闭了 `urgeEnabled` 时，提交人始终不能催办。可查看该实例的人均可调用 |
+| `GET` | `/flow/instances/{instanceId}/urgeStatus` | 调用方现在能否催办该审批，若不能则何时可以（`FlowUrgeStatus`）；流程关闭了 `urgeEnabled` 时，提交人始终不能催办。可查看该实例的人均可调用 |
 | `POST` | `/flow/instances/comment` | 在实例运行期间添加评论审计条目——仅限这条实例的参与者：提交人以及它给过或正给着任务的人（别人一票就通过的步骤里没投票的审批人仍可评论；催办过它的管理员不行）。能看审批单的其他人——只参与过同一单据其他提交的人、凭权限查看的人——不能评论。已结束的实例不再接受评论。返回 `true`，而非实例 |
 
 **单据与它的审批**
@@ -161,9 +161,9 @@
 | Method | Path | 说明 |
 |---|---|---|
 | `GET` | `/flow/instances/{instanceId}/record` | 记录的审批所针对的业务记录，返回 `{ record, fields }`——其他实例一律拒绝，因为它们的记录是随意指定而非提交的。其提交人以及它给过或正给着任务的人越过自己的行权限读取，按审批步骤的字段权限逐字段显示，一对多的行也一样；其他能以自己的权限读取该记录的人，得到模型普通读取的结果。`fields` 给出显示出来、但调用方自己的元数据里没有的字段定义。见[审批的单据](#审批的单据) |
-| `GET` | `/flow/instances/by-record/record?modelName=&rowId=` | 业务记录本身，与 `.../{instanceId}/record` 的返回相同（`{ record, fields }`），不论当前是它的哪一次提交——供以单据为键、展示审批单的页面使用。调用方参与过的最新一次提交像那个实例一样借出单据；其他能读取该记录的人得到模型普通读取的结果，不带 `fields`——从未提交过的记录在这里只能这样读取；其余的人一律拒绝，只凭角色能看审批单的人也一样。见[审批的单据](#审批的单据) |
-| `GET` | `/flow/instances/by-record?modelName=&rowId=` | 单据的审批单：它的每一次提交——各自启动的审批实例——按最新在前排列，每一次都带审批步骤（`steps`：走过的、正在等的，进行中的那次还有未到达的），以及怎样结束或在哪里失败；所有用户都显示姓名（调用方获准之后才取名）。能读取该记录的人、参与过其中任一次提交的人、角色能读到其中任一条 `FlowInstance` 行的人均可调用。见[单据的审批单](#单据的审批单) |
-| `GET` | `/flow/instances/preview?modelName=&rowId=` | 只预览提交：现在提交该记录会发生什么，而不真正提交——它所属单据的审批流及其审批步骤，每个步骤列出将被询问的审批人或它自动通过的原因；拒绝、单据没有启用中的审批流或有多个都会报告，只有审批运行时才能决定的路由报告为未决。记录的审批正在进行时，只返回 <Status>InProgress</Status> 和这次提交的 `instanceId`，不带步骤：它的步骤在审批单（`.../by-record`）里。不启动、不写入任何东西。能读取该记录的人均可调用；记录的审批正在进行时，这次审批的参与者也可调用，得到的同样只是 <Status>InProgress</Status> 和 `instanceId`（见[预览记录的审批](./approval#预览记录的审批)） |
+| `GET` | `/flow/instances/byRecord/record?modelName=&rowId=` | 业务记录本身，与 `.../{instanceId}/record` 的返回相同（`{ record, fields }`），不论当前是它的哪一次提交——供以单据为键、展示审批单的页面使用。调用方参与过的最新一次提交像那个实例一样借出单据；其他能读取该记录的人得到模型普通读取的结果，不带 `fields`——从未提交过的记录在这里只能这样读取；其余的人一律拒绝，只凭角色能看审批单的人也一样。见[审批的单据](#审批的单据) |
+| `GET` | `/flow/instances/byRecord?modelName=&rowId=` | 单据的审批单：它的每一次提交——各自启动的审批实例——按最新在前排列，每一次都带审批步骤（`steps`：走过的、正在等的，进行中的那次还有未到达的），以及怎样结束或在哪里失败；所有用户都显示姓名（调用方获准之后才取名）。能读取该记录的人、参与过其中任一次提交的人、角色能读到其中任一条 `FlowInstance` 行的人均可调用。见[单据的审批单](#单据的审批单) |
+| `GET` | `/flow/instances/preview?modelName=&rowId=` | 只预览提交：现在提交该记录会发生什么，而不真正提交——它所属单据的审批流及其审批步骤，每个步骤列出将被询问的审批人或它自动通过的原因；拒绝、单据没有启用中的审批流或有多个都会报告，只有审批运行时才能决定的路由报告为未决。记录的审批正在进行时，只返回 <Status>InProgress</Status> 和这次提交的 `instanceId`，不带步骤：它的步骤在审批单（`.../byRecord`）里。不启动、不写入任何东西。能读取该记录的人均可调用；记录的审批正在进行时，这次审批的参与者也可调用，得到的同样只是 <Status>InProgress</Status> 和 `instanceId`（见[预览记录的审批](./approval#预览记录的审批)） |
 
 - 动作的意见（`comment`）最多 256 个字符，与批量操作的意见、管理员的理由相同；超出的在执行任何东西之前就被拒绝（`400`）。
 - 对已经不再等待的步骤操作——页面加载之后别人处理了，或本人在另一个页面处理了——会被拒绝（`400`，"This step no longer waits for approval…"），而不是当作系统错误，页面据此刷新、显示审批现在的进展。
@@ -188,10 +188,10 @@
 
 ### 单据的审批单
 
-一张单据只有一张审批单，包含它的每一次提交：每次提交启动一条审批实例，之前的标为 `superseded`（见[审批单与审批步骤](./approval#审批单与审批步骤)）。`GET /flow/instances/by-record` 返回整张审批单（`FlowRecordApprovalsView`）；从未提交过的单据没有提交，`instances` 为空。
+一张单据只有一张审批单，包含它的每一次提交：每次提交启动一条审批实例，之前的标为 `superseded`（见[审批单与审批步骤](./approval#审批单与审批步骤)）。`GET /flow/instances/byRecord` 返回整张审批单（`FlowRecordApprovalsView`）；从未提交过的单据没有提交，`instances` 为空。
 
 - **谁能看**：能以自己的权限读取单据的人；参与过其中任一次提交的人（参与者见[谁可以查看实例](#谁可以查看实例)）；角色能读到其中任一条 `FlowInstance` 行的人，如监控台的管理员（部门数据范围按每次提交记下的部门判断，见[监控](#监控)）。其余的人拒绝（`403`）。
-- **看到的是整张**：每一次提交都在，各带自己的步骤，不论调用方参与的是哪一次、审批走到了哪一步、是否已经结束。这些人也能打开其中每一次提交：详情、`/summary`、`/design`、`/overlay`、`/trace`、`/nodes/{nodeId}/formPermissions`、`GET .../urge`、`GET .../withdraw`，以及它的待办（`/flow/approvalTasks/instance/{instanceId}`）和审批动作记录（`/flow/approvalRecords/instance/{instanceId}`）。能不能催办、撤回，仍按各自的规则判断。
+- **看到的是整张**：每一次提交都在，各带自己的步骤，不论调用方参与的是哪一次、审批走到了哪一步、是否已经结束。这些人也能打开其中每一次提交：详情、`/summary`、`/design`、`/overlay`、`/trace`、`/nodes/{nodeId}/formPermissions`、`GET .../urgeStatus`、`GET .../withdrawable`，以及它的待办（`/flow/approvalTasks/instance/{instanceId}`）和审批动作记录（`/flow/approvalActions/instance/{instanceId}`）。能不能催办、撤回，仍按各自的规则判断。
 - **单据内容另有规则**：经由审批读单据的人更少——参与者，以及能读单据的人；只凭角色能看审批单的人看得到审批步骤，读不到单据（见[审批的单据](#审批的单据)）。
 
 每一次提交（`instances[]`，最新在前）：
@@ -210,11 +210,11 @@
 
 每一步（`steps[]`）有 `nodeId`、`nodeLabel` 和 `state`——`Done`（审批已经过了这一步）、`Current`（正在等它；并行分支同时在等的几步都是）或 `Upcoming`（还没到，只出现在进行中的那次提交）——以及：
 
-- `approvalMode` 和 `requiredApprovals`：审批模式和几票通过（自动通过的也计入；没有人被问到时为空）；`enteredAt`、`finishedAt`：审批到达和通过这一步的时间；
+- `voteThreshold` 和 `requiredApprovals`：通过门槛和几票通过（自动通过的也计入；没有人被问到时为空）；`enteredAt`、`finishedAt`：审批到达和通过这一步的时间；
 - `approvers`：每个审批人一行——`actor`、`result`、`time`、`comment`；`target` 是转交或委托给了谁（接手的人另有一行），`operator` 是代为操作的管理员（如转派），自动通过的写明原因（`autoApprovalReason`：`Submitter` 或 `EarlierApproval`）；
 - `outcome`：未到达的步骤会怎样，取值同[预览](./approval#预览记录的审批)的 `outcome`；走过、但没有审批人而自动通过的步骤为 `NoApproverApproved`；其余为空；
 - `assignedRoles`：找不到审批人、转给了角色时，这些角色的名称；
-- `events`：这一步上的其他动作，按发生顺序——抄送 `Cc`（`target` 为接收人，`read` 说明是否已读）、催办 `Urge`、评论 `Comment`，以及加签去掉之前记下的 `AddSign`；每条有 `actor`、`target`、`operator`、`comment`、`time`。
+- `events`：这一步上的其他动作，按发生顺序——抄送 `Cc`（`target` 为接收人，`read` 说明是否已读）、催办 `Urge`、评论 `Comment`；每条有 `actor`、`target`、`operator`、`comment`、`time`。
 
 审批人的 `result`：
 
@@ -230,7 +230,7 @@
 <Dev title="审批单怎样组装">
 
 - 先越过调用方的权限读出各次提交和它们的审批动作记录，判断调用方能否看审批单（`FlowInstanceAccessGuard.authorizeRecordApprovals`）；获准之后才一次查出各次提交的任务、组装步骤（`FlowApprovalStepsComposer`）、取名。
-- 走过和正在等的步骤取自任务（每个审批人一条；任务状态 Canceled、Withdrawn 记为 `NotNeeded`）和实例等待中的待审批（还没有任务的审批人记为 `Pending`）；抄送、催办、评论取自审批账本，按节点归到所在的步骤；撤回、终止记在 `ended`，重跑记在 `events`，阅读不列出。
+- 走过和正在等的步骤取自任务（每个审批人一条；任务状态 Cancelled、Withdrawn 记为 `NotNeeded`）和实例等待中的待审批（还没有任务的审批人记为 `Pending`）；抄送、催办、评论取自审批账本，按节点归到所在的步骤；撤回、终止记在 `ended`，重跑记在 `events`，阅读不列出。
 - 未到达的步骤由 `ApprovalPathPreviewer.previewRemaining` 推算，从实例自身的变量和审批出发、不读单据，只对进行中的那次提交计算，每次请求最多一次；推算出错或取不到流程版本时，不列未到达的步骤。
 
 </Dev>
@@ -243,9 +243,9 @@
 - **一对多的行在自己的模型上遵循同样的规则**：每一行去掉调用方在该行所属模型的任何行上都看不到的敏感字段，除非调用方的某个等待步骤把这个一对多字段本身列为 `Readonly`、`Editable` 或 `Required`——这样它的行完整返回。步骤把一对多标为 `Hidden` 则整个不返回。提交人和其他人得到的行，去掉的是他们自己的角色看不到的字段。所以，要让没有薪资敏感字段集的审批人看到调薪明细的金额，步骤要列出明细：`"formPermissions": {"salaryAdjustmentDetailIds": "Readonly"}`；不列出，他们看到的明细就不带这些金额。
 - **其他能以自己的权限读取该记录的人**——比如顺着链接打开的管理员——得到模型普通的、带权限检查的读取结果，字段相同：适用他们的行范围、字段屏蔽和脱敏，一对多的行也一样。能读取 `FlowInstance` 行不够；其余的人一律拒绝（`403`）。
 
-**按单据读取。** 以单据为键、展示其审批单的页面，不能经由其中某一次提交读取单据：`GET /flow/instances/by-record/record?modelName=&rowId=` 不论当前是哪一次提交，都返回同样的 `{ record, fields }`：
+**按单据读取。** 以单据为键、展示其审批单的页面，不能经由其中某一次提交读取单据：`GET /flow/instances/byRecord/record?modelName=&rowId=` 不论当前是哪一次提交，都返回同样的 `{ record, fields }`：
 
-- **调用方参与过的最新一次提交**——作为提交人，或它给过或正给着任务的人；被终止的审批里被清掉的审批人凭任务算参与过——像那个实例的 `.../record` 一样借出单据：它正在等待的审批人看到的是自己步骤显示的单据；只参与过之前某次提交的人，看到那次审批给没有等待步骤的参与者看的内容——即默认结果，再去掉其修订版中任一审批步骤隐藏的字段。审批单（`.../by-record`）还放行角色能读到其中某条实例的人；他们读不了单据时，在这里同样被拒绝。
+- **调用方参与过的最新一次提交**——作为提交人，或它给过或正给着任务的人；被终止的审批里被清掉的审批人凭任务算参与过——像那个实例的 `.../record` 一样借出单据：它正在等待的审批人看到的是自己步骤显示的单据；只参与过之前某次提交的人，看到那次审批给没有等待步骤的参与者看的内容——即默认结果，再去掉其修订版中任一审批步骤隐藏的字段。审批单（`.../byRecord`）还放行角色能读到其中某条实例的人；他们读不了单据时，在这里同样被拒绝。
 - **其他能以自己的权限读取该记录的人**得到模型普通的读取结果，`fields` 为空——从未提交过的记录（比如其所有者打开的草稿）在这里只能这样读取。
 - **其余的人**一律拒绝（`403`）。模型不存在时为 `404`，参与过其审批的人遇到单据已被删除也是 `404`；对其他人，不存在的单据与读不到的单据一样被拒绝，因此这个端点不会告诉他们单据是否存在。软删除的单据（行还在、带着删除标记）同样算已删除：放行的人都得到 `404`。
 
@@ -338,7 +338,7 @@
 
 | Method | Path | 说明 |
 |---|---|---|
-| `GET` | `/flow/approvalTasks/counts` | 当前 actor 顶栏要的计数，一次取齐（`{pendingApprovals, unreadCc, unreadNotifications}`）：`/search` 的 `Pending` 任务箱与未读抄送待办的条数，以及未读站内信数——与 `GET /InboxNotification/myCountUnread` 的口径相同（没有 message-starter 的站内信时为 `0`）。铃铛的角标只显示 `unreadNotifications`：每条新待办都附带一条通知，再加上待办数就会算两次；待办数显示在铃铛的“待办”页签上 |
+| `GET` | `/flow/approvalTasks/counts` | 当前 actor 顶栏要的计数，一次取齐（`FlowApprovalCountsView`：`{pendingApprovals, unreadCc, unreadNotifications}`）：`/search` 的 `Pending` 任务箱与未读抄送待办的条数，以及未读站内信数——与 `GET /InboxNotification/myCountUnread` 的口径相同（没有 message-starter 的站内信时为 `0`）。铃铛的角标只显示 `unreadNotifications`：每条新待办都附带一条通知，再加上待办数就会算两次；待办数显示在铃铛的“待办”页签上 |
 | `POST` | `/flow/approvalTasks/search` | 当前 actor 本人在某个任务箱里的任务，一页：`{box, filters?, orders?, pageNumber?, pageSize?}`（`FlowApprovalTaskSearchRequest`；页码默认 1，每页默认 50）→ `Page<FlowApprovalTaskView>`。`box` 为 `Pending`——等其处理的审批待办，最新在前；`Handled`——已经关闭的审批待办，不论因何关闭，最近关闭的在前；或 `Cc`——其抄送待办，已读未读都有，最新的在前。`filters` / `orders` 针对 `FlowApprovalTask` 的存储字段：见[筛选与排序列表](#筛选与排序列表) |
 | `GET` | `/flow/approvalTasks/instance/{instanceId}` | 一个运行时实例的所有任务（仅参与者 / 提交人） |
 
@@ -346,9 +346,9 @@
 
 | 字段 | 内容 |
 |---|---|
-| `actorName` | 持有人的姓名 |
-| `actorNames` | 它提到的账号的姓名，按账号 id：持有人和关闭这条任务的人 |
-| `instanceTitle`、`modelName` / `rowId`、`instanceStatus`、`initiator`、`submittedTime` | 其实例的上下文 |
+| `assigneeName` | 持有人（`assigneeId`：审批待办的审批人、抄送待办的接收人）的姓名 |
+| `actorNames` | 它提到的账号的姓名，按账号 id：持有人和关闭这条任务的人（`closedById`） |
+| `instanceTitle`、`modelName` / `rowId`、`instanceStatus`、`submitter`、`submittedTime` | 其实例的上下文；`submitter` 是提交人，带姓名 |
 | `subject`、`subjectDept`、`effectiveDate`、`recordCode`、`summary` | 记录的审批为其记录记下的内容 |
 | `currentSteps` | 审批中的单据现在停在哪里：实例正在等的步骤和还没处理的审批人，带名称；每页一次查询 |
 | `superseded` | 是否已被后来的提交取代 |
@@ -363,35 +363,35 @@
 
 | 任务 | 粒度 | 状态 |
 |---|---|---|
-| 审批待办 | 每位审批人在每个步骤一条 | 以持有人自己做的事结束：<Status>Approved</Status> <Status>Rejected</Status> <Status>Returned</Status> <Status>Transferred</Status> <Status>Delegated</Status>；持有人没处理过的任务，撤回后为 <Status>Withdrawn</Status>，否则为 <Status tone="cancel">Canceled</Status>（别的审批人结束了这一步、管理员终止了审批） |
+| 审批待办 | 每位审批人在每个步骤一条 | 以持有人自己做的事结束：<Status>Approved</Status> <Status>Rejected</Status> <Status>Returned</Status> <Status>Transferred</Status> <Status>Delegated</Status>；持有人没处理过的任务，撤回后为 <Status>Withdrawn</Status>，否则为 <Status tone="cancel">Cancelled</Status>（别的审批人结束了这一步、管理员终止了审批） |
 | 抄送待办 | 每位接收人在每个步骤一条 | 读之前是 <Status>Pending</Status>，读后为 <Status>Read</Status>，结束时间为读的时间 |
 
 - 审批待办以持有人自己做的事结束，即使同一个动作随后又记了别的（下一步自动通过、审批结束时的抄送）；结束后保持不变：别人之后的投票不会复制它。
 - 任务不论开着还是已关闭，都让持有人仍是实例的参与者（见[实例 API](#实例-api)）：终止时被清掉的审批人仍能从待办邮件打开审批。
-- 任务还存着其实例的列表字段，任务箱因此能在数据库里按它们筛选和排序：`instanceTitle`、`recordCode`、`modelName`、`rowId`、`initiatorId`、`submittedTime`（实例的 `createdTime`）、`subjectId`、`departmentId`、`effectiveDate`——都是普通值，与 `FlowInstance` 存的一样。
+- 任务还存着其实例的列表字段，任务箱因此能在数据库里按它们筛选和排序：`instanceTitle`、`recordCode`、`modelName`、`rowId`、`submitterId`（实例的 `initiatorId`）、`submittedTime`（实例的 `createdTime`）、`subjectId`、`departmentId`、`effectiveDate`——都是普通值，与 `FlowInstance` 存的一样。
 
 <Dev title="列表字段的同步，以及升级时补齐已有任务行">
 
 同步写任务时从实例行复制这些列表字段，而实例一旦启动这些值就不再变；视图只在实例行已不存在时才显示任务自己的副本，否则显示实例的值。
 
-**升级**：新 jar 启动时扫描器给 `flow_approval_task` 加上这九列；之前写下的行，由部署方应用随发版附带的 SQL 从其实例补齐，在新 jar 启动之后执行（仍开着的行，下次同步更新它时也会补上）。它从 `flow_instance` 设置这九列——`title` → `instance_title`，`created_time` → `submitted_time`，其余同名——按 `tenant_id` 和 `instance_id` 关联，只改 `submitted_time` 仍为空的行，所以重跑什么也不变；实例已被清理的任务保持为空。执行之前，任务箱仍列出所有任务并显示其实例的值，但对这些字段的过滤会漏掉未补齐的行，按它们排序会把这些行排到一端。扫描器什么都不应用的环境（`scanner-scope` 为空）由应用先自行加列并补上对应的元数据行，与那里的任何注解变更一样。
+**升级**：新 jar 启动时扫描器给 `flow_approval_task` 加上这九列；之前写下的行，由部署方应用随发版附带的 SQL 从其实例补齐，在新 jar 启动之后执行（仍开着的行，下次同步更新它时也会补上）。它从 `flow_instance` 设置这九列——`title` → `instance_title`，`created_time` → `submitted_time`，`initiator_id` → `submitter_id`，其余同名——按 `tenant_id` 和 `instance_id` 关联，只改 `submitted_time` 仍为空的行，所以重跑什么也不变；实例已被清理的任务保持为空。执行之前，任务箱仍列出所有任务并显示其实例的值，但对这些字段的过滤会漏掉未补齐的行，按它们排序会把这些行排到一端。扫描器什么都不应用的环境（`scanner-scope` 为空）由应用先自行加列并补上对应的元数据行，与那里的任何注解变更一样。
 
 </Dev>
 
 ### 审批动作记录
 
-基础路径：`/flow/approvalRecords`
+基础路径：`/flow/approvalActions`
 
 | Method | Path | 说明 |
 |---|---|---|
-| `GET` | `/flow/approvalRecords/instance/{instanceId}` | 按运行时实例的审批历史 |
+| `GET` | `/flow/approvalActions/instance/{instanceId}` | 按运行时实例的审批历史 |
 
-每个条目（`FlowApprovalRecord`、`FlowApprovalRecordView`）记录：
+每个条目（`FlowApprovalAction`、`FlowApprovalActionView`）记录：
 
-- 其 `action`（`ApprovalActionType`：`APPROVE`、`AUTO_APPROVE`、`REJECT`、`TRANSFER`、`DELEGATE`、`ADD_SIGN`、`CC`、`READ`、`RETURN`、`WITHDRAW`、`URGE`、`COMMENT`、`TERMINATE`、`RETRY`）；`ADD_SIGN` 和 `DELEGATE` 只出现在加签动作和手动委托动作去掉之前记下的历史里；
+- 其 `action`（`ApprovalActionType`：`APPROVE`、`AUTO_APPROVE`、`REJECT`、`TRANSFER`、`DELEGATE`、`CC`、`READ`、`RETURN`、`WITHDRAW`、`URGE`、`COMMENT`、`TERMINATE`、`RETRY`）；`DELEGATE` 只出现在手动委托动作去掉之前记下的历史里；
 - 其 `actorId`，以及代该 actor 执行的动作的 `operatorId`——转派该 actor 任务的管理员（一条从原审批人到新审批人的 `TRANSFER` 条目）；actor 亲自操作时为空。
 
-按实例取的历史（`/instance/{instanceId}`）带上人名：`actorName`，以及条目交给的那个人的 `targetActorName`（抄送接收人、转交或委托的对象）。单据的审批单（`/flow/instances/by-record`）在审批人、步骤上的动作和结束项上带 `operator`（代为操作的管理员，带姓名），见[单据的审批单](#单据的审批单)。
+按实例取的历史（`/instance/{instanceId}`）带上人名：`actorName`，以及条目交给的那个人的 `targetActorName`（抄送接收人、转交或委托的对象）。单据的审批单（`/flow/instances/byRecord`）在审批人、步骤上的动作和结束项上带 `operator`（代为操作的管理员，带姓名），见[单据的审批单](#单据的审批单)。
 
 ### 委托
 
@@ -485,7 +485,7 @@
 | `FlowInstance` | 持久化运行时实例状态（trace 与审批历史**不**内嵌——见两张专用表），以及记录的审批在提交时记下的内容：`subjectId`、`departmentId`、`effectiveDate`、`recordCode`、`superseded`；审批之后的步骤出错的实例还记着 `retryAfterNodeId`——重跑从哪个审批步骤之后开始。`variables` 是 JSON，数字怎样存见下。Approval 实例长期保留；已结束的 Automation 运行连同其 trace 和触发事件日志，在 `flow.automation.retention-days`（默认 30）天后由 `flow_automation_purge` cron 清理 |
 | `FlowExecutionTrace` | 仅追加的执行 trace 行（内存状态只保留当前尝试的增量） |
 | `FlowApprovalTask` | 待办/已完成/抄送待办投影，每条都复制了其实例的列表字段（`instanceTitle`、`recordCode`、`submittedTime` 等），供审批中心搜索 |
-| `FlowApprovalRecord` | 审批动作审计账本——权威审批历史，由实例存储与实例行在同一事务中刷写；`operatorId` 指明代该 actor 操作的管理员 |
+| `FlowApprovalAction` | 审批动作审计账本——权威审批历史，由实例存储与实例行在同一事务中刷写；`operatorId` 指明代该 actor 操作的管理员 |
 | `FlowDelegation` | 委托规则 |
 | `FlowEvent` | 触发事件日志 |
 
@@ -518,6 +518,17 @@
 >
 > 读到枚举里已经没有的码会抛错（未知的枚举值有意不读成空），所以**改名或去掉一个已存储的码，要在同一个改动里附带改写存量数据的 SQL**，由部署方随发版执行；没有它，还存着旧码的流程就无法加载、发布或重放种子——`Process` 场景拆成 `Approval` 和 `Automation` 时就出过这样的事。改 JSON 里的键名也一样：不认识的键读作没有，它的值会悄悄丢掉。
 
+<Dev title="升级：表名、列名、JSON 键名和码值的改名">
+
+审批相关的命名整理改了几处存储的名字和码值，部署方随发版附带 SQL（HCM 见发版批次 `20261126-flow-naming`）：
+
+- **表名、列名**：`flow_approval_record` 改名 `flow_approval_action`；`flow_approval_task` 的 `actor_id`、`closed_by_actor_id`、`initiator_id` 改名 `assignee_id`、`closed_by_id`、`submitter_id`。注解上写了 `renamedFrom`，扫描器在新 jar 启动时改名，数据随之保留；`scanner-scope` 为空的环境由应用自行改名并更新对应的元数据行。
+- **码值**：待办状态 `Canceled` 改为 `Cancelled`；旧数据里的抄送状态 `Cc` 改为 `Pending`，`taskType` 为空或为 `Read` 的行补成 `Cc` / `Approval`；已去掉的加签留下的 `AddSign` 动作记录、`ApprovalAddSigned` 轨迹删除，待办上的 `AddSign` 动作置空。这些要在新 jar 启动**之前**改：新 jar 读到旧码会抛错，而那时表名、列名还是旧的。实例状态去掉了 `Pending`：实例一创建就是 `Running`，这个值从来没有写入过，不用改数据（待办状态和单据审批状态里的 `Pending` 不变）。
+- **JSON 键名**：审批步骤配置里的 `approvalMode` 改名 `voteThreshold`，取值（`AnyOne`、`Unanimous`、`MinCount`、`Percentage`）不变；流程设计（`flow_design.design_json`）、每个已发布版本（`flow_bundle.design_json` / `compiled_json`）和实例的待审批列表（`flow_instance.pending_approvals`）里的这个键一起改。同样要在新 jar 启动**之前**改：新 jar 把旧键读作没有，按任一人同意计票，要全员或按人数、比例通过的步骤一个人同意就过了。
+- 接口路径和返回字段的变化见上面各接口表，前端和 APP 要同批更新。
+
+</Dev>
+
 ## 节点描述符契约
 
 <Lead>
@@ -530,7 +541,7 @@
 - config 字段的 `type` 指定编辑器用哪种控件
 - 每个任务节点的 config schema 在执行器自己的字段之后都有 `outputVariable`（`string`，Output variable）：结果写进的变量
 - 设置项装的是什么，就决定它的类型，编辑器据此给出合适的输入：运行时插值的文字用 `template`（正文加 `multiline`），AviatorScript 用 `expression`，一组文字（收件人、字段名）用 `stringList`，自由 JSON 载荷用 `json`，变量名用 `variableRef`，单据自己的字段用 `recordField`（`targets` 写明字段要指向的模型：单据上的人员是 `Employee` / `UserAccount`，「单据上的部门」是 `Department`），记录用选择器——`rolePicker` / `userPicker` / …，或写明 `model` 的 `recordPicker`（如邮件模板）——给了 `valueField`（`code`）就存它而不是 id，`allowCustom` 允许填写没有对应记录的值；`keyValueMap` 用 `valueType` 说明值是什么（`expression`、`template`）
-- 审批步骤的 `approverSources` 按 HR 管理员常用的顺序给出来源——指定人员，找一个人的（上级、部门负责人、HRBP、单据上的人员），然后是按群体的（角色、岗位、部门成员）——每个选项带着编辑器判断哪些设置适用所需的信息：`names`（指定人员放在哪个字段，`userIds`）和 `findsOne`（这个来源最多找到一个人）。只对部分步骤生效的设置用 `appliesWhen` 说明：`severalApprovers`（审批模式、`minCount`、`percentage`）或 `approversFoundByRule`（空审批人策略及其角色）；引擎在其他步骤上按同样的规则忽略它，所以编辑器只在适用时显示它
+- 审批步骤的 `approverSources` 按 HR 管理员常用的顺序给出来源——指定人员，找一个人的（上级、部门负责人、HRBP、单据上的人员），然后是按群体的（角色、岗位、部门成员）——每个选项带着编辑器判断哪些设置适用所需的信息：`names`（指定人员放在哪个字段，`userIds`）和 `findsOne`（这个来源最多找到一个人）。只对部分步骤生效的设置用 `appliesWhen` 说明：`severalApprovers`（通过门槛、`minCount`、`percentage`）或 `approversFoundByRule`（空审批人策略及其角色）；引擎在其他步骤上按同样的规则忽略它，所以编辑器只在适用时显示它
 
 `FlowNodeDescriptorRegistry` 只为实际注册为 Spring bean 的执行器列出任务节点，因此像 `QUERY_AI` 和 `ASYNC_TASK` 这类条件执行器仅在其依赖存在时出现。
 
