@@ -790,7 +790,7 @@ resolver 的上下文（`@mode`、`USER_ID`、声明的字段类型）在 **reso
 
 - Header：标题，模型描述放在标题后的帮助图标里；页面可在标题下加一行这条记录的说明
 - 粘性工具栏：
-  - 左侧：内置 `FormEditStatus + FormPrimaryActions`（`ModelForm/ModelSideForm enableWorkflow=true` 时还有 `FormWorkflowActions`）
+  - 左侧：内置 `FormEditStatus + FormPrimaryActions`（审批类单据新建或编辑草稿时：Submit，`enableSaveDraft` 不为 false 时再加 Save Draft）（`ModelForm/ModelSideForm enableWorkflow=true` 时还有 `FormWorkflowActions`）
   - 右侧：业务动作区（自定义动作 + 内置 Duplicate/Delete + More Actions）
 - Body：`FormBody` 渲染堆叠 section 或真正的 tabs，以及内置审计面板布局
 - Audit：`FormBody(enableAuditLog)` 控制审计面板；大屏右侧、小屏底部
@@ -818,8 +818,9 @@ resolver 的上下文（`@mode`、`USER_ID`、声明的字段类型）在 **reso
 | `enableDelete`         | `boolean`                 | No       | auto                                  | 内置删除动作开关。三态解析与 `enableCreate` 相同。 |
 | `enableUpdate`         | `boolean`                 | No       | auto                                  | 路由只读模式下工具栏 `Edit` 按钮的开关。`false` 隐藏该按钮；不影响表单自身的只读状态。受 `update`（或 `updatePermissionId`）门控。 |
 | `updatePermissionId`   | `string`                  | No       | -                                     | 授权在本页编辑的权限 id，覆盖 `MODEL_PERMISSIONS` 中按模型查找的 `update`。用于由另一模型上的 `customPermission` 管理的页面（工作流草稿页）。 |
-| `submitPermissionId`   | `string`                  | No       | -                                     | 审批类单据已保存记录上 **Submit**（**Cancel Draft** 随它）的权限 id，覆盖按模型查找的 `submit`。同一模型的 submit 在多个页面声明时——审批中心也提交的单据（LeaveRequest、OvertimeRequest、ExpenseClaim、AttendanceExceptionRequest）——按模型查不出结果，按钮会对所有人显示，由页面自己指定。 |
+| `submitPermissionId`   | `string`                  | No       | -                                     | 审批类单据新建和草稿上 **Submit**（**Cancel Draft** 随它）的权限 id，覆盖按模型查找的 `submit`。没有这个权限时表单只存草稿（按钮写 Save Draft）。同一模型的 submit 在多个页面声明时——审批中心也提交的单据（LeaveRequest、OvertimeRequest、ExpenseClaim、AttendanceExceptionRequest）——按模型查不出结果，按钮会对所有人显示，由页面自己指定。 |
 | `withdrawPermissionId` | `string`                  | No       | -                                     | 同上，用于 **Withdraw**，覆盖按模型查找的 `withdraw`。 |
+| `enableSaveDraft`      | `boolean`                 | No       | `true`                                | 仅审批类单据：新建和草稿上 **Submit** 旁是否有 **Save Draft**，用来只存草稿、先不提交。内容多、要分几次填的单据（报销）用 `true`；一次填完的（请假、加班）用 `false`，只点 **Submit** 一次完成保存和送审。其他模型忽略。 |
 | `confirmDeleteMessage` | `string`                  | No       | `Delete this {modelLabel}? This action cannot be undone.` | 内置删除动作的确认文案。 |
 | `onDeleted` | `() => void` | No | - | 内置删除删掉记录之后去哪里，代替默认的模型列表（记录路由的上一级）。用于没有列表可回的独立页面——审批中心单据页上的申请删掉后回到打开它的地方。 |
 | `timeline`      | `ModelFormTimelineConfig` | No       | -                                     | 时间轴模型行为开关（`enableAddVersion` / `enableVersionPanel` / `versionSummaryFields`，均可选）。仅当 `metaModel.timeline` 为 true 时生效；见下文「时间轴模型」。 |
@@ -1227,6 +1228,7 @@ function UnlockDialog() {
 - **单据的审批状态**：表单标题后的状态徽标（见上方 `FormHeader`）就是 `ApprovalStatusBadge`，审批中心的单据页也用它显示单据状态，基于通用的 `OptionStatusBadge`，和只读字段、表格单元格一样按选项色调着色：Draft、Cancelled 中性，Pending 信息色，Approved 成功色，Rejected 错误色。它不画成步骤条：退回、撤回会让单据回到 Draft，结束也有三种结果。一次审批实例的状态（Waiting、Completed……）是另一回事，仍用它自己的徽标。
 - **`ApprovalSteps`**：一次提交的步骤，排成一个有序列表，从第一步开始（提交人和提交时间在组头）；走过的步骤写明通过门槛，每个审批人一行，带结果、时间和意见——不用再处理的人灰显，转交、委托写明交给了谁；正在等的步骤高亮，写明进入时间和进度（如 2/3），还没处理的人显示待处理；未到达的步骤用虚线、淡色显示，写明预计由谁审批（Expected），或者会自动通过、没有审批人、要到运行时才知道。抄送（已读 / 未读）、催办、评论以小字列在所在的步骤下；路线要到运行时才知道的地方在那一步之后加一行说明。最后是结束项：通过、驳回、退回、撤回或终止，以及操作人、时间和意见；失败时写明停在哪一步、原因，以及能否重跑。
 - **「If submitted now」**：单据没有进行中的审批时，面板上方显示现在提交会怎样（`GET /flow/instances/preview`），由 `ApprovalPreviewCard` 显示——它也基于 `ApprovalSteps`，每一步都按未到达的样式显示。审批进行中时不显示：这次提交还没到的步骤已经在它那一组里。没有流程或有多个流程时，卡片的位置写明提交会被拒的原因；单据自己的校验拒绝（比如额度已经不够）只在提交人自己的草稿页（传了 `previewSubmission`）这样显示——这正是它的 Submit 不可点的原因；在表单里不显示（单据可能是别人的），由 Submit 悬停说明。
+- **提交按钮**：新建或编辑草稿时，**Submit** 是表单的主按钮（`FormPrimaryActions`）：先校验、写入（新建 `createOne`，草稿 `updateOne` 改过的字段），再在表单跳转之前提交（`POST /{Model}/submit`），所以跳到的页面读到的已是提交后的单据；提示 Submitted for approval.，不再提示保存成功。提交被拒时单据照样存成了草稿：请求层说明原因，表单再提示 `Saved, but not submitted — nobody has been asked to approve it. Submit again to retry.`，并像保存后一样跳到这张草稿（单据页的只读模式），再点 Submit 提交的还是这一张，不会多建一张。草稿没有改动时不写入，按现状提交，可不可点看上面的预检；有改动时预检读的是库里的旧版本，Submit 保持可点，存好后由服务端判断。**Save Draft**（`enableSaveDraft`，默认有）在它旁边，描边样式，只保存；它是表单的 submit 按钮，所以在字段里按回车只存草稿，Submit 不会被回车触发。Submit 之后 `onPersistSuccess` 带上 `submitted`（true / false）。只读模式下的草稿，Submit 在 `FormApprovalActions` 里（直接提交）。
 - **撤回按钮**：Withdraw 对审批单里最新的一次提交问 `GET /flow/instances/{instanceId}/withdrawable`，恰在撤回会被接受时出现；审批失败后取回单据也一样。Submit 前的检查——模型自己的拒绝、没有流程、有多个流程——仍来自 `/preview`。
 
 ## 时间轴模型
